@@ -32,10 +32,9 @@ import matplotlib.pyplot as plt
 # Custom imports
 
 from argoverse.map_representation.map_api import ArgoverseMap
-import model.data_loader.argoverse.map_functions as map_functions
-import model.data_loader.argoverse.dataset_utils as dataset_utils
+import model.dataset.argoverse.map_functions as map_functions
+import model.dataset.argoverse.dataset_utils as dataset_utils
 
-import model.data_loader.argoverse.dataset_utils as dataset_utils
 import geometric_functions
 import goal_points_functions
 import map_functions

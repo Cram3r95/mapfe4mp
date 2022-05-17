@@ -24,7 +24,7 @@ sys.path.append(BASE_DIR)
 
 # Custom imports
 
-from model.data_loader.argoverse.dataset import ArgoverseMotionForecastingDataset
+from model.dataset.argoverse.dataset import ArgoverseMotionForecastingDataset
 
 #######################################
 

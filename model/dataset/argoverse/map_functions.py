@@ -18,34 +18,19 @@ import time
 import pdb
 import os
 
-import PIL.ImageDraw as ImageDraw
-import PIL.Image as Image
-import math
-
 from collections import defaultdict
-from typing import Any, Dict, List, Optional, Tuple, Union
+from typing import Dict, Tuple, Union
 
-import matplotlib.lines as mlines
 import matplotlib.pyplot as plt
 import numpy as np
-import pandas as pd
 import scipy.interpolate as interp
 
 from argoverse.utils.centerline_utils import (
-    centerline_to_polygon,
-    filter_candidate_centerlines,
-    get_centerlines_most_aligned_with_trajectory,
-    lane_waypt_to_query_dist,
-    remove_overlapping_lane_seq,
+    centerline_to_polygon
 )
 
-from argoverse.map_representation.map_api import ArgoverseMap
-from argoverse.utils.mpl_plotting_utils import plot_bbox_2D
-from argoverse.utils.se3 import SE3
-from argoverse.utils.transform import quat2rotmat
-
-from sophie.utils.utils import relative_to_abs
-import sophie.data_loader.argoverse.dataset_utils as dataset_utils
+from model.utils.utils import relative_to_abs
+import model.dataset.argoverse.dataset_utils as dataset_utils
 
 IS_OCCLUDED_FLAG = 100
 LANE_TANGENT_VECTOR_SCALING = 4

@@ -10,21 +10,22 @@ Created on Sun Mar 06 23:47:19 2022
 
 # General purpose imports
 
-import random
-import math
-import pdb
-import copy
+import csv
+import time
 
 # DL & Math imports
 
 import numpy as np
 import torch
-import cv2
-from sklearn import linear_model
 
 # Plot imports
 
 import matplotlib.pyplot as plt
+
+# Custom imports
+
+import goal_points_functions
+import map_functions
 
 #######################################
 
@@ -54,7 +55,7 @@ def read_file(_path):
     return data.astype(np.float64)
     
 def load_images(num_seq, obs_seq_data, first_obs, city_id, ego_origin, dist_rasterized_map, 
-                object_class_id_list,debug_images=False):
+                object_class_id_list,data_imgs_folder,debug_images=False):
     """
     Get the corresponding rasterized map
     """
@@ -91,7 +92,7 @@ def load_images(num_seq, obs_seq_data, first_obs, city_id, ego_origin, dist_rast
 
         filename = data_imgs_folder + "/" + str(curr_num_seq) + ".png"
 
-        img = map_utils.plot_trajectories(filename, curr_obs_seq_data, curr_first_obs, 
+        img = map_functions.plot_trajectories(filename, curr_obs_seq_data, curr_first_obs, 
                                           curr_ego_origin, object_class_id, dist_rasterized_map,
                                           rot_angle=0,obs_len=obs_len, smoothen=True, show=False)
 
@@ -119,7 +120,7 @@ def load_images(num_seq, obs_seq_data, first_obs, city_id, ego_origin, dist_rast
     return frames_arr
 
 def load_goal_points(num_seq, obs_seq_data, first_obs, city_id, ego_origin, dist_rasterized_map, 
-                    object_class_id_list,debug_images=False):
+                    object_class_id_list,data_imgs_folder,debug_images=False):
     """
     Get the corresponding rasterized map
     """
@@ -152,7 +153,7 @@ def load_goal_points(num_seq, obs_seq_data, first_obs, city_id, ego_origin, dist
         agent_obs_seq_abs = relative_to_abs(agent_obs_seq, agent_first_obs) # "abs" (around 0)
         agent_obs_seq_global = agent_obs_seq_abs + origin_pos # abs (hdmap coordinates)
 
-        goal_points = dataset_utils.get_goal_points(filename, agent_obs_seq_global, origin_pos, dist_around)
+        goal_points = goal_points_functions.get_goal_points(filename, agent_obs_seq_global, origin_pos, dist_around)
 
         goal_points_list.append(goal_points)
         t0_idx = t1_idx
@@ -161,3 +162,49 @@ def load_goal_points(num_seq, obs_seq_data, first_obs, city_id, ego_origin, dist
 
     return goal_points_array
 
+# Relative - Absolute coordinates
+
+def relative_to_abs_sgan(rel_traj, start_pos):
+    """
+    Inputs:
+    - rel_traj: pytorch tensor of shape (seq_len, batch, 2)
+    - start_pos: pytorch tensor of shape (batch, 2)
+    Outputs:
+    - abs_traj: pytorch tensor of shape (seq_len, batch, 2)
+    """
+    # batch, seq_len, 2
+    rel_traj = rel_traj.permute(1, 0, 2)
+    displacement = torch.cumsum(rel_traj, dim=1)
+    start_pos = torch.unsqueeze(start_pos, dim=1)
+    abs_traj = displacement + start_pos
+    return abs_traj.permute(1, 0, 2)
+
+
+def relative_to_abs_sgan_multimodal(rel_traj, start_pos):
+    """
+    Inputs:
+    - rel_traj: pytorch tensor of shape (b, m, t, 2)
+    - start_pos: pytorch tensor of shape (batch, 2)
+    Outputs:
+    - abs_traj: pytorch tensor of shape (seq_len, batch, 2)
+    """
+    # batch, seq_len, 2
+    displacement = torch.cumsum(rel_traj, dim=2)
+    start_pos = torch.unsqueeze(torch.unsqueeze(start_pos, dim=1), dim=1)
+    abs_traj = displacement + start_pos
+    return abs_traj
+
+def relative_to_abs(rel_traj, start_pos):
+    # TODO: Not used in the training stage. Nevertheless, rewrite using torch, not numpy
+    """
+    Inputs:
+    - rel_traj: numpy array of shape (len, 2)
+    - start_pos: numpy array of shape (1, 2)
+    Outputs:
+    - abs_traj: numpy array of shape (len, 2) in absolute coordinates
+    """
+
+    displacement = np.cumsum(rel_traj, axis=0)
+    abs_traj = displacement + start_pos
+
+    return abs_traj
