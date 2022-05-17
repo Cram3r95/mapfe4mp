@@ -1,0 +1,77 @@
+# LSTM based Encoder-Decoder with Multi-Head Self Attention
+
+use_gpu: 1
+dataset_name: argoverse_motion_forecasting_dataset
+dataset:
+    path: data/datasets/argoverse/motion-forecasting/
+    split: "train"
+    batch_size: 32
+    split_percentage: 0.0002
+    shuffle: False # False to check the input data, always set to True
+    class_balance: 0.7 # % of straight trajectories (considering the AGENT). Remaining % are curved trajectories
+                       # (again, considering the AGENT). -1.0 if no class balance is used (get_item takes the corresponding
+                       # sequence regardless if it is straight or curved)
+    num_workers: 0
+optim_parameters:
+    g_learning_rate: 1.0e-3
+    g_weight_decay: 0
+    d_learning_rate: 5.0e-3
+    d_weight_decay: 0
+hyperparameters:
+    loss_type_g: "mse_w+nll" # (mse|mse_w) nll (mse|mse_w)+nll
+    lr_schduler: True # ExponentialLR
+    output_single_agent: True
+    tensorboard_active: True
+    num_iterations: 20000 #1608 #20000
+    num_epochs: 36 #75
+    d_steps: 2
+    g_steps: 1
+    print_every: 10
+    checkpoint_every: 1000
+    output_dir: "save/argoverse/gen_exp/exp_multiloss_5" # "save/argoverse/test"  # 
+    exp_description: "multi loss + learning_rate scheduler"
+    checkpoint_name: "0"
+    checkpoint_start_from: "save/argoverse/gen_exp/exp_multiloss_4/argoverse_motion_forecasting_dataset_0_with_model.pt"
+    restore_from_checkpoint: 
+    clipping_threshold_d: 0
+    clipping_threshold_g: 1.1
+    best_k: 10
+    l2_loss_weight: 0.05 # If different from 0, L2 loss is considered when training
+    num_samples_check: 5000
+    obs_origin: 20 # This frame will be the origin, tipically the first observation (1) or last observation 
+                   # (obs_len) of the AGENT (object to be predicted in Argoverse 1.0). Note that in the code
+                   # it will be 0 and 19 respectively
+    obs_len: &obs_len 20 
+    pred_len: &pred_len 30 # Must be 0 for the split test since we do not have the predictions of the agents
+                           # Only the observations (0 to obs_len-1 past observations)
+    num_agents_per_obs: &num_agents_per_obs 10
+    distance_threshold: 40 # It depends on a statistical study (see get_sequences_as_array function), 
+                           # where we determine the mean distance of the AGENT w.r.t the ego-vehicle
+                           # in the obs_len-th frame
+    hidden_dim_lstm_decoder: &hidden_dim_lstm_decoder 128
+
+# SoPhie model
+
+sophie:
+    generator: 
+        hdim: 32
+    discriminator:
+        # Encoder
+        encoder:
+            num_layers: 1
+            hidden_dim: 64
+            emb_dim: 16 # embedding input from mlp
+            mlp_config:
+                dim_list: [2, 16] # From 2 (x,y) to 16 (original embedding of the paper)
+                activation: 'relu'
+                batch_norm: True
+                dropout: 0.5
+            dropout: 0
+
+        # Classifier
+        classifier:
+            mlp_config:
+                dim_list: [64, 1024, 1]
+                activation: 'relu'
+                batch_norm: True
+                dropout: 0.5
