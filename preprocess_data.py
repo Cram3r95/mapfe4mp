@@ -11,20 +11,9 @@ Created on Sun Mar 06 23:47:19 2022
 
 # General purpose imports
 
-import random
-import math
-import pdb
-import copy
 import sys
 import yaml
 from prodict import Prodict
-
-# DL & Math imports
-
-import numpy as np
-import torch
-import cv2
-from sklearn import linear_model
 
 # Plot imports
 
@@ -35,11 +24,11 @@ sys.path.append(BASE_DIR)
 
 # Custom imports
 
-from model.data_loader.argoverse.dataloader.dataloader import ArgoverseMotionForecastingDataset, seq_collate
+from model.data_loader.argoverse.dataset import ArgoverseMotionForecastingDataset
 
 #######################################
 
-with open(r'./configs/mp_so_goals.yml') as config:
+with open(r'./configs/social_lstm_mhsa.yml') as config:
     config = yaml.safe_load(config)
     config = Prodict.from_dict(config)
     config.base_dir = BASE_DIR
@@ -57,4 +46,6 @@ ArgoverseMotionForecastingDataset(dataset_name=config.dataset_name,
                                   shuffle=config.dataset.shuffle,
                                   batch_size=config.dataset.batch_size,
                                   class_balance=config.dataset.class_balance,
-                                  obs_origin=config.hyperparameters.obs_origin)
+                                  obs_origin=config.hyperparameters.obs_origin,
+                                  preprocess_data=True,
+                                  save_data=True)
