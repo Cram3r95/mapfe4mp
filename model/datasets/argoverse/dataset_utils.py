@@ -15,6 +15,7 @@ import os
 import csv
 import time
 import glob, glob2
+import pdb
 
 # DL & Math imports
 
@@ -113,7 +114,30 @@ def read_file(_path):
     data[:, 1] = id_idx
 
     return data.astype(np.float64)
-    
+
+def get_origin_and_city(seq,obs_window):
+    """
+    """
+
+    frames = np.unique(seq[:, 0]).tolist() 
+    frame_data = []
+    for frame in frames:
+        frame_data.append(seq[frame == seq[:, 0], :]) # save info for each frame
+
+    obs_frame = frame_data[obs_window-1]
+    # pdb.set_trace()
+    try:
+        origin = obs_frame[obs_frame[:,2] == 1][:,3:5] # Get x|y of the AGENT (object_class = 1) in the obs window
+    except:
+        pdb.set_trace()
+    city_id = round(obs_frame[0,-1])
+    if city_id == 0:
+        city_name = "PIT"
+    else:
+        city_name = "MIA"
+
+    return origin, city_name
+
 def load_images(num_seq, obs_seq_data, first_obs, city_id, ego_origin, dist_rasterized_map, 
                 object_class_id_list,data_imgs_folder,debug_images=False):
     """
