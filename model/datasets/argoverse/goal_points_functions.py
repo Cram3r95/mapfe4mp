@@ -105,6 +105,7 @@ def plot_fepoints(img, filename, obs_px_x, obs_px_y, car_px,
         plt.title(filename) 
         plt.show()
 
+    
     plt.savefig(filename, bbox_inches='tight', facecolor=fig.get_facecolor(), 
                 edgecolor='none', pad_inches=0)
 

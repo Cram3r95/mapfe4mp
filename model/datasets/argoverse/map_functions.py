@@ -114,9 +114,9 @@ def map_generator(curr_num_seq,
 
     plot_centerlines = True
     plot_local_das = False
-    plot_local_lane_polygons = True
+    plot_local_lane_polygons = False
 
-    xcenter, ycenter = origin_pos[0][0], origin_pos[0][1]
+    xcenter, ycenter = origin_pos[0], origin_pos[1]
     x_min = xcenter + offset[0]
     x_max = xcenter + offset[1]
     y_min = ycenter + offset[2]
@@ -156,7 +156,7 @@ def map_generator(curr_num_seq,
                                                             y_min, 
                                                             y_max], 
                                                             city_name)
-    pdb.set_trace()
+    #pdb.set_trace()
     ## Get drivable area around the origin
 
     local_das = []
@@ -171,7 +171,7 @@ def map_generator(curr_num_seq,
 
     # Plot
 
-    fig, ax = plt.subplots(figsize=(6,6), facecolor="white") # facecolor="black")
+    fig, ax = plt.subplots(figsize=(6,6), facecolor="black")
     plt.xlim(x_min, x_max)
     plt.ylim(y_min, y_max)
     plt.axis("off") # Comment if you want to generate images without x|y-labels

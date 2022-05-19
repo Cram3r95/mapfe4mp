@@ -43,7 +43,7 @@ class TrajectoryGenerator(nn.Module):
         XX = torch.cat(XX, 0)
 
         coords = self.regressor(XX).reshape(-1, self.num_outputs, self.pred_len, 2) # (b, m, t, 2)
-        pdb.set_trace()
+        #pdb.set_trace()
         confidences = torch.squeeze(self.mode_confidences(XX), -1) # (b, m)
         confidences = torch.softmax(confidences, dim=1)
 

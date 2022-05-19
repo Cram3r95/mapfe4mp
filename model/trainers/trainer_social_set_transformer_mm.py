@@ -15,7 +15,7 @@ import torch.optim.lr_scheduler as lrs
 from torch.cuda.amp import GradScaler, autocast 
 
 from model.datasets.argoverse.dataset import ArgoverseMotionForecastingDataset, seq_collate
-from model.models.social_transformer import TrajectoryGenerator
+from model.models.social_set_transformer_mm import TrajectoryGenerator
 from model.modules.losses import pytorch_neg_multi_log_likelihood_batch, mse_custom, l2_loss, l2_loss_multimodal
 from model.modules.evaluation_metrics import displacement_error, final_displacement_error
 from model.utils.checkpoint_data import Checkpoint, get_total_norm

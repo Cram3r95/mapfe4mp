@@ -135,7 +135,7 @@ def get_origin_and_city(seq,obs_window):
         city_name = "PIT"
     else:
         city_name = "MIA"
-
+    
     return origin, city_name
 
 def load_images(num_seq, obs_seq_data, first_obs, city_id, ego_origin, dist_rasterized_map, 
