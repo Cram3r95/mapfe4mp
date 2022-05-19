@@ -29,8 +29,7 @@ from argoverse.utils.centerline_utils import (
     centerline_to_polygon
 )
 
-from model.utils.utils import relative_to_abs
-import model.dataset.argoverse.dataset_utils as dataset_utils
+import model.datasets.argoverse.dataset_utils as dataset_utils
 
 IS_OCCLUDED_FLAG = 100
 LANE_TANGENT_VECTOR_SCALING = 4
@@ -262,7 +261,7 @@ def plot_trajectories(filename,obs_seq,first_obs,origin_pos, object_class_id_lis
         obs_ = obs_seq[:obs_len,i,:].view(-1,2) # 20 x 2 (rel-rel)
         curr_first_obs = first_obs[i,:].view(-1)
 
-        abs_obs_ = relative_to_abs(obs_, curr_first_obs) # "abs" (around 0)
+        abs_obs_ = dataset_utils.relative_to_abs(obs_, curr_first_obs) # "abs" (around 0)
         obj_id = object_class_id_list[i]
         obs_seq_list.append([abs_obs_,obj_id])
 

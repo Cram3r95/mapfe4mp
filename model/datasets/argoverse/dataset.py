@@ -23,6 +23,7 @@ import glob, glob2
 
 import numpy as np
 import torch
+from torch.utils.data import Dataset
 import cv2
 
 # Plot imports
@@ -32,19 +33,16 @@ import matplotlib.pyplot as plt
 # Custom imports
 
 from argoverse.map_representation.map_api import ArgoverseMap
-import model.dataset.argoverse.map_functions as map_functions
-import model.dataset.argoverse.dataset_utils as dataset_utils
 
-import geometric_functions
-import goal_points_functions
-import map_functions
-import data_augmentation_functions
+import model.datasets.argoverse.dataset_utils as dataset_utils
+import model.datasets.argoverse.geometric_functions as geometric_functions
+import model.datasets.argoverse.data_augmentation_functions as data_augmentation_functions
 
 #######################################
 
 # Data augmentation variables
 
-APPLY_DATA_AUGMENTATION = True
+APPLY_DATA_AUGMENTATION = False
 
 decision = [0,1] # Not apply/apply
 dropout_prob = [0.1,0.9] # Not applied/applied probability
@@ -368,7 +366,7 @@ class ArgoverseMotionForecastingDataset(Dataset):
 
         if PREPROCESS_DATA:
             folder = root_folder + split + "/data/"
-            files, num_files = load_list_from_folder(folder)
+            files, num_files = dataset_utils.load_list_from_folder(folder)
 
             self.file_id_list = []
             root_file_name = None
@@ -381,7 +379,7 @@ class ArgoverseMotionForecastingDataset(Dataset):
             print("Num files (whole split): ", num_files)
 
             if self.shuffle:
-                rng = default_rng()
+                rng = random.default_rng()
                 indeces = rng.choice(num_files, size=int(num_files*split_percentage), replace=False)
                 self.file_id_list = np.take(self.file_id_list, indeces, axis=0)
             else:
@@ -423,7 +421,7 @@ class ArgoverseMotionForecastingDataset(Dataset):
                 print(f"File {file_id} -> {i}/{len(self.file_id_list)}")
                 num_seq_list.append(file_id)
                 path = os.path.join(root_file_name,str(file_id)+".csv")
-                data = read_file(path) 
+                data = dataset_utils.read_file(path) 
             
                 frames = np.unique(data[:, 0]).tolist() 
                 frame_data = []
@@ -492,7 +490,7 @@ class ArgoverseMotionForecastingDataset(Dataset):
             # seq_list_rel = (seq_list_rel - seq_list_rel.min()) / (seq_list_rel.max() - seq_list_rel.min())
             norm = (abs_norm, rel_norm)
 
-            if SAVE_NPY:
+            if SAVE_DATA:
                 # Save numpy objects as npy 
 
                 folder_data_processed = root_folder + split + "/data_processed/"

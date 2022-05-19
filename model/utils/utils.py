@@ -4,6 +4,8 @@ import pdb
 import numpy as np
 import torch.nn as nn
 
+# Model parameters functions
+
 def create_weights(batch, vmin, vmax, w_len=30, w_type="linear"):
     w = torch.ones(w_len)
     if w_type == "linear":

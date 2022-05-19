@@ -1,4 +1,6 @@
-# LSTM based Encoder-Decoder with Multi-Head Self Attention
+# LSTM based Encoder-Decoder with Multi-Head Self Attention configuration file
+
+# Model hyperparameters
 
 use_gpu: 1
 dataset_name: argoverse_motion_forecasting_dataset
@@ -6,8 +8,11 @@ dataset:
     path: data/datasets/argoverse/motion-forecasting/
     split: "train"
     batch_size: 32
-    split_percentage: 0.0002
+    start_from_percentage: 0.0 # By default, 0. If you want to analize a particular bunch of files (e.g. from 25 % to 50 %)
+                               # then write here 0.25 and in split_percentage 0.25
+    split_percentage: 1.0 # % of the dataset (0-1)
     shuffle: False # False to check the input data, always set to True
+    data_augmentation: False # Rotation, Swapping, Dropout, Gaussian noise
     class_balance: 0.7 # % of straight trajectories (considering the AGENT). Remaining % are curved trajectories
                        # (again, considering the AGENT). -1.0 if no class balance is used (get_item takes the corresponding
                        # sequence regardless if it is straight or curved)
@@ -15,23 +20,24 @@ dataset:
 optim_parameters:
     g_learning_rate: 1.0e-3
     g_weight_decay: 0
-    d_learning_rate: 5.0e-3
+    d_learning_rate: 1.0e-3
     d_weight_decay: 0
 hyperparameters:
     loss_type_g: "mse_w+nll" # (mse|mse_w) nll (mse|mse_w)+nll
     lr_schduler: True # ExponentialLR
     output_single_agent: True
     tensorboard_active: True
-    num_iterations: 20000 #1608 #20000
+    num_iterations: 20000 
     num_epochs: 36 #75
     d_steps: 2
     g_steps: 1
+    timing: 0 # Waits for all kernels in all streams on a CUDA device to complete
     print_every: 10
     checkpoint_every: 1000
-    output_dir: "save/argoverse/gen_exp/exp_multiloss_5" # "save/argoverse/test"  # 
+    output_dir: "save/argoverse/gen_exp/social_lstm" # "save/argoverse/test"  # 
     exp_description: "multi loss + learning_rate scheduler"
     checkpoint_name: "0"
-    checkpoint_start_from: "save/argoverse/gen_exp/exp_multiloss_4/argoverse_motion_forecasting_dataset_0_with_model.pt"
+    checkpoint_start_from: ""
     restore_from_checkpoint: 
     clipping_threshold_d: 0
     clipping_threshold_g: 1.1
@@ -46,13 +52,13 @@ hyperparameters:
                            # Only the observations (0 to obs_len-1 past observations)
     num_agents_per_obs: &num_agents_per_obs 10
     distance_threshold: 40 # It depends on a statistical study (see get_sequences_as_array function), 
-                           # where we determine the mean distance of the AGENT w.r.t the ego-vehicle
-                           # in the obs_len-th frame
+                           # where we determine which is the optimal distance for which most agents
+                           # are observed for our AGENT 
     hidden_dim_lstm_decoder: &hidden_dim_lstm_decoder 128
 
-# SoPhie model
+# Model
 
-sophie:
+model:
     generator: 
         hdim: 32
     discriminator:

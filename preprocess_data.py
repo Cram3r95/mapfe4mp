@@ -15,10 +15,6 @@ import sys
 import yaml
 from prodict import Prodict
 
-# Plot imports
-
-import matplotlib.pyplot as plt
-
 BASE_DIR = "/home/denso/carlos_vsr_workspace/efficient-goals-motion-prediction"
 sys.path.append(BASE_DIR)
 
@@ -28,24 +24,48 @@ from model.dataset.argoverse.dataset import ArgoverseMotionForecastingDataset
 
 #######################################
 
-with open(r'./configs/social_lstm_mhsa.yml') as config:
+with open(r'./config/social_lstm_mhsa.yml') as config:
     config = yaml.safe_load(config)
     config = Prodict.from_dict(config)
     config.base_dir = BASE_DIR
 
-# Generate data
+# Preprocess data
 
-ArgoverseMotionForecastingDataset(dataset_name=config.dataset_name,
-                                  root_folder=config.dataset.path,
-                                  obs_len=config.hyperparameters.obs_len,
-                                  pred_len=config.hyperparameters.pred_len,
-                                  distance_threshold=config.hyperparameters.distance_threshold,
-                                  split="train",
-                                  num_agents_per_obs=config.hyperparameters.num_agents_per_obs,
-                                  split_percentage=config.dataset.split_percentage,
-                                  shuffle=config.dataset.shuffle,
-                                  batch_size=config.dataset.batch_size,
-                                  class_balance=config.dataset.class_balance,
-                                  obs_origin=config.hyperparameters.obs_origin,
-                                  preprocess_data=True,
-                                  save_data=True)
+PREPROCESS_DATA_TRAIN = False
+PREPROCESS_DATA_VAL = True
+
+## Train split
+
+if PREPROCESS_DATA_TRAIN:
+    ArgoverseMotionForecastingDataset(dataset_name=config.dataset_name,
+                                    root_folder=config.dataset.path,
+                                    obs_len=config.hyperparameters.obs_len,
+                                    pred_len=config.hyperparameters.pred_len,
+                                    distance_threshold=config.hyperparameters.distance_threshold,
+                                    split="train",
+                                    num_agents_per_obs=config.hyperparameters.num_agents_per_obs,
+                                    split_percentage=config.dataset.split_percentage,
+                                    shuffle=config.dataset.shuffle,
+                                    batch_size=config.dataset.batch_size,
+                                    class_balance=config.dataset.class_balance,
+                                    obs_origin=config.hyperparameters.obs_origin,
+                                    preprocess_data=True,
+                                    save_data=True)
+
+## Val split
+
+if PREPROCESS_DATA_VAL:
+    ArgoverseMotionForecastingDataset(dataset_name=config.dataset_name,
+                                    root_folder=config.dataset.path,
+                                    obs_len=config.hyperparameters.obs_len,
+                                    pred_len=config.hyperparameters.pred_len,
+                                    distance_threshold=config.hyperparameters.distance_threshold,
+                                    split="val",
+                                    num_agents_per_obs=config.hyperparameters.num_agents_per_obs,
+                                    split_percentage=config.dataset.split_percentage,
+                                    shuffle=config.dataset.shuffle,
+                                    batch_size=config.dataset.batch_size,
+                                    class_balance=-1.0,
+                                    obs_origin=config.hyperparameters.obs_origin,
+                                    preprocess_data=True,
+                                    save_data=True)
