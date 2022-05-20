@@ -33,7 +33,7 @@ hyperparameters:
     g_steps: 1
     timing: 0 # Waits for all kernels in all streams on a CUDA device to complete.
     print_every: 10
-    checkpoint_every: 50 # "save/argoverse/set_trans_1"
+    checkpoint_every: 2000 # "save/argoverse/set_trans_1"
     output_dir:  "save/argoverse/test" #"save/argoverse/te_lstm_1" # "save/argoverse/gen_exp_trans/exp_te_lstm_1" #
     exp_description: "50% dataset. et + lstm, scheduler"
     checkpoint_name: "0"

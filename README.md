@@ -11,7 +11,8 @@ pip install \
     torch \
     pyyaml \
     torchvision \
-    tensorboard
+    tensorboard \
+    torchstat
 
 Download argoverse-api (1.0) in another folder (out of this directory). \
 Go to the argoverse-api folder: 
