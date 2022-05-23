@@ -13,22 +13,14 @@ Created on Fri Feb 25 12:19:38 2022
 import random
 import os
 import math
-import csv
 import time
 import pdb
-import copy
-import glob, glob2
 
 # DL & Math imports
 
 import numpy as np
 import torch
 from torch.utils.data import Dataset
-import cv2
-
-# Plot imports
-
-import matplotlib.pyplot as plt
 
 # Custom imports
 
@@ -86,13 +78,17 @@ def seq_collate(data):
     # Data format: batch, input_size, seq_len
     # LSTM input format: seq_len, batch, input_size
 
-    obs_traj = torch.cat(obs_traj, dim=0).permute(2, 0, 1) # Past Observations x Num_agents · batch_size x 2
+    obs_traj = torch.cat(obs_traj, dim=0).permute(2, 0, 1) # Past Observations x Num_agents · batch_size x 2                                                          
     pred_traj_gt = torch.cat(pred_traj_gt, dim=0).permute(2, 0, 1)
     obs_traj_rel = torch.cat(obs_traj_rel, dim=0).permute(2, 0, 1)
     pred_traj_gt_rel = torch.cat(pred_traj_gt_rel, dim=0).permute(2, 0, 1)
     non_linear_obj = torch.cat(non_linear_obj)
     loss_mask = torch.cat(loss_mask, dim=0)
-    seq_start_end = torch.LongTensor(seq_start_end)
+    seq_start_end = torch.LongTensor(seq_start_end) # This variable represents the number of agents per 
+                                                    # sequence in the batch, i.e. if this variable = [[0,3],[4,10]],
+                                                    # that means that obs_traj = 20 x 10 x 2, with batch_size = 2, and
+                                                    # there are 3 agents in the first element of the batch and 7 agents in 
+                                                    # the second element of the batch
     id_frame = torch.cat(seq_id_list, dim=0).permute(2, 0, 1) # seq_len - objs_in_curr_seq - 3
 
     ## Data augmentation

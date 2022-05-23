@@ -34,7 +34,7 @@ hyperparameters:
     timing: 0 # Waits for all kernels in all streams on a CUDA device to complete
     print_every: 10
     checkpoint_every: 1000
-    output_dir: "save/argoverse/gen_exp/social_lstm" # "save/argoverse/test"  # 
+    output_dir: "save/argoverse/social_lstm/exp1" # "save/argoverse/test"  # 
     exp_description: "multi loss + learning_rate scheduler"
     checkpoint_name: "0"
     checkpoint_start_from: ""

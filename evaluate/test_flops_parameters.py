@@ -13,13 +13,14 @@ Created on Wed May 18 17:59:06 2022
 
 import sys
 import time
+import pdb
 
 # DL & Math
 
 import torch
-import torchstat
 from thop import profile, clever_format
-from pthflops import count_ops
+# https://github.com/facebookresearch/fvcore/blob/main/docs/flop_count.md
+from fvcore.nn import FlopCountAnalysis, flop_count_table
 
 # Custom imports
 
@@ -38,20 +39,23 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 # Get model parameters and FLOPs (Floating Point Operation per second)
 
 print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
+agents = 20
 
 ## Social LSTM MHSA
 
 h_dim = 32 # LSTM hidden state
 print("Social LSTM MHSA h_dim %i: " % h_dim)
 
+print("Num agents: ", agents)
+
 m_train = TG_So_LSTM_MHSA(h_dim=h_dim).train()
 m_non_train = TG_So_LSTM_MHSA(h_dim=h_dim)
 print("Only trainable parameters: ", utils.count_parameters(m_train))
 print("All parameters: ", utils.count_parameters(m_non_train))
 
-obs = torch.randn(20,3,2).to(device)
-rel = torch.randn(20,3,2).to(device)
-se = torch.tensor([[0,3]]).to(device)
+obs = torch.randn(20,agents,2).to(device)
+rel = torch.randn(20,agents,2).to(device)
+se = torch.tensor([[0,agents]]).to(device)
 idx = torch.tensor([1]).to(device)
 
 model = m_non_train.to(device)
@@ -60,26 +64,40 @@ t0 = time.time()
 preds = model(obs,rel,se,idx) # forward
 print("time ", time.time() - t0)
 
+print("FLOPs count using thop library: ")
+
 macs, params = profile(model, inputs=(obs,rel,se,idx, ), custom_ops={})
 macs, params = clever_format([macs, params], "%.3f")
 
-print('{:<30}  {:<8}'.format('Computational complexity: ', macs))
+print('{:<30}  {:<8}'.format('Computational complexity (MACs): ', macs))
 print('{:<30}  {:<8}'.format('Number of parameters: ', params))
+
+print("MACs count using fvcore library: ")
+
+macs = FlopCountAnalysis(model,(obs,rel,se,idx)) # This function actually 
+# returns the MACs. https://github.com/facebookresearch/fvcore/issues/69
+
+print("MACs total: ", macs.total())
+print("MACs my module: ", macs.by_module())
+print("MACs by module and operator: ", macs.by_module_and_operator())
 
 print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
 
 ## Social SET Transformer Multimodal
 
+agents = 20
+
 print("Social SET Transformer MM: ")
 
-h_dim = 32 # LSTM hidden state
+print("\nNum agents: ", agents)
+
 m_train = TG_So_SET_Trans_MM().train()
 m_non_train = TG_So_SET_Trans_MM()
 print("Only trainable parameters: ", utils.count_parameters(m_train))
 print("All parameters: ", utils.count_parameters(m_non_train))
 
-x = torch.randn(20,10,2).to(device)
-seq_start_end = torch.tensor([[0,5], [5, 10]]).to(device)
+x = torch.randn(20,agents,2).to(device)
+seq_start_end = torch.tensor([[0,agents]]).to(device)
 
 model = m_non_train.to(device)
 
@@ -87,26 +105,43 @@ t0 = time.time()
 preds, conf = model(x, seq_start_end) # forward
 print("time ", time.time() - t0)
 
+print("MACs count using thop library: ")
+
 macs, params = profile(model, inputs=(x, seq_start_end, ), custom_ops={})
 macs, params = clever_format([macs, params], "%.3f")
 
-print('{:<30}  {:<8}'.format('Computational complexity: ', macs))
+print('{:<30}  {:<8}'.format('Computational complexity (MACs): ', macs))
 print('{:<30}  {:<8}'.format('Number of parameters: ', params))
 
-# count_ops(model, (x,seq_start_end))
+print("MACs count using fvcore library: ")
 
-def test_count_flops():
-    """
-    """
+agents_list = [1,10,20,50,100,500,1000] # Test the FLOPs for this number of agents
+flops_list = []
 
-    from torchvision.models import resnet18
+for num_agents in agents_list:
+    x = torch.randn(20,num_agents,2).to(device)
+    seq_start_end = torch.tensor([[0,num_agents]]).to(device)
+    macs = FlopCountAnalysis(model,(x,seq_start_end))
+    flops = 0.5 * macs.total()
+    flops = clever_format([flops], "%.3f") 
+    
+    flops_list.append(flops)
 
-    # Create a network and a corresponding input
-    device = 'cuda:0'
-    model = resnet18().to(device)
-    inp = torch.rand(1,3,224,224).to(device)
+print("SET Transformer FLOPs study: \n")
+for num_agents, flops in zip(agents_list, flops_list):
+    print(f"Agents: {num_agents}, FLOPs: {flops}")
 
-    # Count the number of FLOPs
-    count_ops(model, inp)
+# print("MACs total: ", macs.total())
+# print("MACs my module: ", macs.by_module())
+# print("MACs by module and operator: ", macs.by_module_and_operator())
+
+# print(flop_count_table(macs))
+
+################################################################
+
+# LSTM 10 agents: 46616 (totally wrong)
+# Set transformer 10 agents: 378528 (makes sense)
+
+# It is not possible to compute LSTM for just one agent
 
 
