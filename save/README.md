@@ -1,0 +1,1 @@
+In this folder we save the different logs of the experiments as well as the architecture/weights (argoverse_motion_forecasting_dataset_0_with_model.pt).

@@ -16,6 +16,7 @@ import csv
 import time
 import glob, glob2
 import pdb
+import random
 
 # DL & Math imports
 
@@ -33,6 +34,8 @@ import model.datasets.argoverse.goal_points_functions as goal_points_functions
 import model.datasets.argoverse.map_functions as map_functions
 
 #######################################
+
+# File functions
 
 def isstring(string_test):
     """
@@ -90,6 +93,45 @@ def load_list_from_folder(folder_path, ext_filter=None, depth=1, recursive=False
 
     return full_list, num_elem
 
+def get_sorted_file_id_list(files):
+    """
+    """
+
+    sorted_file_id_list = []
+    root_file_name = None
+    for file_name in files:
+        if not root_file_name:
+            root_file_name = os.path.dirname(os.path.abspath(file_name))
+        file_id = int(os.path.normpath(file_name).split('/')[-1].split('.')[0])
+        sorted_file_id_list.append(file_id)
+    sorted_file_id_list.sort()
+
+    return sorted_file_id_list, root_file_name
+
+def apply_shuffling_percentage_startfrom(file_id_list, num_files, 
+                                         shuffle=False, split_percentage=0.25, start_from_percentage=0.0):
+    """
+    """
+
+    if shuffle:
+        rng = random.default_rng()
+        indeces = rng.choice(num_files, size=int(num_files*split_percentage), replace=False)
+        file_id_list = np.take(file_id_list, indeces, axis=0)
+    else:
+        start_from = int(start_from_percentage*num_files)
+        n_files = int(split_percentage*num_files)
+        file_id_list = file_id_list[start_from:start_from+n_files]
+
+        if (start_from + n_files) >= num_files:
+            print(f"WARNING: Unable to analyze {n_files} from {start_from} file. \
+                    Analyzing remaining files to completion")
+            file_id_list = file_id_list[start_from:]
+        else:
+            file_id_list = file_id_list[start_from:start_from+n_files]
+    print("Num files to be analized: ", len(file_id_list)) 
+
+    return file_id_list
+
 def read_file(_path):
     data = csv.DictReader(open(_path))
     aux = []
@@ -137,6 +179,52 @@ def get_origin_and_city(seq,obs_window):
         city_name = "MIA"
     
     return origin, city_name
+
+def create_dictionary_from_variable_list(variable_list, variable_name_list):
+    """
+    """
+
+    preprocessed_data_dict = dict()
+    pdb.set_trace()
+    for key,value in zip(variable_name_list,variable_list):
+        preprocessed_data_dict[key] = value
+    return preprocessed_data_dict
+
+def save_processed_data_as_npy(data_processed_folder, 
+                               processed_data_dict,
+                               split_percentage):
+    """
+    """
+
+    if not os.path.exists(data_processed_folder):
+        print("Create path: ", data_processed_folder)
+        os.mkdir(data_processed_folder)
+
+    for key, value in processed_data_dict.items():
+        filename = data_processed_folder + "/" + key + ".npy"
+        with open(filename, 'wb') as my_file: np.save(my_file, value)
+
+    # Save text file with additional information
+
+    filename = data_processed_folder + "/readme.txt"
+    split_percentage *= 100
+    string = f'This folder contains {split_percentage} % of the original files of the corresponding split dataset processed'.encode()
+    with open(filename, 'wb') as my_file:
+        my_file.write(string)
+
+def load_processed_files_from_npy(folder):
+    """
+    """
+
+    preprocessed_data_dict = dict()
+
+    preprocessed_files, num_files = load_list_from_folder(folder)
+    for preprocessed_file in preprocessed_files:
+        key = preprocessed_file.split('/')[-1].split('.')[0]
+        with open(preprocessed_file, 'rb') as my_file: value = np.load(my_file)
+        preprocessed_data_dict[key] = value
+
+    return preprocessed_data_dict
 
 def load_images(num_seq, obs_seq_data, first_obs, city_id, ego_origin, dist_rasterized_map, 
                 object_class_id_list,data_imgs_folder,debug_images=False):

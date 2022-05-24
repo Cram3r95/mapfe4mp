@@ -12,8 +12,8 @@ Created on Fri Feb 25 12:19:38 2022
 
 import random
 import os
-import math
 import time
+from operator import itemgetter
 import pdb
 
 # DL & Math imports
@@ -156,8 +156,9 @@ def seq_collate(data):
     return tuple(out)
 
 def process_window_sequence(idx, frame_data, frames, seq_len, pred_len, 
-                            threshold, file_id, split, obs_origin, skip=1, 
+                            file_id, split, obs_origin, 
                             rot_angle=None, augs=None):
+
     """
     Input:
         idx (int): AV id
@@ -165,16 +166,14 @@ def process_window_sequence(idx, frame_data, frames, seq_len, pred_len,
             - timestamp (int)
             - id (int) -> previously need to be converted. Original data is string
             - type (int) -> need to be converted from string to int
-            - x (float) -> x position
-            - y (float) -> y position
+            - x (float) -> x position (global, hdmap)
+            - y (float) -> y position (global, hdmap)
             - city_name (int)
         seq_len (int)
-        skip (int)
         pred_len (int)
         threshold (float)
         file_id (int)
-        split (str: "train", "val", "test")
-        skip (int) 
+        split (str: "train", "val", "test") 
     Output:
         num_objs_considered, _non_linear_obj, curr_loss_mask, curr_seq, curr_seq_rel, 
         id_frame_list, object_class_list, city_id, ego_origin
@@ -319,7 +318,7 @@ def process_window_sequence(idx, frame_data, frames, seq_len, pred_len,
             # non_linear = _non_linear_obj.append(poly_fit(curr_ped_seq, pred_len, threshold))
             try:
                 non_linear = geometric_functions.get_non_linear(file_id, curr_seq, idx=_idx, obj_kind=curr_ped_seq[0,2],
-                                                          threshold=2, debug_trajectory_classifier=False)
+                                                                threshold=2, debug_trajectory_classifier=False)
             except: # E.g. All max_trials iterations were skipped because each randomly chosen sub-sample 
                     # failed the passing criteria. Return non-linear because RANSAC could not fit a model
                 non_linear = 1.0
@@ -334,127 +333,117 @@ def process_window_sequence(idx, frame_data, frames, seq_len, pred_len,
            
 class ArgoverseMotionForecastingDataset(Dataset):
     """Dataloder for the Trajectory datasets"""
-    def __init__(self, dataset_name, root_folder, obs_len=20, pred_len=30, skip=1, threshold=0.002, distance_threshold=30,
-                 min_objs=0, windows_frames=None, split='train', num_agents_per_obs=10, split_percentage=0.1, start_from_percentage=0.0,
-                 shuffle=False, batch_size=16, class_balance=-1.0, obs_origin=1, preprocess_data=False, save_data=False):
+    def __init__(self, dataset_name, root_folder, obs_len=20, pred_len=30, distance_threshold=30,
+                 split='train', split_percentage=0.1, start_from_percentage=0.0, shuffle=False, 
+                 batch_size=16, class_balance=-1.0, obs_origin=1, preprocess_data=False, save_data=False, 
+                 data_augmentation=False):
         super(ArgoverseMotionForecastingDataset, self).__init__()
 
-        self.root_folder = root_folder
+        # Initialize self variables
+
         self.dataset_name = dataset_name
-        self.objects_id_dict = {"DUMMY": -1, "AV": 0, "AGENT": 1, "OTHERS": 2} # TODO: Get this by argument
+        self.root_folder = root_folder
+        data_processed_folder = root_folder + split + "/data_processed_1"
+
         self.obs_len, self.pred_len = obs_len, pred_len
         self.seq_len = self.obs_len + self.pred_len
-        self.skip = skip
-        self.threshold = threshold
-        self.distance_threshold = distance_threshold
-        self.min_objs = min_objs
-        self.windows_frames = windows_frames
+        self.distance_threshold = distance_threshold # Monitorize distance_threshold around the AGENT
         self.split = split
-        self.shuffle = shuffle
         self.batch_size = batch_size
         self.class_balance = class_balance
         self.obs_origin = obs_origin
-        self.min_ped = 2
+        self.min_objs = 2 # Minimum number of objects to include the scene (AV and AGENT)
         self.cont_seqs = 0
+
+        variable_name_list = ['seq_list','seq_list_rel','loss_mask_list','non_linear_obj',
+                              'num_objs_in_seq','seq_id_list','object_class_id_list',
+                              'object_id_list','ego_vehicle_origin','num_seq_list',
+                              'straight_trajectories_list','curved_trajectories_list','city_id','norm'] 
 
         PREPROCESS_DATA = preprocess_data
         SAVE_DATA = save_data
+
+        # Preprocess data (from raw .csvs to torch Tensors, at least including the 
+        # AGENT (most important vehicle) and AV
 
         if PREPROCESS_DATA:
             folder = root_folder + split + "/data/"
             files, num_files = dataset_utils.load_list_from_folder(folder)
 
-            self.file_id_list = []
-            root_file_name = None
-            for file_name in files:
-                if not root_file_name:
-                    root_file_name = os.path.dirname(os.path.abspath(file_name))
-                file_id = int(os.path.normpath(file_name).split('/')[-1].split('.')[0])
-                self.file_id_list.append(file_id)
-            self.file_id_list.sort()
-            print("Num files (whole split): ", num_files)
+            # Sort list and apply shuffling/analyze a specific percentage/from a specific position
 
-            if self.shuffle:
-                rng = random.default_rng()
-                indeces = rng.choice(num_files, size=int(num_files*split_percentage), replace=False)
-                self.file_id_list = np.take(self.file_id_list, indeces, axis=0)
-            else:
-                start_from = int(start_from_percentage*num_files)
-                n_files = int(split_percentage*num_files)
-                self.file_id_list = self.file_id_list[start_from:start_from+n_files]
+            file_id_list, root_file_name = dataset_utils.get_sorted_file_id_list(files)     
+            file_id_list = dataset_utils.apply_shuffling_percentage_startfrom(file_id_list, num_files,
+                                                                              shuffle=shuffle, 
+                                                                              split_percentage=split_percentage, 
+                                                                              start_from_percentage=start_from_percentage)
 
-                if (start_from + n_files) >= num_files:
-                    self.file_id_list = self.file_id_list[start_from:]
-                else:
-                    self.file_id_list = self.file_id_list[start_from:start_from+n_files]
-            print("Num files to be analized: ", len(self.file_id_list))
-
-            num_objs_in_seq = []
-            seq_list = []
-            seq_list_rel = []
+            seq_list = [] # Absolute coordinates (obs+pred) around 0.0 (center of the local map)
+            seq_list_rel = [] # Relative displacements (obs+pred)
+            num_objs_in_seq = [] 
             loss_mask_list = []
-            non_linear_obj = []
+            non_linear_obj = [] # Object with non-linear trajectory
             seq_id_list = []
-            object_class_id_list = []
-            object_id_list = []
-            num_seq_list = []
+            object_class_id_list = [] # 0 = AV, 1 = AGENT, 2 = DUMMY 
+            object_id_list = [] 
+            num_seq_list = [] # ID of the current sequence
             straight_trajectories_list = []
             curved_trajectories_list = []
-            ego_vehicle_origin = []
-            self.city_ids = []
-
-            min_disp_rel = []
-            max_disp_rel = []
+            ego_vehicle_origin = [] # Origin of the AGENT (TODO: ego_vehicle_origin is a WRONG nomenclature)
+            self.city_id = []
 
             print("Start Dataset")
             # TODO: Speed-up dataloading, avoiding objects further than X distance
 
             t0 = time.time()
-            # for i, path in enumerate(files):
-            for i, file_id in enumerate(self.file_id_list):
-                # file_id = int(path.split("/")[-1].split(".")[0])
+            for i, file_id in enumerate(file_id_list):
                 t1 = time.time()
-                print(f"File {file_id} -> {i}/{len(self.file_id_list)}")
+                print(f"File {file_id} -> {i}/{len(file_id_list)}")
                 num_seq_list.append(file_id)
                 path = os.path.join(root_file_name,str(file_id)+".csv")
                 data = dataset_utils.read_file(path) 
             
-                frames = np.unique(data[:, 0]).tolist() 
+                frames = np.unique(data[:, 0]).tolist() # Get unique timestamps (50 in this case)
                 frame_data = []
                 for frame in frames:
                     frame_data.append(data[frame == data[:, 0], :]) # save info for each frame
 
-                num_sequences = int(math.ceil((len(frames) - self.seq_len + 1) / skip))
                 idx = 0
 
                 num_objs_considered, _non_linear_obj, curr_loss_mask, curr_seq, \
                 curr_seq_rel, id_frame_list, object_class_list, city_id, ego_origin = \
-                    process_window_sequence(idx, frame_data, frames, \
-                                            self.seq_len, self.pred_len, threshold, file_id, self.split, self.obs_origin)
+                    process_window_sequence(idx, frame_data, frames,
+                                            self.seq_len, self.pred_len, 
+                                            file_id, self.split, self.obs_origin)
 
-                # Check if the trajectory is a straight line or has a curve
+                # Check if the current AGENT trajectory can be considered as a curve or straight trajectory
+                # (so for further training we can focus on the most difficult samples -> sequences in which
+                # the AGENT is permorming a curved trajectory)
 
                 if self.class_balance >= 0.0:
                     agent_idx = int(np.where(object_class_list==1)[0])
+
                     try:
-                        non_linear = dataset_utils.get_non_linear(file_id, curr_seq, idx=agent_idx, obj_kind=1,
-                                                                threshold=2, debug_trajectory_classifier=False)
+                        non_linear = geometric_functions.get_non_linear(file_id, curr_seq, idx=agent_idx, obj_kind=1,
+                                                                  threshold=2, debug_trajectory_classifier=False)
                     except: # E.g. All max_trials iterations were skipped because each randomly chosen sub-sample 
                             # failed the passing criteria. Return non-linear because RANSAC could not fit a model
                         non_linear = 1.0
 
-                if num_objs_considered >= self.min_ped:
+                    print("Non linear: ", non_linear)
+
+                if num_objs_considered >= self.min_objs:
                     non_linear_obj += _non_linear_obj
-                    num_objs_in_seq.append(num_objs_considered)
-                    loss_mask_list.append(curr_loss_mask[:num_objs_considered])
                     seq_list.append(curr_seq[:num_objs_considered]) # Remove dummies
                     seq_list_rel.append(curr_seq_rel[:num_objs_considered])
+                    num_objs_in_seq.append(num_objs_considered)
+                    loss_mask_list.append(curr_loss_mask[:num_objs_considered])
                     ###################################################################
                     seq_id_list.append(id_frame_list[:num_objs_considered]) # (timestamp, id, file_id)
                     object_class_id_list.append(object_class_list[:num_objs_considered]) # obj_class (-1 0 1 2 2 2 2 ...)
                     object_id_list.append(id_frame_list[:num_objs_considered,1,0])
                     ###################################################################
-                    self.city_ids.append(city_id)
+                    self.city_id.append(city_id)
                     ego_vehicle_origin.append(ego_origin)
                     ###################################################################
                     if self.class_balance >= 0.0:
@@ -478,7 +467,7 @@ class ArgoverseMotionForecastingDataset(Dataset):
             straight_trajectories_list = np.concatenate([straight_trajectories_list])
             ego_vehicle_origin = np.asarray(ego_vehicle_origin)
 
-            ## normalize abs and relative data
+            ## normalize abs and relative data # TODO: Is this used now?
             abs_norm = (seq_list.min(), seq_list.max())
             # seq_list = (seq_list - seq_list.min()) / (seq_list.max() - seq_list.min())
 
@@ -486,103 +475,34 @@ class ArgoverseMotionForecastingDataset(Dataset):
             # seq_list_rel = (seq_list_rel - seq_list_rel.min()) / (seq_list_rel.max() - seq_list_rel.min())
             norm = (abs_norm, rel_norm)
 
+            # Create dictionary with all processed data
+
+            variable_list = [seq_list, seq_list_rel, loss_mask_list, non_linear_obj, num_objs_in_seq,
+                             seq_id_list, object_class_id_list, object_id_list, ego_vehicle_origin, 
+                             num_seq_list, straight_trajectories_list, curved_trajectories_list, city_id, norm]
+            preprocess_data_dict = dataset_utils.create_dictionary_from_variable_list(variable_list, 
+                                                                                      variable_name_list)
+
             if SAVE_DATA:
                 # Save numpy objects as npy 
 
-                folder_data_processed = root_folder + split + "/data_processed/"
-                if not os.path.exists(folder_data_processed):
-                    print("Create path: ", folder_data_processed)
-                    os.mkdir(folder_data_processed)
-                    
-                filename = root_folder + split + "/data_processed/" + "seq_list" + ".npy"
-                with open(filename, 'wb') as my_file: np.save(my_file, seq_list)
-
-                filename = root_folder + split + "/data_processed/" + "seq_list_rel" + ".npy"
-                with open(filename, 'wb') as my_file: np.save(my_file, seq_list_rel)
-
-                filename = root_folder + split + "/data_processed/" + "loss_mask_list" + ".npy"
-                with open(filename, 'wb') as my_file: np.save(my_file, loss_mask_list)
-
-                filename = root_folder + split + "/data_processed/" + "non_linear_obj" + ".npy"
-                with open(filename, 'wb') as my_file: np.save(my_file, non_linear_obj)
-
-                filename = root_folder + split + "/data_processed/" + "num_objs_in_seq" + ".npy"
-                with open(filename, 'wb') as my_file: np.save(my_file, num_objs_in_seq)
-
-                filename = root_folder + split + "/data_processed/" + "seq_id_list" + ".npy"
-                with open(filename, 'wb') as my_file: np.save(my_file, seq_id_list)
-
-                filename = root_folder + split + "/data_processed/" + "object_class_id_list" + ".npy"
-                with open(filename, 'wb') as my_file: np.save(my_file, object_class_id_list)
-
-                filename = root_folder + split + "/data_processed/" + "object_id_list" + ".npy"
-                with open(filename, 'wb') as my_file: np.save(my_file, object_id_list)
-
-                filename = root_folder + split + "/data_processed/" + "ego_vehicle_origin" + ".npy"
-                with open(filename, 'wb') as my_file: np.save(my_file, ego_vehicle_origin)
-
-                filename = root_folder + split + "/data_processed/" + "num_seq_list" + ".npy"
-                with open(filename, 'wb') as my_file: np.save(my_file, num_seq_list)
-
-                filename = root_folder + split + "/data_processed/" + "straight_trajectories_list" + ".npy"
-                with open(filename, 'wb') as my_file: np.save(my_file, straight_trajectories_list)
-
-                filename = root_folder + split + "/data_processed/" + "curved_trajectories_list" + ".npy"
-                with open(filename, 'wb') as my_file: np.save(my_file, curved_trajectories_list)
-
-                filename = root_folder + split + "/data_processed/" + "norm" + ".npy"
-                with open(filename, 'wb') as my_file: np.save(my_file, norm)
-
-                filename = root_folder + split + "/data_processed/" + "city_id" + ".npy"
-                with open(filename, 'wb') as my_file: np.save(my_file, self.city_ids)
-
-                # assert 1 == 0
-
+                print("Saving np data structures as .npy files ...")
+                dataset_utils.save_processed_data_as_npy(data_processed_folder, 
+                                                         preprocess_data_dict,
+                                                         split_percentage)
+                assert 1 == 0
         else:
-            print("Loading .npy files ...")
+            print("Loading .npy files as np data structures ...")
 
-            filename = root_folder + split + "/data_processed/" + "seq_list" + ".npy"
-            with open(filename, 'rb') as my_file: seq_list = np.load(my_file)
+            preprocess_data_dict = dataset_utils.load_processed_files_from_npy(data_processed_folder)
 
-            filename = root_folder + split + "/data_processed/" + "seq_list_rel" + ".npy"
-            with open(filename, 'rb') as my_file: seq_list_rel = np.load(my_file)
+            seq_list, seq_list_rel, loss_mask_list, non_linear_obj, num_objs_in_seq, \
+            seq_id_list, object_class_id_list, object_id_list, ego_vehicle_origin, num_seq_list, \
+            straight_trajectories_list, curved_trajectories_list, city_id, norm  = \
+                itemgetter(*variable_name_list)(preprocess_data_dict)
 
-            filename = root_folder + split + "/data_processed/" + "loss_mask_list" + ".npy"
-            with open(filename, 'rb') as my_file: loss_mask_list = np.load(my_file)
-
-            filename = root_folder + split + "/data_processed/" + "non_linear_obj" + ".npy"
-            with open(filename, 'rb') as my_file: non_linear_obj = np.load(my_file)
-
-            filename = root_folder + split + "/data_processed/" + "num_objs_in_seq" + ".npy"
-            with open(filename, 'rb') as my_file: num_objs_in_seq = np.load(my_file)
-
-            filename = root_folder + split + "/data_processed/" + "seq_id_list" + ".npy"
-            with open(filename, 'rb') as my_file: seq_id_list = np.load(my_file)
-
-            filename = root_folder + split + "/data_processed/" + "object_class_id_list" + ".npy"
-            with open(filename, 'rb') as my_file: object_class_id_list = np.load(my_file)
-
-            filename = root_folder + split + "/data_processed/" + "object_id_list" + ".npy"
-            with open(filename, 'rb') as my_file: object_id_list = np.load(my_file)
-
-            filename = root_folder + split + "/data_processed/" + "ego_vehicle_origin" + ".npy"
-            with open(filename, 'rb') as my_file: ego_vehicle_origin = np.load(my_file)
-
-            filename = root_folder + split + "/data_processed/" + "num_seq_list" + ".npy"
-            with open(filename, 'rb') as my_file: num_seq_list = np.load(my_file)
+            self.city_id = city_id
             self.num_seq = len(num_seq_list)
-
-            filename = root_folder + split + "/data_processed/" + "straight_trajectories_list" + ".npy"
-            with open(filename, 'rb') as my_file: straight_trajectories_list = np.load(my_file)
-
-            filename = root_folder + split + "/data_processed/" + "curved_trajectories_list" + ".npy"
-            with open(filename, 'rb') as my_file: curved_trajectories_list = np.load(my_file)
-
-            filename = root_folder + split + "/data_processed/" + "norm" + ".npy"
-            with open(filename, 'rb') as my_file: norm = np.load(my_file)
-
-            filename = root_folder + split + "/data_processed/" + "city_id" + ".npy"
-            with open(filename, 'rb') as my_file: self.city_ids = np.load(my_file)
 
         ## Create torch data
 
@@ -641,7 +561,7 @@ class ArgoverseMotionForecastingDataset(Dataset):
                 self.obs_traj_rel[start:end, :, :], self.pred_traj_gt_rel[start:end, :, :],
                 self.non_linear_obj[start:end], self.loss_mask[start:end, :],
                 self.seq_id_list[start:end, :, :], self.object_class_id_list[start:end], 
-                self.object_id_list[start:end], self.city_ids[index], self.ego_vehicle_origin[index,:,:],
+                self.object_id_list[start:end], self.city_id[index], self.ego_vehicle_origin[index,:,:],
                 self.num_seq_list[index], self.norm
               ] 
 

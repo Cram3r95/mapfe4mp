@@ -20,37 +20,36 @@ sys.path.append(BASE_DIR)
 
 # Custom imports
 
-from model.dataset.argoverse.dataset import ArgoverseMotionForecastingDataset
+from model.datasets.argoverse.dataset import ArgoverseMotionForecastingDataset
 
 #######################################
 
-with open(r'./config/social_lstm_mhsa.yml') as config:
+with open(r'./config/config_social_lstm_mhsa.yml') as config:
     config = yaml.safe_load(config)
     config = Prodict.from_dict(config)
     config.base_dir = BASE_DIR
 
 # Preprocess data
 
-PREPROCESS_DATA_TRAIN = False
-PREPROCESS_DATA_VAL = True
+PREPROCESS_DATA_TRAIN = True
+PREPROCESS_DATA_VAL = False
 
 ## Train split
 
 if PREPROCESS_DATA_TRAIN:
     ArgoverseMotionForecastingDataset(dataset_name=config.dataset_name,
-                                    root_folder=config.dataset.path,
-                                    obs_len=config.hyperparameters.obs_len,
-                                    pred_len=config.hyperparameters.pred_len,
-                                    distance_threshold=config.hyperparameters.distance_threshold,
-                                    split="train",
-                                    num_agents_per_obs=config.hyperparameters.num_agents_per_obs,
-                                    split_percentage=config.dataset.split_percentage,
-                                    shuffle=config.dataset.shuffle,
-                                    batch_size=config.dataset.batch_size,
-                                    class_balance=config.dataset.class_balance,
-                                    obs_origin=config.hyperparameters.obs_origin,
-                                    preprocess_data=True,
-                                    save_data=True)
+                                      root_folder=config.dataset.path,
+                                      obs_len=config.hyperparameters.obs_len,
+                                      pred_len=config.hyperparameters.pred_len,
+                                      distance_threshold=config.hyperparameters.distance_threshold,
+                                      split="train",
+                                      split_percentage=config.dataset.split_percentage,
+                                      shuffle=config.dataset.shuffle,
+                                      batch_size=config.dataset.batch_size,
+                                      class_balance=config.dataset.class_balance,
+                                      obs_origin=config.hyperparameters.obs_origin,
+                                      preprocess_data=config.dataset.preprocess_data,
+                                      save_data=config.dataset.save_data)
 
 ## Val split
 
@@ -61,11 +60,10 @@ if PREPROCESS_DATA_VAL:
                                     pred_len=config.hyperparameters.pred_len,
                                     distance_threshold=config.hyperparameters.distance_threshold,
                                     split="val",
-                                    num_agents_per_obs=config.hyperparameters.num_agents_per_obs,
                                     split_percentage=config.dataset.split_percentage,
                                     shuffle=config.dataset.shuffle,
                                     batch_size=config.dataset.batch_size,
                                     class_balance=-1.0,
                                     obs_origin=config.hyperparameters.obs_origin,
-                                    preprocess_data=True,
-                                    save_data=True)
+                                    preprocess_data=config.dataset.preprocess_data,
+                                    save_data=config.dataset.save_data)

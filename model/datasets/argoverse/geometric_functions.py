@@ -87,8 +87,9 @@ def pnt2line(pnt, start, end):
 
 def get_non_linear(file_id, curr_seq, idx=0, obj_kind=2, threshold=2, debug_trajectory_classifier=False):
     """
-    Non-linear means the trajectory (of the AGENT in the present case) is a curve. 
-    Otherwise, it is considered as a linear (straight) trajectory
+    Non-linear means the trajectory (of the the corresponding obstacle) is a curve, 
+    considering its whole sequence (both obs and pred). Otherwise, it is considered 
+    as a linear (straight) trajectory
     """
 
     agent_seq = curr_seq[idx,:,:] #.cpu().detach().numpy()
