@@ -5,7 +5,7 @@
 
 """
 Created on Fri Feb 25 12:19:38 2022
-@author: Miguel Eduardo Ortiz Huamaní and Carlos Gómez-Huélamo
+@author: Carlos Gómez-Huélamo and Miguel Eduardo Ortiz Huamaní
 """
 
 # General purpose imports
@@ -13,7 +13,7 @@ Created on Fri Feb 25 12:19:38 2022
 import random
 import os
 import time
-from operator import itemgetter
+import operator
 import pdb
 
 # DL & Math imports
@@ -47,8 +47,7 @@ rotation_angles_prob = [0.33,0.33,0.34]
 # Auxiliar variables
 
 data_imgs_folder = None
-GET_VISUAL_DATA = False
-GET_GOAL_POINTS = False
+PHYSICAL_CONTEXT = "Dummy"
 
 frames_path = None
 avm = ArgoverseMap()
@@ -125,16 +124,20 @@ def seq_collate(data):
 
     first_obs = obs_traj[0,:,:] # 1 x agents · batch_size x 2
 
-    if GET_VISUAL_DATA: # batch_size x channels x height x width
+    # TODO: Merge load_goal_points and load_images in a single function
+    
+    if PHYSICAL_CONTEXT == "visual": # batch_size x channels x height x width
         frames = dataset_utils.load_images(num_seq_list, obs_traj_rel, first_obs, city_id, ego_vehicle_origin,
-                            dist_rasterized_map, object_class_id_list, debug_images=False)
+                                           dist_rasterized_map, object_class_id_list, data_imgs_folder,
+                                           debug_images=False)
         frames = torch.from_numpy(frames).type(torch.float32)
         frames = frames.permute(0, 3, 1, 2)
-    elif GET_GOAL_POINTS: # batch_size x num_goal_points x 2 (x|y) (real-world coordinates (HDmap))
+    elif PHYSICAL_CONTEXT == "goals": # batch_size x num_goal_points x 2 (x|y) (real-world coordinates (HDmap))
         frames = dataset_utils.load_goal_points(num_seq_list, obs_traj_rel, first_obs, city_id, ego_vehicle_origin,
-                            dist_rasterized_map, object_class_id_list, debug_images=False)
+                                                dist_rasterized_map, object_class_id_list, data_imgs_folder,
+                                                debug_images=False)
         frames = torch.from_numpy(frames).type(torch.float32)
-    else:
+    else: # dummy frames
         frames = np.random.randn(1,1,1,1)
         frames = torch.from_numpy(frames).type(torch.float32)
 
@@ -336,14 +339,14 @@ class ArgoverseMotionForecastingDataset(Dataset):
     def __init__(self, dataset_name, root_folder, obs_len=20, pred_len=30, distance_threshold=30,
                  split='train', split_percentage=0.1, start_from_percentage=0.0, shuffle=False, 
                  batch_size=16, class_balance=-1.0, obs_origin=1, preprocess_data=False, save_data=False, 
-                 data_augmentation=False):
+                 data_augmentation=False, physical_context="dummy"):
         super(ArgoverseMotionForecastingDataset, self).__init__()
 
         # Initialize self variables
 
         self.dataset_name = dataset_name
         self.root_folder = root_folder
-        data_processed_folder = root_folder + split + "/data_processed_1"
+        data_processed_folder = root_folder + split + "/data_processed"
 
         self.obs_len, self.pred_len = obs_len, pred_len
         self.seq_len = self.obs_len + self.pred_len
@@ -362,6 +365,9 @@ class ArgoverseMotionForecastingDataset(Dataset):
 
         PREPROCESS_DATA = preprocess_data
         SAVE_DATA = save_data
+        global APPLY_DATA_AUGMENTATION, PHYSICAL_CONTEXT
+        APPLY_DATA_AUGMENTATION = data_augmentation
+        PHYSICAL_CONTEXT = physical_context
 
         # Preprocess data (from raw .csvs to torch Tensors, at least including the 
         # AGENT (most important vehicle) and AV
@@ -390,7 +396,7 @@ class ArgoverseMotionForecastingDataset(Dataset):
             straight_trajectories_list = []
             curved_trajectories_list = []
             ego_vehicle_origin = [] # Origin of the AGENT (TODO: ego_vehicle_origin is a WRONG nomenclature)
-            self.city_id = []
+            city_ids = []
 
             print("Start Dataset")
             # TODO: Speed-up dataloading, avoiding objects further than X distance
@@ -430,8 +436,6 @@ class ArgoverseMotionForecastingDataset(Dataset):
                             # failed the passing criteria. Return non-linear because RANSAC could not fit a model
                         non_linear = 1.0
 
-                    print("Non linear: ", non_linear)
-
                 if num_objs_considered >= self.min_objs:
                     non_linear_obj += _non_linear_obj
                     seq_list.append(curr_seq[:num_objs_considered]) # Remove dummies
@@ -443,7 +447,7 @@ class ArgoverseMotionForecastingDataset(Dataset):
                     object_class_id_list.append(object_class_list[:num_objs_considered]) # obj_class (-1 0 1 2 2 2 2 ...)
                     object_id_list.append(id_frame_list[:num_objs_considered,1,0])
                     ###################################################################
-                    self.city_id.append(city_id)
+                    city_ids.append(city_id)
                     ego_vehicle_origin.append(ego_origin)
                     ###################################################################
                     if self.class_balance >= 0.0:
@@ -466,6 +470,7 @@ class ArgoverseMotionForecastingDataset(Dataset):
             curved_trajectories_list = np.concatenate([curved_trajectories_list])
             straight_trajectories_list = np.concatenate([straight_trajectories_list])
             ego_vehicle_origin = np.asarray(ego_vehicle_origin)
+            city_ids = np.asarray(city_ids)
 
             ## normalize abs and relative data # TODO: Is this used now?
             abs_norm = (seq_list.min(), seq_list.max())
@@ -479,7 +484,7 @@ class ArgoverseMotionForecastingDataset(Dataset):
 
             variable_list = [seq_list, seq_list_rel, loss_mask_list, non_linear_obj, num_objs_in_seq,
                              seq_id_list, object_class_id_list, object_id_list, ego_vehicle_origin, 
-                             num_seq_list, straight_trajectories_list, curved_trajectories_list, city_id, norm]
+                             num_seq_list, straight_trajectories_list, curved_trajectories_list, city_ids, norm]
             preprocess_data_dict = dataset_utils.create_dictionary_from_variable_list(variable_list, 
                                                                                       variable_name_list)
 
@@ -490,19 +495,17 @@ class ArgoverseMotionForecastingDataset(Dataset):
                 dataset_utils.save_processed_data_as_npy(data_processed_folder, 
                                                          preprocess_data_dict,
                                                          split_percentage)
-                assert 1 == 0
+                #assert 1 == 0 # Uncomment this if you want to preprocess -> save -> 
+                              # -> continue with the dataset (for example in training)
         else:
             print("Loading .npy files as np data structures ...")
 
             preprocess_data_dict = dataset_utils.load_processed_files_from_npy(data_processed_folder)
-
+        
             seq_list, seq_list_rel, loss_mask_list, non_linear_obj, num_objs_in_seq, \
             seq_id_list, object_class_id_list, object_id_list, ego_vehicle_origin, num_seq_list, \
-            straight_trajectories_list, curved_trajectories_list, city_id, norm  = \
-                itemgetter(*variable_name_list)(preprocess_data_dict)
-
-            self.city_id = city_id
-            self.num_seq = len(num_seq_list)
+            straight_trajectories_list, curved_trajectories_list, city_ids, norm  = \
+                operator.itemgetter(*variable_name_list)(preprocess_data_dict)
 
         ## Create torch data
 
@@ -518,7 +521,11 @@ class ArgoverseMotionForecastingDataset(Dataset):
         self.object_class_id_list = torch.from_numpy(object_class_id_list).type(torch.float)
         self.object_id_list = torch.from_numpy(object_id_list).type(torch.float)
         self.ego_vehicle_origin = torch.from_numpy(ego_vehicle_origin).type(torch.float)
+        self.city_ids = torch.from_numpy(city_ids).type(torch.float)
+
         self.num_seq_list = torch.from_numpy(num_seq_list).type(torch.int)
+        self.num_seq = len(num_seq_list)
+
         self.straight_trajectories_list = torch.from_numpy(straight_trajectories_list).type(torch.int)
         self.curved_trajectories_list = torch.from_numpy(curved_trajectories_list).type(torch.int)
         self.norm = torch.from_numpy(np.array(norm))
@@ -529,7 +536,8 @@ class ArgoverseMotionForecastingDataset(Dataset):
     def __getitem__(self, index):
         global data_imgs_folder
         data_imgs_folder = self.root_folder + self.split + "/data_images/"
-        if self.class_balance >= 0.0:
+
+        if self.class_balance >= 0.0: # Only during training
             if self.cont_seqs % self.batch_size == 0: # Get a new batch
                 self.cont_straight_traj = []
                 self.cont_curved_traj = []
@@ -556,12 +564,13 @@ class ArgoverseMotionForecastingDataset(Dataset):
                 self.cont_curved_traj.append(index)
 
         start, end = self.seq_start_end[index]
+
         out = [
                 self.obs_traj[start:end, :, :], self.pred_traj_gt[start:end, :, :],
                 self.obs_traj_rel[start:end, :, :], self.pred_traj_gt_rel[start:end, :, :],
                 self.non_linear_obj[start:end], self.loss_mask[start:end, :],
                 self.seq_id_list[start:end, :, :], self.object_class_id_list[start:end], 
-                self.object_id_list[start:end], self.city_id[index], self.ego_vehicle_origin[index,:,:],
+                self.object_id_list[start:end], self.city_ids[index], self.ego_vehicle_origin[index,:,:],
                 self.num_seq_list[index], self.norm
               ] 
 

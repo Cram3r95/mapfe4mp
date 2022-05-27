@@ -22,10 +22,11 @@ import argparse
 import importlib
 import pdb
 
-BASE_DIR = "/home/denso/carlos_vsr_workspace/efficient-goals-motion-prediction"
+BASE_DIR = "/home/denso/carlos_vsr_workspace/mapfe4mp"
 sys.path.append(BASE_DIR)
 
-TRAINER_LIST = ["social_lstm_mhsa", "social_transformer", "social_set_transformer_mm"]
+TRAINER_LIST = ["social_lstm_mhsa",
+                "social_set_transformer_goals_mm", "social_set_transformer_mm"]
 
 def create_logger(file_path):
     """
@@ -46,6 +47,7 @@ if __name__ == "__main__":
     """
     parser = argparse.ArgumentParser()
     parser.add_argument("--trainer", required=True, type=str, choices=TRAINER_LIST)
+    parser.add_argument("--device_gpu", required=True, type=int)
     args = parser.parse_args()
     print(args.trainer)
     
@@ -62,8 +64,7 @@ if __name__ == "__main__":
 
     with open(config_path) as config_file:
         config_file = yaml.safe_load(config_file)
-
-        # Fill some additional dimensions
+        config_file["device_gpu"] = args.device_gpu
 
         config_file["base_dir"] = BASE_DIR
         exp_path = os.path.join(config_file["base_dir"], config_file["hyperparameters"]["output_dir"])   

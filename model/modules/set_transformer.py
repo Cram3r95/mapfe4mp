@@ -4,6 +4,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+# Multi-Head Attention Block
+
+# ln = layer normalization
 class MAB(nn.Module):
     def __init__(self, dim_Q, dim_K, dim_V, num_heads, do=0.1, ln=False):
         super(MAB, self).__init__()
@@ -34,6 +37,7 @@ class MAB(nn.Module):
         O = O if getattr(self, 'ln1', None) is None else self.ln1(O)
         return O
 
+# Set Attention Block
 
 class SAB(nn.Module):
     def __init__(self, dim_in, dim_out, num_heads, ln=False):
@@ -43,6 +47,7 @@ class SAB(nn.Module):
     def forward(self, X):
         return self.mab(X, X)
 
+# Induced Set Attention Block
 
 class ISAB(nn.Module):
     def __init__(self, dim_in, dim_out, num_heads, num_inds, ln=False):
@@ -56,6 +61,7 @@ class ISAB(nn.Module):
         H = self.mab0(self.I.repeat(X.size(0), 1, 1), X)
         return self.mab1(X, H)
 
+# Pooling by Multihead Attention
 
 class PMA(nn.Module):
     def __init__(self, dim, num_heads, num_seeds, ln=False):

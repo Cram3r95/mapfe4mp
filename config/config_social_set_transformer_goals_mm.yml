@@ -1,8 +1,9 @@
-# LSTM based Encoder-Decoder with Multi-Head Self Attention configuration file
+# Social SET Transformer Multimodal configuration file
 
 # Model hyperparameters
 
 use_gpu: 1
+device_gpu: 0 # Default
 dataset_name: argoverse_motion_forecasting_dataset
 dataset:
     path: data/datasets/argoverse/motion-forecasting/
@@ -10,14 +11,15 @@ dataset:
     batch_size: 32
     start_from_percentage: 0.0 # By default, 0. If you want to analize a particular bunch of files (e.g. from 25 % to 50 %)
                                # then write here 0.25 and in split_percentage 0.25
-    split_percentage: 1.0 # % of the dataset (0-1)
+    split_percentage: 0.005 # Proportion of the dataset (0-1) e.g. 0.5 means 50 %
     shuffle: False # False to check the input data, always set to True
     data_augmentation: False # Rotation, Swapping, Dropout, Gaussian noise
+    physical_context: "goals" # dummy (physical context ignored), visual (rasterized image), goals (plausible end points)
     class_balance: 0.7 # % of straight trajectories (considering the AGENT). Remaining % are curved trajectories
                        # (again, considering the AGENT). -1.0 if no class balance is used (get_item takes the corresponding
                        # sequence regardless if it is straight or curved)
-    preprocess_data: True
-    save_data: True
+    preprocess_data: False
+    save_data: False
     num_workers: 0
 optim_parameters:
     g_learning_rate: 1.0e-3
@@ -29,15 +31,15 @@ hyperparameters:
     lr_schduler: True # ExponentialLR
     output_single_agent: True
     tensorboard_active: True
-    num_iterations: 20000 
-    num_epochs: 36 #75
+    num_iterations: 20000
+    num_epochs: 500 #75
     d_steps: 2
     g_steps: 1
     timing: 0 # Waits for all kernels in all streams on a CUDA device to complete
     print_every: 10
-    checkpoint_every: 1000
-    output_dir: "save/argoverse/social_lstm/exp2"
-    exp_description: "multi loss + learning_rate scheduler"
+    checkpoint_every: 2000 
+    output_dir:  "save/argoverse/social_set_transformer_goals_mm/exp1"
+    exp_description: "50% dataset. et + lstm, scheduler"
     checkpoint_name: "0"
     checkpoint_start_from: ""
     restore_from_checkpoint: 
@@ -62,7 +64,7 @@ hyperparameters:
 
 model:
     generator: 
-        hdim: 32
+      test: "test"
     discriminator:
         # Encoder
         encoder:

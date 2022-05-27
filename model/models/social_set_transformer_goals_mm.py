@@ -5,7 +5,7 @@
 
 """
 Created on Mon May 23 17:54:37 2022
-@author: Miguel Eduardo Ortiz Huamaní, Marcos V. Conde and Carlos Gómez-Huélamo
+@author: Carlos Gómez-Huélamo, Miguel Eduardo Ortiz Huamaní and Marcos V. Conde 
 """
 
 # General purpose imports
@@ -39,7 +39,6 @@ from model.modules.set_transformer import ISAB, PMA, SAB
 # Read: Set transformer 
 # Read: https://medium.com/wovenplanetlevel5/how-to-build-a-motion-prediction-model-for-autonomous-vehicles-29f7f81f1580
 
-
 class TrajectoryGenerator(nn.Module):
     def __init__(self, dim_input=20*2, num_outputs=3, dim_output=30 * 2,
                  num_inds=8, dim_hidden=64, num_heads=4, ln=False, pred_len=30):
@@ -66,17 +65,17 @@ class TrajectoryGenerator(nn.Module):
         self.regressor = nn.Linear(dim_hidden, dim_output)
         self.mode_confidences = nn.Linear(dim_hidden, 1)
 
-    def forward(self, seq_list_rel, seq_start_end): #
+    def forward(self, seq_list_rel, seq_start_end, goals): #
         """
         seq_list_rel: Observation data (20 = obs_len x batch_size*num_agents x data_dimensionality = 2 (x|y))
                       Note that this data is in relative coordinates (displacements)
         start_end_seq: batch_size x 2 (each element indicates the number of agents per sequence batch element
                        in seq_list_rel
+        goals: batch_size x 32 x 2 
         """
-        # pdb.set_trace()
-        XX = []
-        for start, end in seq_start_end.data:
 
+        for start, end in seq_start_end.data:
+            pdb.set_trace()
             Y = seq_list_rel[:,start:end,:].contiguous().permute(1,0,2)
             num_agents, obs_len, data_dim = Y.shape
             Y = Y.contiguous().view(1, num_agents, data_dim*obs_len)

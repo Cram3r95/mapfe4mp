@@ -30,6 +30,7 @@ from argoverse.utils.centerline_utils import (
 )
 
 import model.datasets.argoverse.dataset_utils as dataset_utils
+import model.datasets.argoverse.goal_points_functions as goal_points_functions
 
 IS_OCCLUDED_FLAG = 100
 LANE_TANGENT_VECTOR_SCALING = 4
@@ -194,20 +195,14 @@ def map_generator(curr_num_seq,
     # print("Time consumed by plot drivable area and lane centerlines: ", time.time()-t0)
 
     # draw_lane_polygons(ax, local_das, "tab:pink", linewidth=1.5, fill=False)
-    # filled_img = fill_driveable_area(img_cv) # Not test for complex polygons
-
     # draw_lane_polygons(ax, local_lane_polygons, "tab:red", linewidth=1.5, fill=False)
 
     # Save image
 
     filename = root_folder + "/" + str(curr_num_seq) + ".png"
 
-    # img_map = renderize_image(fig,new_shape=(224,224),normalize=False)
-    # cv2.imwrite(filename,img_map)
-
     if show:
         plt.show()
-        # cv2.imshow("img_map",img_map)
         pdb.set_trace()
 
     # Save PLT canvas -> png to automatically remove padding
@@ -634,10 +629,10 @@ def plot_qualitative_results_mm(filename, pred_traj_fake_list, agent_pred_traj_g
     dist_around = 40
     ori_pos = [xcenter,ycenter]
     agent_obs_seq_global = obs_traj[:, agent_idx, :].view(-1,2).numpy() + origin_pos[0][0].cpu().numpy() # Global (HDmap)
-    goal_points = dataset_utils.get_goal_points(filename, torch.tensor(agent_obs_seq_global), torch.tensor(ori_pos), dist_around)
+    goal_points = goal_points_functions.get_goal_points(filename, torch.tensor(agent_obs_seq_global), torch.tensor(ori_pos), dist_around)
     
     ## radius of action
-    vel = dataset_utils.get_agent_velocity(torch.transpose(obs_traj[:, agent_idx, :].view(-1,2),0,1))
+    vel = goal_points_functions.get_agent_velocity(torch.transpose(obs_traj[:, agent_idx, :].view(-1,2),0,1))
     r = 3*vel
     circ_car = plt.Circle((xcenter, ycenter), r, color='purple', fill=False, linewidth=3)
     ax.add_patch(circ_car)

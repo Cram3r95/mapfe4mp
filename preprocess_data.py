@@ -32,7 +32,7 @@ with open(r'./config/config_social_lstm_mhsa.yml') as config:
 # Preprocess data
 
 PREPROCESS_DATA_TRAIN = True
-PREPROCESS_DATA_VAL = False
+PREPROCESS_DATA_VAL = True
 
 ## Train split
 
@@ -48,8 +48,8 @@ if PREPROCESS_DATA_TRAIN:
                                       batch_size=config.dataset.batch_size,
                                       class_balance=config.dataset.class_balance,
                                       obs_origin=config.hyperparameters.obs_origin,
-                                      preprocess_data=config.dataset.preprocess_data,
-                                      save_data=config.dataset.save_data)
+                                      preprocess_data=True,
+                                      save_data=True)
 
 ## Val split
 
@@ -65,5 +65,5 @@ if PREPROCESS_DATA_VAL:
                                     batch_size=config.dataset.batch_size,
                                     class_balance=-1.0,
                                     obs_origin=config.hyperparameters.obs_origin,
-                                    preprocess_data=config.dataset.preprocess_data,
-                                    save_data=config.dataset.save_data)
+                                    preprocess_data=True,
+                                    save_data=True)

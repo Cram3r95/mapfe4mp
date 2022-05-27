@@ -69,13 +69,18 @@ def get_points(img, car_px, scale_x, rad=100, color=255, N=1024, sample_car=True
                   
     return px_y, px_x
 
+# def change_bg_color(img):
+#     img_aux = copy.deepcopy(img)
+#     for i in range(img_aux.shape[0]):    
+#        for j in range(img_aux.shape[1]):  
+#            if (img_aux[i,j] == [0,0,0]).all():
+#                img_aux[i,j] = [255,255,255]
+#     return img_aux
+
 def change_bg_color(img):
-    img_aux = copy.deepcopy(img)
-    for i in range(img_aux.shape[0]):    
-       for j in range(img_aux.shape[1]):  
-           if (img_aux[i,j] == [0,0,0]).all():
-               img_aux[i,j] = [255,255,255]
-    return img_aux
+    img[np.all(img == (0, 0, 0), axis=-1)] = (255,255,255)
+
+    return img
 
 # N.B. In PLT, points must be specified as standard cartesian frames (x from left to right, y from bottom to top)
 def plot_fepoints(img, filename, obs_px_x, obs_px_y, car_px, 

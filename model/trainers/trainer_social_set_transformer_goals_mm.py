@@ -1,3 +1,13 @@
+#!/usr/bin/env python3.8
+# -*- coding: utf-8 -*-
+
+## Argoverse dataset
+
+"""
+Created on Mon May 23 17:54:37 2022
+@author: Carlos Gómez-Huélamo, Miguel Eduardo Ortiz Huamaní and Marcos V. Conde 
+"""
+
 import argparse
 import gc
 import logging
@@ -15,7 +25,7 @@ import torch.optim.lr_scheduler as lrs
 from torch.cuda.amp import GradScaler, autocast 
 
 from model.datasets.argoverse.dataset import ArgoverseMotionForecastingDataset, seq_collate
-from model.models.social_set_transformer_mm import TrajectoryGenerator
+from model.models.social_set_transformer_goals_mm import TrajectoryGenerator
 from model.modules.losses import pytorch_neg_multi_log_likelihood_batch, mse_custom, l2_loss, l2_loss_multimodal
 from model.modules.evaluation_metrics import displacement_error, final_displacement_error
 from model.utils.checkpoint_data import Checkpoint, get_total_norm
@@ -27,16 +37,27 @@ from torch.utils.tensorboard import SummaryWriter
 torch.backends.cudnn.benchmark = True
 scaler = GradScaler()
 
+# Aux functions
+
 def get_lr(optimizer):
+    """
+    """
+
     for param_group in optimizer.param_groups:
         return param_group['lr']
 
 def init_weights(m):
+    """
+    """
+        
     classname = m.__class__.__name__
     if classname.find('Linear') != -1:
         nn.init.kaiming_normal_(m.weight)
 
 def get_dtypes(use_gpu):
+    """
+    """
+        
     long_dtype = torch.LongTensor
     float_dtype = torch.FloatTensor
     if use_gpu == 1:
@@ -44,7 +65,12 @@ def get_dtypes(use_gpu):
         float_dtype = torch.cuda.FloatTensor
     return long_dtype, float_dtype
 
+# Compute losses
+
 def calculate_nll_loss(gt, pred, loss_f, confidences):
+    """
+    """
+    
     time, bs, _ = gt.shape
     gt = gt.permute(1,0,2)
     avails = torch.ones(bs,time).cuda()
@@ -60,6 +86,7 @@ def calculate_mse_loss(gt, pred, loss_f):
     """
     pred: (b,m,t,2)
     """
+
     b,m,t,_ = pred.shape
     pred = pred.permute(1,2,0,3) # (m,t,b,2)
     loss_ade = torch.zeros(1).to(pred)
@@ -69,18 +96,18 @@ def calculate_mse_loss(gt, pred, loss_f):
         loss_fde += loss_f(pred[i][-1].unsqueeze(0), gt[-1].unsqueeze(0))
     return loss_ade/m, loss_fde/m
 
-
 def model_trainer(config, logger):
     """
     """
 
-    #device = torch.device(f"cuda:{config.device_gpu}" if torch.cuda.is_available() else "cpu")
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    device = torch.device(f"cuda:{config.device_gpu}" if torch.cuda.is_available() else "cpu")
 
     long_dtype, float_dtype = get_dtypes(config.use_gpu)
 
     logger.info('Configuration: ')
     logger.info(config)
+
+    # Get train and val datasets
 
     logger.info("Initializing train dataset") 
     data_train = ArgoverseMotionForecastingDataset(dataset_name=config.dataset_name,
@@ -93,7 +120,8 @@ def model_trainer(config, logger):
                                                    shuffle=config.dataset.shuffle,
                                                    batch_size=config.dataset.batch_size,
                                                    class_balance=config.dataset.class_balance,
-                                                   obs_origin=config.hyperparameters.obs_origin)
+                                                   obs_origin=config.hyperparameters.obs_origin,
+                                                   physical_context=config.dataset.physical_context)
 
     train_loader = DataLoader(data_train,
                               batch_size=config.dataset.batch_size,
@@ -111,19 +139,21 @@ def model_trainer(config, logger):
                                                  split_percentage=config.dataset.split_percentage,
                                                  shuffle=config.dataset.shuffle,
                                                  class_balance=-1,
-                                                 obs_origin=config.hyperparameters.obs_origin)
+                                                 obs_origin=config.hyperparameters.obs_origin,
+                                                 physical_context=config.dataset.physical_context)
+
     val_loader = DataLoader(data_val,
                             batch_size=config.dataset.batch_size,
                             shuffle=config.dataset.shuffle,
                             num_workers=config.dataset.num_workers,
                             collate_fn=seq_collate)
 
+    # Configure hyperparameters
 
     hyperparameters = config.hyperparameters
     optim_parameters = config.optim_parameters
 
-
-    iterations_per_epoch = len(data_train) / config.dataset.batch_size
+    iterations_per_epoch = len(data_train) / config.dataset.batch_size # 1 iteration = 1 batch analysis
     if hyperparameters.num_epochs:
         hyperparameters.num_iterations = int(iterations_per_epoch * hyperparameters.num_epochs)
         hyperparameters.num_iterations = hyperparameters.num_iterations if hyperparameters.num_iterations != 0 else 1
@@ -139,18 +169,21 @@ def model_trainer(config, logger):
     logger.info('Generator model:')
     logger.info(generator)
 
-    # optimizer, scheduler and loss functions
+    # Optimizer, scheduler and loss functions
 
     loss_f = {
         "mse": mse_custom ,
         "nll": pytorch_neg_multi_log_likelihood_batch
     }
 
-    optimizer_g = optim.Adam(generator.parameters(), lr=optim_parameters.g_learning_rate, weight_decay=optim_parameters.g_weight_decay)
+    optimizer_g = optim.Adam(generator.parameters(), 
+                             lr=optim_parameters.g_learning_rate, 
+                             weight_decay=optim_parameters.g_weight_decay)
+
     if hyperparameters.lr_schduler:
         # scheduler_g = lrs.ExponentialLR(optimizer_g, gamma=hyperparameters.lr_scheduler_gamma_g)
         scheduler_g = lrs.ReduceLROnPlateau(
-            optimizer_g, "min", min_lr=1e-6, verbose=True, factor=0.5, patience=6010,
+            optimizer_g, "min", min_lr=1e-6, verbose=True, factor=0.5, patience=5000,
         )
 
     restore_path = None
@@ -159,7 +192,6 @@ def model_trainer(config, logger):
     elif hyperparameters.restore_from_checkpoint == 1:
         restore_path = os.path.join(hyperparameters.output_dir,
                                     '%s_with_model.pt' % hyperparameters.checkpoint_name)
-
 
     if restore_path is not None and os.path.isfile(restore_path):
         logger.info('Restoring from checkpoint {}'.format(restore_path))
@@ -175,6 +207,8 @@ def model_trainer(config, logger):
         t, epoch = 0, 0
         checkpoint = Checkpoint()
 
+    # Tensorboard
+
     if hyperparameters.tensorboard_active:
         exp_path = os.path.join(
             config.base_dir, hyperparameters.output_dir, "tensorboard_logs"
@@ -185,7 +219,8 @@ def model_trainer(config, logger):
     logger.info(f"Train {len(train_loader)}")
     logger.info(f"Val {len(val_loader)}")
 
-    ## start training
+    # Start training
+
     while t < hyperparameters.num_iterations:
         gc.collect()
         epoch += 1
@@ -326,7 +361,6 @@ def model_trainer(config, logger):
         config.base_dir, hyperparameters.output_dir, "{}_{}_with_model.pt".format(config.dataset_name, hyperparameters.checkpoint_name)
     )
 
-
 def generator_step(
     hyperparameters, batch, generator, optimizer_g, loss_f
 ):
@@ -345,13 +379,15 @@ def generator_step(
     if hyperparameters.output_single_agent:
         loss_mask = loss_mask[agent_idx, hyperparameters.obs_len:]
         pred_traj_gt_rel = pred_traj_gt_rel[:, agent_idx, :]
-    else:  # 160x30 -> 0 o 1
+    else:  
         loss_mask = loss_mask[:, hyperparameters.obs_len:]
 
-    # forward
-    optimizer_g.zero_grad()
+    # Forward
+
+    optimizer_g.zero_grad() # Set gradients to 0
+
     generator_out, conf = generator(
-        obs_traj_rel, seq_start_end
+        obs_traj_rel, seq_start_end, frames
     )
 
     pred_traj_fake_rel = generator_out
@@ -360,7 +396,6 @@ def generator_step(
     else:
         pred_traj_fake = relative_to_abs_sgan_multimodal(pred_traj_fake_rel, obs_traj[-1])
         
-
     # handle single agent output
     if hyperparameters.output_single_agent:
         obs_traj = obs_traj[:,agent_idx, :]
@@ -385,12 +420,7 @@ def generator_step(
             pred_traj_gt_rel, pred_traj_fake_rel, loss_f["mse"]
         )
         loss_nll = calculate_nll_loss(pred_traj_gt_rel, pred_traj_fake_rel,loss_f["nll"], conf)
-        
-        alfa = 1
-        beta = 2.5
-        ganma = 1.5
-        loss = alfa*loss_ade + beta*loss_fde + ganma*loss_nll
-
+        loss = loss_ade + loss_fde + loss_nll*0.75
         losses["G_mse_ade_loss"] = loss_ade.item()
         losses["G_mse_fde_loss"] = loss_fde.item()
         losses["G_nll_loss"] = loss_nll.item()

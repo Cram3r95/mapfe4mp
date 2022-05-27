@@ -7,7 +7,7 @@ import os
 
 import matplotlib.pyplot as plt
 
-BASE_DIR = "/home/denso/carlos_vsr_workspace/efficient-goals-motion-prediction"
+BASE_DIR = "/home/denso/carlos_vsr_workspace/mapfe4mp"
 sys.path.append(BASE_DIR)
 
 from model.datasets.argoverse.dataset_utils import read_file, \
@@ -58,7 +58,7 @@ past_observations = config.hyperparameters.obs_len
 num_agents_per_obs = config.hyperparameters.num_agents_per_obs
 
 config.dataset.split = "train"
-config.dataset.split_percentage = 0.05 #0.025 # To generate the final results, must be 1 (whole split test) 0.0001
+config.dataset.split_percentage = 0.55 #0.025 # To generate the final results, must be 1 (whole split test) 0.0001
 config.dataset.start_from_percentage = 0.0
 config.dataset.batch_size = 1 # Better to build the h5 results file
 config.dataset.num_workers = 0
@@ -105,14 +105,15 @@ if MAP_GENERATION:
         path = os.path.join(root_file_name,str(file_id)+".csv")
         data = read_file(path) 
 
-        origin_pos, city_name = get_origin_and_city(data,20)
+        origin_pos, city_name = get_origin_and_city(data,config.hyperparameters.obs_origin)
+        origin_pos = origin_pos[0].tolist() # [[x,y]] np.array -> [x,y] list
 
         map_functions.map_generator(file_id,
-                                origin_pos,
-                                dist_rasterized_map,
-                                avm,
-                                city_name,
-                                show=False,
-                                root_folder=data_images_folder)
+                                    origin_pos,
+                                    dist_rasterized_map,
+                                    avm,
+                                    city_name,
+                                    show=False,
+                                    root_folder=data_images_folder)
 
         plt.close("all")

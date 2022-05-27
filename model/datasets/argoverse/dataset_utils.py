@@ -114,7 +114,7 @@ def apply_shuffling_percentage_startfrom(file_id_list, num_files,
     """
 
     if shuffle:
-        rng = random.default_rng()
+        rng = np.random.default_rng()
         indeces = rng.choice(num_files, size=int(num_files*split_percentage), replace=False)
         file_id_list = np.take(file_id_list, indeces, axis=0)
     else:
@@ -185,7 +185,7 @@ def create_dictionary_from_variable_list(variable_list, variable_name_list):
     """
 
     preprocessed_data_dict = dict()
-    pdb.set_trace()
+    #pdb.set_trace()
     for key,value in zip(variable_name_list,variable_list):
         preprocessed_data_dict[key] = value
     return preprocessed_data_dict
@@ -203,12 +203,14 @@ def save_processed_data_as_npy(data_processed_folder,
     for key, value in processed_data_dict.items():
         filename = data_processed_folder + "/" + key + ".npy"
         with open(filename, 'wb') as my_file: np.save(my_file, value)
+    
+    split = data_processed_folder.split('/')[-2]
 
     # Save text file with additional information
 
     filename = data_processed_folder + "/readme.txt"
     split_percentage *= 100
-    string = f'This folder contains {split_percentage} % of the original files of the corresponding split dataset processed'.encode()
+    string = f'This folder contains {split_percentage} % of the original files (after being processed) of the {split} split'.encode()
     with open(filename, 'wb') as my_file:
         my_file.write(string)
 
@@ -221,7 +223,9 @@ def load_processed_files_from_npy(folder):
     preprocessed_files, num_files = load_list_from_folder(folder)
     for preprocessed_file in preprocessed_files:
         key = preprocessed_file.split('/')[-1].split('.')[0]
-        with open(preprocessed_file, 'rb') as my_file: value = np.load(my_file)
+        with open(preprocessed_file, 'rb') as my_file:
+            if (preprocessed_file.find('npy') != -1): # Do not load other files
+                value = np.load(my_file)
         preprocessed_data_dict[key] = value
 
     return preprocessed_data_dict
@@ -241,7 +245,6 @@ def load_images(num_seq, obs_seq_data, first_obs, city_id, ego_origin, dist_rast
         
         curr_num_seq = int(num_seq[i].cpu().data.numpy())
         object_class_id = object_class_id_list[i].cpu().data.numpy()
-         
 
         t1_idx = len(object_class_id_list[i]) + t0_idx
         if i < batch_size - 1:
@@ -291,32 +294,33 @@ def load_images(num_seq, obs_seq_data, first_obs, city_id, ego_origin, dist_rast
     frames_arr = np.array(frames_list)
     return frames_arr
 
-def load_goal_points(num_seq, obs_seq_data, first_obs, city_id, ego_origin, dist_rasterized_map, 
-                    object_class_id_list, dist_around, data_imgs_folder,debug_images=False):
+def load_goal_points(num_seq_list, obs_traj_rel, first_obs, city_id, ego_vehicle_origin, 
+                     dist_rasterized_map, object_class_id_list, data_imgs_folder,debug_images=False):
     """
-    Get the corresponding rasterized map
+    Get plausible goal points
     """
 
     batch_size = len(object_class_id_list)
+    dist_around = abs(dist_rasterized_map[0])
     goal_points_list = []
 
     t0_idx = 0
-    for i in range(batch_size):
-        
-        curr_num_seq = int(num_seq[i].cpu().data.numpy())
+    for i in range(batch_size):    
+        curr_num_seq = int(num_seq_list[i].cpu().data.numpy())
         object_class_id = object_class_id_list[i].cpu().data.numpy()
          
         t1_idx = len(object_class_id_list[i]) + t0_idx
         if i < batch_size - 1:
-            curr_obs_seq_data = obs_seq_data[:,t0_idx:t1_idx,:]
+            curr_obs_seq_data = obs_traj_rel[:,t0_idx:t1_idx,:]
         else:
-            curr_obs_seq_data = obs_seq_data[:,t0_idx:,:]
+            curr_obs_seq_data = obs_traj_rel[:,t0_idx:,:]
         curr_first_obs = first_obs[t0_idx:t1_idx,:]
 
         obs_len = curr_obs_seq_data.shape[0]
-        origin_pos = ego_origin[i][0]#.reshape(1,-1)
+        origin_pos = ego_vehicle_origin[i][0]#.reshape(1,-1)
                                                      
         filename = data_imgs_folder + str(curr_num_seq) + ".png"
+        print("filename: ", filename)
         
         agent_index = np.where(object_class_id == 1)[0].item()
         agent_obs_seq = curr_obs_seq_data[:,agent_index,:] # 20 x 2
@@ -350,7 +354,6 @@ def relative_to_abs_sgan(rel_traj, start_pos):
     start_pos = torch.unsqueeze(start_pos, dim=1)
     abs_traj = displacement + start_pos
     return abs_traj.permute(1, 0, 2)
-
 
 def relative_to_abs_sgan_multimodal(rel_traj, start_pos):
     """
