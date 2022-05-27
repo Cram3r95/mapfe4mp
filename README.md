@@ -1,4 +1,4 @@
-# Exploring Map-based Features for Efficient Attention-based Vehicle Vehicle Motion Prediction
+# <span style="font-size:0.8em;">**Exploring Map-based Features for Efficient Attention-based Vehicle Vehicle Motion Prediction**</span>
 
 <img src="data/datasets/argoverse/motion-forecasting/train/goal_points_test/3_step_7_multimodal.png"/>
 
