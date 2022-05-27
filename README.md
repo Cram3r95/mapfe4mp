@@ -33,8 +33,15 @@ methods for map processing. our code is publicly available at ([Code](https://gi
 Coming soon ...
 ## Quantitative results
 Coming soon ...
+
+<img src="media/performance_results.JPG"/>
+<img src="media/efficiency_results.JPG"/>
+
 ## Qualitative results
 Coming soon ...
+
+<img src="media/val_289_mm.png" width="300" height="300">
+<img src="media/val_126_mm.png" width="300" height="300">
 
   - TO DOs:
 
