@@ -1,6 +1,8 @@
 # <span style="font-size:0.8em;">**Exploring Map-based Features for Efficient Attention-based Vehicle Vehicle Motion Prediction**</span>
 
-<img src="data/datasets/argoverse/motion-forecasting/train/goal_points_test/3_step_7_multimodal.png"/>
+<img src="media/social_lstm_mhsa.svg"/>
+
+<img src="media/social_set_transformer_mm.svg"/>
 
 ## Overview
 Motion prediction (MP) of multiple agents is a crucial task in arbitrarily complex environments, from social robots to self-driving cars. Current approaches tackle this problem using end-to-end networks, where the input data is usually a rendered top-view of the scene and the past trajectories of all the agents; leveraging this information is a must to obtain optimal performance. In that sense, a reliable Autonomous Driving (AD) system must produce reasonable predictions on time, however, despite many of these approaches use simple ConvNets and LSTMs, models might not be efficient enough for real-time applications when using both sources of information (map and trajectory history). Moreover, the performance of these models highly depends on the amount of training data, which can be expensive (particularly the annotated HD maps). In this work, we explore how to achieve competitive performance on the Argoverse 1.0 Benchmark using efficient attention-based models, which take as input the past trajectories and map-based features from minimal map information to ensure efficient and reliable MP. These features represent interpretable information as the driveable area and plausible goal points, in opposition to black-box CNN-based
