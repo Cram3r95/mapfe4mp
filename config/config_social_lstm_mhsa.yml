@@ -3,11 +3,12 @@
 # Model hyperparameters
 
 use_gpu: 1
+device_gpu: 0 # Default CUDA device
 dataset_name: argoverse_motion_forecasting_dataset
 dataset:
     path: data/datasets/argoverse/motion-forecasting/
     split: "train"
-    batch_size: 32
+    batch_size: 2
     start_from_percentage: 0.0 # By default, 0. If you want to analize a particular bunch of files (e.g. from 25 % to 50 %)
                                # then write here 0.25 and in split_percentage 0.25
     split_percentage: 1.0 # % of the dataset (0-1)
@@ -16,8 +17,8 @@ dataset:
     class_balance: 0.7 # % of straight trajectories (considering the AGENT). Remaining % are curved trajectories
                        # (again, considering the AGENT). -1.0 if no class balance is used (get_item takes the corresponding
                        # sequence regardless if it is straight or curved)
-    preprocess_data: True
-    save_data: True
+    preprocess_data: False
+    save_data: False
     num_workers: 0
 optim_parameters:
     g_learning_rate: 1.0e-3
@@ -36,8 +37,9 @@ hyperparameters:
     timing: 0 # Waits for all kernels in all streams on a CUDA device to complete
     print_every: 10
     checkpoint_every: 1000
-    output_dir: "save/argoverse/social_lstm/exp2"
-    exp_description: "multi loss + learning_rate scheduler"
+    checkpoint_train_every: 5000
+    output_dir: "save/argoverse/social_lstm/exp3"
+    exp_description: "10 % dataset (both train and val). Print train metrics"
     checkpoint_name: "0"
     checkpoint_start_from: ""
     restore_from_checkpoint: 

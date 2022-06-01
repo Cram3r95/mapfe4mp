@@ -7,17 +7,18 @@ from model.modules.layers import MLP
 
 class EncoderLSTM(nn.Module):
 
-    def __init__(self, embedding_dim=16, h_dim=64):
+    def __init__(self, embedding_dim=16, h_dim=64, current_cuda="cuda:0"):
         super().__init__()
 
         self.embedding_dim = embedding_dim
         self.h_dim = h_dim
         self.encoder = nn.LSTM(self.embedding_dim, self.h_dim, 1)
         self.spatial_embedding = nn.Linear(2, self.embedding_dim)
+        self.current_cuda = current_cuda
 
     def init_hidden(self, batch):
-        h = torch.zeros(1,batch, self.h_dim).cuda()
-        c = torch.zeros(1,batch, self.h_dim).cuda()
+        h = torch.zeros(1,batch, self.h_dim).cuda(self.current_cuda)
+        c = torch.zeros(1,batch, self.h_dim).cuda(self.current_cuda)
         return h, c
 
     def forward(self, obs_traj):

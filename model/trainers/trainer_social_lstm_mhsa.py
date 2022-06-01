@@ -27,6 +27,8 @@ from torch.utils.tensorboard import SummaryWriter
 torch.backends.cudnn.benchmark = True
 scaler = GradScaler()
 
+current_cuda = None
+
 # single agent False -> does not work
 
 def get_lr(optimizer):
@@ -48,7 +50,7 @@ def get_dtypes(use_gpu):
 
 def handle_batch(batch, is_single_agent_out):
     # load batch in cuda
-    batch = [tensor.cuda() for tensor in batch]
+    batch = [tensor.cuda(current_cuda) for tensor in batch]
 
     (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel, non_linear_obj,
      loss_mask, seq_start_end, frames, object_cls, obj_id, ego_origin, num_seq_list) = batch
@@ -67,8 +69,8 @@ def calculate_nll_loss(gt, pred, loss_f):
     time, bs, _ = pred.shape
     gt = gt.permute(1,0,2)
     pred = pred.contiguous().unsqueeze(1).permute(2,1,0,3)
-    confidences = torch.ones(bs,1).cuda()
-    avails = torch.ones(bs,time).cuda()
+    confidences = torch.ones(bs,1).cuda(current_cuda)
+    avails = torch.ones(bs,time).cuda(current_cuda)
     loss = loss_f(
         gt, 
         pred,
@@ -86,8 +88,11 @@ def model_trainer(config, logger):
     """
     """
 
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-
+    # device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    global current_cuda
+    current_cuda = torch.device(f"cuda:{config.device_gpu}")
+    device = torch.device(current_cuda if torch.cuda.is_available() else "cpu")
+    
     long_dtype, float_dtype = get_dtypes(config.use_gpu)
 
     logger.info('Configuration: ')
@@ -148,7 +153,7 @@ def model_trainer(config, logger):
     )
 
     # generator = TrajectoryGenerator(h_dim=128)
-    generator = TrajectoryGenerator(h_dim=config.model.generator.hdim)
+    generator = TrajectoryGenerator(h_dim=config.model.generator.hdim,current_cuda=current_cuda)
     generator.to(device)
     generator.apply(init_weights)
     generator.type(float_dtype).train()
@@ -169,7 +174,7 @@ def model_trainer(config, logger):
     else:
         assert 1 == 0, "loss_type_g is not correct"
 
-    w_loss = create_weights(config.dataset.batch_size, 1, 8).cuda()
+    w_loss = create_weights(config.dataset.batch_size, 1, 8).cuda(current_cuda)
 
     optimizer_g = optim.Adam(generator.parameters(), lr=optim_parameters.g_learning_rate, weight_decay=optim_parameters.g_weight_decay)
     if hyperparameters.lr_schduler:
@@ -235,6 +240,19 @@ def model_trainer(config, logger):
                     checkpoint.config_cp["G_losses"][k].append(v)
                 checkpoint.config_cp["losses_ts"].append(t)
 
+            if t > 0 and t % hyperparameters.checkpoint_train_every == 0:
+                metrics_train = check_accuracy(
+                    hyperparameters, train_loader, generator
+                )
+
+                for k, v in sorted(metrics_train.items()):
+                    logger.info('  [val] {}: {:.3f}'.format(k, v))
+                    if hyperparameters.tensorboard_active:
+                        writer.add_scalar(k, v, t+1)
+                    if k not in checkpoint.config_cp["metrics_train"].keys():
+                        checkpoint.config_cp["metrics_train"][k] = []
+                    checkpoint.config_cp["metrics_train"][k].append(v)
+
             if t > 0 and t % hyperparameters.checkpoint_every == 0:
                 checkpoint.config_cp["counters"]["t"] = t
                 checkpoint.config_cp["counters"]["epoch"] = epoch
@@ -243,6 +261,9 @@ def model_trainer(config, logger):
                 # Check stats on the validation set
                 logger.info('Checking stats on val ...')
                 # TODO add trainer metrics -> Compare for overfitting/underfitting
+
+                
+
                 metrics_val = check_accuracy(
                     hyperparameters, val_loader, generator
                 )
@@ -355,7 +376,8 @@ def model_trainer(config, logger):
 def generator_step(
     hyperparameters, batch, generator, optimizer_g, loss_f, w_loss=None
 ):
-    batch = [tensor.cuda() for tensor in batch]
+ 
+    batch = [tensor.cuda(current_cuda) for tensor in batch]
 
     (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel, non_linear_obj,
      loss_mask, seq_start_end, frames, object_cls, obj_id, ego_origin, _, _) = batch
@@ -442,7 +464,7 @@ def check_accuracy(
 
     with torch.no_grad():
         for batch in loader:
-            batch = [tensor.cuda() for tensor in batch]
+            batch = [tensor.cuda(current_cuda) for tensor in batch]
 
             (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel, non_linear_obj,
              loss_mask, seq_start_end, frames, object_cls, obj_id, ego_origin, _, _) = batch

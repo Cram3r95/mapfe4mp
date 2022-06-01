@@ -436,6 +436,7 @@ def check_accuracy(
             # mask and linear
             if not hyperparameters.output_single_agent: # TODO corregir con el nuevo dataset
                 mask = np.where(obj_id.cpu() == -1, 0, 1)
+                pdb.set_trace()
                 mask = torch.tensor(mask, device=obj_id.device).reshape(-1)
             if hyperparameters.output_single_agent:
                 # mask = mask[agent_idx]

@@ -346,7 +346,7 @@ class ArgoverseMotionForecastingDataset(Dataset):
 
         self.dataset_name = dataset_name
         self.root_folder = root_folder
-        data_processed_folder = root_folder + split + "/data_processed"
+        data_processed_folder = root_folder + split + "/data_processed_10"
 
         self.obs_len, self.pred_len = obs_len, pred_len
         self.seq_len = self.obs_len + self.pred_len

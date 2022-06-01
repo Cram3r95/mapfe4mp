@@ -20,14 +20,14 @@ def make_mlp(dim_list):
         layers.append(nn.LeakyReLU())
     return nn.Sequential(*layers)
 
-def get_noise(shape):
-    return torch.randn(*shape).cuda()
+def get_noise(shape,current_cuda):
+    return torch.randn(*shape).cuda(current_cuda)
 
 
 class TrajectoryGenerator(nn.Module):
     def __init__(
         self, obs_len=20, pred_len=30, mlp_dim=64, h_dim=32, embedding_dim=16, bottleneck_dim=32,
-        noise_dim=8, n_agents=10, img_feature_size=(512,6,6), dropout=0.3
+        noise_dim=8, n_agents=10, img_feature_size=(512,6,6), dropout=0.3, current_cuda="cuda:0"
     ):
         super(TrajectoryGenerator, self).__init__()
 
@@ -39,8 +39,9 @@ class TrajectoryGenerator(nn.Module):
         self.bottleneck_dim = bottleneck_dim
         self.noise_dim = noise_dim
         self.n_agents = n_agents
+        self.current_cuda = current_cuda
 
-        self.encoder = Encoder(h_dim=self.h_dim)
+        self.encoder = Encoder(h_dim=self.h_dim, current_cuda=self.current_cuda)
         self.lne = nn.LayerNorm(self.h_dim)
 
         self.sattn = MultiHeadAttention(
@@ -58,7 +59,7 @@ class TrajectoryGenerator(nn.Module):
     def add_noise(self, _input):
         npeds = _input.size(0)
         noise_shape = (self.noise_dim,)
-        z_decoder = get_noise(noise_shape)
+        z_decoder = get_noise(noise_shape, self.current_cuda)
         vec = z_decoder.view(1, -1).repeat(npeds, 1)
         return torch.cat((_input, vec), dim=1)
 
@@ -109,7 +110,7 @@ class TrajectoryGenerator(nn.Module):
         decoder_h = self.add_noise(noise_input) # 80x32
         decoder_h = torch.unsqueeze(decoder_h, 0) # 1x80x32
 
-        decoder_c = torch.zeros(tuple(decoder_h.shape)).cuda() # 1x80x32
+        decoder_c = torch.zeros(tuple(decoder_h.shape)).cuda(self.current_cuda) # 1x80x32
         state_tuple = (decoder_h, decoder_c)
 
         # Get agent observations
