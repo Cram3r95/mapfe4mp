@@ -8,7 +8,7 @@ dataset_name: argoverse_motion_forecasting_dataset
 dataset:
     path: data/datasets/argoverse/motion-forecasting/
     split: "train"
-    batch_size: 2
+    batch_size: 64
     start_from_percentage: 0.0 # By default, 0. If you want to analize a particular bunch of files (e.g. from 25 % to 50 %)
                                # then write here 0.25 and in split_percentage 0.25
     split_percentage: 0.01 # % of the dataset (0-1)
@@ -30,18 +30,18 @@ hyperparameters:
     lr_schduler: True # ExponentialLR
     output_single_agent: True
     tensorboard_active: True
-    num_iterations: 20000 
-    num_epochs: 500 #75
+    num_iterations: 20000000 
+    num_epochs: 5000000 #75
     d_steps: 2
     g_steps: 1
     timing: 0 # Waits for all kernels in all streams on a CUDA device to complete
     print_every: 10
     checkpoint_every: 1000
     checkpoint_train_every: 2500
-    output_dir: "save/argoverse/social_lstm_mhsa/exp5"
-    exp_description: "1 % dataset (both train and val). Print train metrics. Take checkpoint from exp4. Train more epochs"
+    output_dir: "save/argoverse/social_lstm_mhsa/exp6"
+    exp_description: "1 % dataset (both train and val). Print train metrics. Generator h_dim 32 -> 128"
     checkpoint_name: "0"
-    checkpoint_start_from: "save/argoverse/social_lstm_mhsa/exp5/argoverse_motion_forecasting_dataset_0_with_model.pt"
+    checkpoint_start_from: "save/argoverse/social_lstm_mhsa/exp6/argoverse_motion_forecasting_dataset_0_with_model.pt"
     restore_from_checkpoint: 
     clipping_threshold_d: 0
     clipping_threshold_g: 1.1
@@ -64,24 +64,4 @@ hyperparameters:
 
 model:
     generator: 
-        hdim: 32
-    discriminator:
-        # Encoder
-        encoder:
-            num_layers: 1
-            hidden_dim: 64
-            emb_dim: 16 # embedding input from mlp
-            mlp_config:
-                dim_list: [2, 16] # From 2 (x,y) to 16 (original embedding of the paper)
-                activation: 'relu'
-                batch_norm: True
-                dropout: 0.5
-            dropout: 0
-
-        # Classifier
-        classifier:
-            mlp_config:
-                dim_list: [64, 1024, 1]
-                activation: 'relu'
-                batch_norm: True
-                dropout: 0.5
+        hdim: 128 # 32 (original from SoPhie)

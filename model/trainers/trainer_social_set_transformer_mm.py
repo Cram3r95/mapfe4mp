@@ -1,8 +1,5 @@
-import argparse
 import gc
-import logging
 import os
-import sys
 import time
 import pdb
 import numpy as np
@@ -27,6 +24,8 @@ from torch.utils.tensorboard import SummaryWriter
 torch.backends.cudnn.benchmark = True
 scaler = GradScaler()
 
+current_cuda = None
+
 def get_lr(optimizer):
     for param_group in optimizer.param_groups:
         return param_group['lr']
@@ -44,6 +43,23 @@ def get_dtypes(use_gpu):
         float_dtype = torch.cuda.FloatTensor
     return long_dtype, float_dtype
 
+def handle_batch(batch, is_single_agent_out):
+    # load batch in cuda
+    batch = [tensor.cuda(current_cuda) for tensor in batch]
+
+    (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel, non_linear_obj,
+     loss_mask, seq_start_end, frames, object_cls, obj_id, ego_origin, num_seq_list) = batch
+    
+    # handle single agent 
+    agent_idx = None
+    if is_single_agent_out: # search agent idx
+        agent_idx = torch.where(object_cls==1)[0].cpu().numpy()
+        pred_traj_gt = pred_traj_gt[:,agent_idx, :]
+        pred_traj_gt_rel = pred_traj_gt_rel[:, agent_idx, :]
+
+    return (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel, non_linear_obj,
+     loss_mask, seq_start_end, frames, object_cls, obj_id, ego_origin, num_seq_list)
+     
 def calculate_nll_loss(gt, pred, loss_f, confidences):
     time, bs, _ = gt.shape
     gt = gt.permute(1,0,2)
@@ -74,8 +90,9 @@ def model_trainer(config, logger):
     """
     """
 
-    #device = torch.device(f"cuda:{config.device_gpu}" if torch.cuda.is_available() else "cpu")
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    global current_cuda
+    current_cuda = torch.device(f"cuda:{config.device_gpu}")
+    device = torch.device(current_cuda if torch.cuda.is_available() else "cpu")
 
     long_dtype, float_dtype = get_dtypes(config.use_gpu)
 
@@ -93,7 +110,9 @@ def model_trainer(config, logger):
                                                    shuffle=config.dataset.shuffle,
                                                    batch_size=config.dataset.batch_size,
                                                    class_balance=config.dataset.class_balance,
-                                                   obs_origin=config.hyperparameters.obs_origin)
+                                                   obs_origin=config.hyperparameters.obs_origin,
+                                                   preprocess_data=config.dataset.preprocess_data,
+                                                   save_data=config.dataset.save_data)
 
     train_loader = DataLoader(data_train,
                               batch_size=config.dataset.batch_size,
@@ -111,7 +130,9 @@ def model_trainer(config, logger):
                                                  split_percentage=config.dataset.split_percentage,
                                                  shuffle=config.dataset.shuffle,
                                                  class_balance=-1,
-                                                 obs_origin=config.hyperparameters.obs_origin)
+                                                 obs_origin=config.hyperparameters.obs_origin,
+                                                 preprocess_data=config.dataset.preprocess_data,
+                                                 save_data=config.dataset.save_data)
     val_loader = DataLoader(data_val,
                             batch_size=config.dataset.batch_size,
                             shuffle=config.dataset.shuffle,
@@ -121,7 +142,6 @@ def model_trainer(config, logger):
 
     hyperparameters = config.hyperparameters
     optim_parameters = config.optim_parameters
-
 
     iterations_per_epoch = len(data_train) / config.dataset.batch_size
     if hyperparameters.num_epochs:
@@ -163,12 +183,12 @@ def model_trainer(config, logger):
 
     if restore_path is not None and os.path.isfile(restore_path):
         logger.info('Restoring from checkpoint {}'.format(restore_path))
-        checkpoint = torch.load(restore_path)
+        checkpoint = torch.load(restore_path, map_location=current_cuda)
         generator.load_state_dict(checkpoint.config_cp['g_best_state'], strict=False)
         optimizer_g.load_state_dict(checkpoint.config_cp['g_optim_state'])
-        # t = checkpoint.config_cp['counters']['t']
-        # epoch = checkpoint.config_cp['counters']['epoch']
-        t, epoch = 0, 0
+        t = checkpoint.config_cp['counters']['t']
+        epoch = checkpoint.config_cp['counters']['epoch']
+        # t, epoch = 0, 0
         checkpoint.config_cp['restore_ts'].append(t)
     else:
         # Starting from scratch, so initialize checkpoint data structure
@@ -210,6 +230,25 @@ def model_trainer(config, logger):
                     checkpoint.config_cp["G_losses"][k].append(v)
                 checkpoint.config_cp["losses_ts"].append(t)
 
+            # Check training metrics
+
+            if t > 0 and t % hyperparameters.checkpoint_train_every == 0:
+                logger.info('Checking stats on train ...')
+
+                metrics_train = check_accuracy(
+                    hyperparameters, train_loader, generator, split="train"
+                )
+
+                for k, v in sorted(metrics_train.items()):
+                    logger.info('  [train] {}: {:.3f}'.format(k, v))
+                    if hyperparameters.tensorboard_active:
+                        writer.add_scalar(k, v, t+1)
+                    if k not in checkpoint.config_cp["metrics_train"].keys():
+                        checkpoint.config_cp["metrics_train"][k] = []
+                    checkpoint.config_cp["metrics_train"][k].append(v)
+
+            # Check validation metrics
+
             if t > 0 and t % hyperparameters.checkpoint_every == 0:
                 checkpoint.config_cp["counters"]["t"] = t
                 checkpoint.config_cp["counters"]["epoch"] = epoch
@@ -217,9 +256,11 @@ def model_trainer(config, logger):
 
                 # Check stats on the validation set
                 logger.info('Checking stats on val ...')
-                # TODO add trainer metrics -> Compare for overfitting/underfitting
+
+                split = "val"
+
                 metrics_val = check_accuracy(
-                    hyperparameters, val_loader, generator
+                    hyperparameters, val_loader, generator, split=split
                 )
 
                 for k, v in sorted(metrics_val.items()):
@@ -230,24 +271,24 @@ def model_trainer(config, logger):
                         checkpoint.config_cp["metrics_val"][k] = []
                     checkpoint.config_cp["metrics_val"][k].append(v)
 
-                min_ade = min(checkpoint.config_cp["metrics_val"]['ade'])
-                min_fde = min(checkpoint.config_cp["metrics_val"]['fde'])
-                min_ade_nl = min(checkpoint.config_cp["metrics_val"]['ade_nl'])
+                min_ade = min(checkpoint.config_cp["metrics_val"][f'{split}_ade'])
+                min_fde = min(checkpoint.config_cp["metrics_val"][f'{split}_fde'])
+                min_ade_nl = min(checkpoint.config_cp["metrics_val"][f'{split}_ade_nl'])
                 logger.info("Min ADE: {}".format(min_ade))
                 logger.info("Min FDE: {}".format(min_fde))
-                if metrics_val['ade'] <= min_ade:
+                if metrics_val[f'{split}_ade'] <= min_ade:
                     logger.info('New low for avg_disp_error')
                     checkpoint.config_cp["best_t"] = t
                     checkpoint.config_cp["g_best_state"] = generator.state_dict()
 
-                if metrics_val['ade_nl'] <= min_ade_nl:
+                if metrics_val[f'{split}_ade_nl'] <= min_ade_nl:
                     logger.info('New low for avg_disp_error_nl')
                     checkpoint.config_cp["best_t_nl"] = t
                     checkpoint.config_cp["g_best_nl_state"] = generator.state_dict()
 
                 # Save another checkpoint with model weights and
                 # optimizer state
-                if metrics_val['ade'] <= min_ade:
+                if metrics_val[f'{split}_ade'] <= min_ade:
                     checkpoint.config_cp["g_state"] = generator.state_dict()
                     checkpoint.config_cp["g_optim_state"] = optimizer_g.state_dict()
                     checkpoint_path = os.path.join(
@@ -278,7 +319,7 @@ def model_trainer(config, logger):
             t += 1
             if t >= hyperparameters.num_iterations:
                 break
-
+            
             if hyperparameters.lr_schduler:
                 scheduler_g.step(losses_g["G_total_loss"])
                 g_lr = get_lr(optimizer_g)
@@ -286,7 +327,8 @@ def model_trainer(config, logger):
     ###
     logger.info("Training finished")
 
-    # Check stats on the validation set
+    # Check stats on the validation set (again. required?)
+    
     t += 1
     epoch += 1
     checkpoint.config_cp["counters"]["t"] = t
@@ -423,7 +465,7 @@ def check_accuracy(
 
     with torch.no_grad():
         for batch in loader:
-            batch = [tensor.cuda() for tensor in batch]
+            batch = [tensor.cuda(current_cuda) for tensor in batch]
 
             (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel, non_linear_obj,
              loss_mask, seq_start_end, frames, object_cls, obj_id, ego_origin, _, _) = batch
@@ -436,7 +478,6 @@ def check_accuracy(
             # mask and linear
             if not hyperparameters.output_single_agent: # TODO corregir con el nuevo dataset
                 mask = np.where(obj_id.cpu() == -1, 0, 1)
-                pdb.set_trace()
                 mask = torch.tensor(mask, device=obj_id.device).reshape(-1)
             if hyperparameters.output_single_agent:
                 # mask = mask[agent_idx]

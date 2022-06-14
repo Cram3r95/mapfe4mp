@@ -105,6 +105,8 @@ class TrajectoryGenerator(nn.Module):
         if agent_idx is not None:
             mlp_decoder_context_input = mlp_decoder_context_input[agent_idx,:]
 
+        ## TODO: REMOVE -> ONLY FOR GENERATIVE MODELS
+        
         ## add noise to decoder input
         noise_input = self.mlp_decoder_context(self.lnc(mlp_decoder_context_input)) # 80x24
         decoder_h = self.add_noise(noise_input) # 80x32
