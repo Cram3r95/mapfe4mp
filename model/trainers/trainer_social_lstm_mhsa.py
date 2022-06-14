@@ -88,7 +88,6 @@ def model_trainer(config, logger):
     """
     """
 
-    # device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
     global current_cuda
     current_cuda = torch.device(f"cuda:{config.device_gpu}")
     device = torch.device(current_cuda if torch.cuda.is_available() else "cpu")
@@ -190,15 +189,14 @@ def model_trainer(config, logger):
         restore_path = os.path.join(hyperparameters.output_dir,
                                     '%s_with_model.pt' % hyperparameters.checkpoint_name)
 
-
     if restore_path is not None and os.path.isfile(restore_path):
         logger.info('Restoring from checkpoint {}'.format(restore_path))
-        checkpoint = torch.load(restore_path)
+        checkpoint = torch.load(restore_path, map_location=current_cuda)
         generator.load_state_dict(checkpoint.config_cp['g_best_state'], strict=False)
         optimizer_g.load_state_dict(checkpoint.config_cp['g_optim_state'])
-        # t = checkpoint.config_cp['counters']['t']
-        # epoch = checkpoint.config_cp['counters']['epoch']
-        t,epoch = 0,0
+        t = checkpoint.config_cp['counters']['t']
+        epoch = checkpoint.config_cp['counters']['epoch']
+        # t,epoch = 0,0
         checkpoint.config_cp['restore_ts'].append(t)
     else:
         # Starting from scratch, so initialize checkpoint data structure
@@ -240,18 +238,24 @@ def model_trainer(config, logger):
                     checkpoint.config_cp["G_losses"][k].append(v)
                 checkpoint.config_cp["losses_ts"].append(t)
 
+            # Check training metrics
+
             if t > 0 and t % hyperparameters.checkpoint_train_every == 0:
+                logger.info('Checking stats on train ...')
+
                 metrics_train = check_accuracy(
-                    hyperparameters, train_loader, generator
+                    hyperparameters, train_loader, generator, split="train"
                 )
 
                 for k, v in sorted(metrics_train.items()):
-                    logger.info('  [val] {}: {:.3f}'.format(k, v))
+                    logger.info('  [train] {}: {:.3f}'.format(k, v))
                     if hyperparameters.tensorboard_active:
                         writer.add_scalar(k, v, t+1)
                     if k not in checkpoint.config_cp["metrics_train"].keys():
                         checkpoint.config_cp["metrics_train"][k] = []
                     checkpoint.config_cp["metrics_train"][k].append(v)
+
+            # Check validation metrics
 
             if t > 0 and t % hyperparameters.checkpoint_every == 0:
                 checkpoint.config_cp["counters"]["t"] = t
@@ -260,12 +264,11 @@ def model_trainer(config, logger):
 
                 # Check stats on the validation set
                 logger.info('Checking stats on val ...')
-                # TODO add trainer metrics -> Compare for overfitting/underfitting
 
-                
+                split = "val"
 
                 metrics_val = check_accuracy(
-                    hyperparameters, val_loader, generator
+                    hyperparameters, val_loader, generator, split=split
                 )
 
                 for k, v in sorted(metrics_val.items()):
@@ -276,24 +279,24 @@ def model_trainer(config, logger):
                         checkpoint.config_cp["metrics_val"][k] = []
                     checkpoint.config_cp["metrics_val"][k].append(v)
 
-                min_ade = min(checkpoint.config_cp["metrics_val"]['ade'])
-                min_fde = min(checkpoint.config_cp["metrics_val"]['fde'])
-                min_ade_nl = min(checkpoint.config_cp["metrics_val"]['ade_nl'])
+                min_ade = min(checkpoint.config_cp["metrics_val"][f'{split}_ade'])
+                min_fde = min(checkpoint.config_cp["metrics_val"][f'{split}_fde'])
+                min_ade_nl = min(checkpoint.config_cp["metrics_val"][f'{split}_ade_nl'])
                 logger.info("Min ADE: {}".format(min_ade))
                 logger.info("Min FDE: {}".format(min_fde))
-                if metrics_val['ade'] <= min_ade:
+                if metrics_val[f'{split}_ade'] <= min_ade:
                     logger.info('New low for avg_disp_error')
                     checkpoint.config_cp["best_t"] = t
                     checkpoint.config_cp["g_best_state"] = generator.state_dict()
 
-                if metrics_val['ade_nl'] <= min_ade_nl:
+                if metrics_val[f'{split}_ade_nl'] <= min_ade_nl:
                     logger.info('New low for avg_disp_error_nl')
                     checkpoint.config_cp["best_t_nl"] = t
                     checkpoint.config_cp["g_best_nl_state"] = generator.state_dict()
 
                 # Save another checkpoint with model weights and
                 # optimizer state
-                if metrics_val['ade'] <= min_ade:
+                if metrics_val[f'{split}_ade'] <= min_ade:
                     checkpoint.config_cp["g_state"] = generator.state_dict()
                     checkpoint.config_cp["g_optim_state"] = optimizer_g.state_dict()
                     checkpoint_path = os.path.join(
@@ -332,7 +335,8 @@ def model_trainer(config, logger):
     ###
     logger.info("Training finished")
 
-    # Check stats on the validation set
+    # Check stats on the validation set (again. required?)
+
     t += 1
     epoch += 1
     checkpoint.config_cp["counters"]["t"] = t
@@ -374,7 +378,7 @@ def model_trainer(config, logger):
 
 
 def generator_step(
-    hyperparameters, batch, generator, optimizer_g, loss_f, w_loss=None
+    hyperparameters, batch, generator, optimizer_g, loss_f, w_loss=None, split="train"
 ):
  
     batch = [tensor.cuda(current_cuda) for tensor in batch]
@@ -424,22 +428,22 @@ def generator_step(
             w_loss = w_loss[:b, :]
             loss_ade, loss_fde = calculate_mse_loss(pred_traj_gt_rel, pred_traj_fake_rel, loss_f, hyperparameters.loss_type_g)
             loss = loss_ade + loss_fde
-            losses["G_mse_ade_loss"] = loss_ade.item()
-            losses["G_mse_fde_loss"] = loss_fde.item()
+            losses[f"G_mse_ade_loss"] = loss_ade.item()
+            losses[f"G_mse_fde_loss"] = loss_fde.item()
         elif hyperparameters.loss_type_g == "nll":
             loss = calculate_nll_loss(pred_traj_gt_rel, pred_traj_fake_rel,loss_f)
-            losses["G_nll_loss"] = loss.item()
+            losses[f"G_nll_loss"] = loss.item()
         elif hyperparameters.loss_type_g == "mse+nll" or hyperparameters.loss_type_g == "mse_w+nll":
             _,b,_ = pred_traj_gt_rel.shape
             w_loss = w_loss[:b, :]
             loss_ade, loss_fde = calculate_mse_loss(pred_traj_gt_rel, pred_traj_fake_rel, loss_f["mse"], hyperparameters.loss_type_g)
             loss_nll = calculate_nll_loss(pred_traj_gt_rel, pred_traj_fake_rel,loss_f["nll"])
             loss = loss_ade + loss_fde*1.5 + loss_nll*0.75 
-            losses["G_mse_ade_loss"] = loss_ade.item()
-            losses["G_mse_fde_loss"] = loss_fde.item()
-            losses["G_nll_loss"] = loss_nll.item()
+            losses[f"G_mse_ade_loss"] = loss_ade.item()
+            losses[f"G_mse_fde_loss"] = loss_fde.item()
+            losses[f"G_nll_loss"] = loss_nll.item()
         
-        losses['G_total_loss'] = loss.item()
+        losses[f"G_total_loss"] = loss.item()
 
     
     scaler.scale(loss).backward()
@@ -452,7 +456,7 @@ def generator_step(
     return losses
 
 def check_accuracy(
-    hyperparameters, loader, generator, limit=False
+    hyperparameters, loader, generator, limit=False, split="train"
 ):
     metrics = {}
     g_l2_losses_abs, g_l2_losses_rel = [], []
@@ -535,24 +539,24 @@ def check_accuracy(
             total_traj_nl += torch.sum(non_linear_obj).item()
             if limit and total_traj >= hyperparameters.num_samples_check:
                 break
-    metrics['g_l2_loss_abs'] = sum(g_l2_losses_abs) / loss_mask_sum
-    metrics['g_l2_loss_rel'] = sum(g_l2_losses_rel) / loss_mask_sum
+    metrics[f'{split}_g_l2_loss_abs'] = sum(g_l2_losses_abs) / loss_mask_sum
+    metrics[f'{split}_g_l2_loss_rel'] = sum(g_l2_losses_rel) / loss_mask_sum
 
-    metrics['ade'] = sum(disp_error) / (total_traj * hyperparameters.pred_len)
-    metrics['fde'] = sum(f_disp_error) / total_traj
+    metrics[f'{split}_ade'] = sum(disp_error) / (total_traj * hyperparameters.pred_len)
+    metrics[f'{split}_fde'] = sum(f_disp_error) / total_traj
     if total_traj_l != 0:
-        metrics['ade_l'] = sum(disp_error_l) / (total_traj_l * hyperparameters.pred_len)
-        metrics['fde_l'] = sum(f_disp_error_l) / total_traj_l
+        metrics[f'{split}_ade_l'] = sum(disp_error_l) / (total_traj_l * hyperparameters.pred_len)
+        metrics[f'{split}_fde_l'] = sum(f_disp_error_l) / total_traj_l
     else:
-        metrics['ade_l'] = 0
-        metrics['fde_l'] = 0
+        metrics[f'{split}_ade_l'] = 0
+        metrics[f'{split}_fde_l'] = 0
     if total_traj_nl != 0:
-        metrics['ade_nl'] = sum(disp_error_nl) / (
+        metrics[f'{split}_ade_nl'] = sum(disp_error_nl) / (
             total_traj_nl * hyperparameters.pred_len)
-        metrics['fde_nl'] = sum(f_disp_error_nl) / total_traj_nl
+        metrics[f'{split}_fde_nl'] = sum(f_disp_error_nl) / total_traj_nl
     else:
-        metrics['ade_nl'] = 0
-        metrics['fde_nl'] = 0
+        metrics[f'{split}_ade_nl'] = 0
+        metrics[f'{split}_fde_nl'] = 0
 
     generator.train()
     return metrics

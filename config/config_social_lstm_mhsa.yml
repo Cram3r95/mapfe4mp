@@ -11,7 +11,7 @@ dataset:
     batch_size: 2
     start_from_percentage: 0.0 # By default, 0. If you want to analize a particular bunch of files (e.g. from 25 % to 50 %)
                                # then write here 0.25 and in split_percentage 0.25
-    split_percentage: 1.0 # % of the dataset (0-1)
+    split_percentage: 0.01 # % of the dataset (0-1)
     shuffle: False # False to check the input data, always set to True
     data_augmentation: False # Rotation, Swapping, Dropout, Gaussian noise
     class_balance: 0.7 # % of straight trajectories (considering the AGENT). Remaining % are curved trajectories
@@ -31,17 +31,17 @@ hyperparameters:
     output_single_agent: True
     tensorboard_active: True
     num_iterations: 20000 
-    num_epochs: 36 #75
+    num_epochs: 500 #75
     d_steps: 2
     g_steps: 1
     timing: 0 # Waits for all kernels in all streams on a CUDA device to complete
     print_every: 10
     checkpoint_every: 1000
-    checkpoint_train_every: 5000
-    output_dir: "save/argoverse/social_lstm/exp3"
-    exp_description: "10 % dataset (both train and val). Print train metrics"
+    checkpoint_train_every: 2500
+    output_dir: "save/argoverse/social_lstm_mhsa/exp5"
+    exp_description: "1 % dataset (both train and val). Print train metrics. Take checkpoint from exp4. Train more epochs"
     checkpoint_name: "0"
-    checkpoint_start_from: ""
+    checkpoint_start_from: "save/argoverse/social_lstm_mhsa/exp5/argoverse_motion_forecasting_dataset_0_with_model.pt"
     restore_from_checkpoint: 
     clipping_threshold_d: 0
     clipping_threshold_g: 1.1

@@ -83,25 +83,37 @@ def change_bg_color(img):
     return img
 
 # N.B. In PLT, points must be specified as standard cartesian frames (x from left to right, y from bottom to top)
-def plot_fepoints(img, filename, obs_px_x, obs_px_y, car_px, 
-                  goals_px_x=None, goals_px_y=None, radius=None, change_bg=False, show=False):
+def plot_fepoints(img, filename, seq_px_x, seq_px_y, last_obs_px, obs_origin, 
+                  goals_px_x=None, goals_px_y=None, label=None,
+                  radius=None, change_bg=False, show_pred_gt=False, show=False, save_fig=False, final_clusters=False):
     assert len(img.shape) == 3
     
     img_aux = copy.deepcopy(img)
     fig, ax = plt.subplots(figsize=(8, 8))
 
-    plt.scatter(obs_px_x, obs_px_y, c="b", s=10) # Past trajectory
-    plt.scatter(car_px[0], car_px[1], c="b", marker="*", s=50) # Last observation point
-    if goals_px_x is not None:
-        plt.scatter(goals_px_x, goals_px_y, color="purple", marker="x", s=10) # Goal points
+    obs_px_x, obs_px_y = seq_px_x[:obs_origin], seq_px_y[:obs_origin]
 
-    if change_bg:
-        img_aux = change_bg_color(img)
+    if show_pred_gt:
+        plt.scatter(seq_px_x[obs_origin:], seq_px_y[obs_origin:], c="cyan", marker=6, s=50) # GT future trajectory
+        
+    plt.scatter(obs_px_x, obs_px_y, c="blue", marker=".", s=50) # Past trajectory
+    plt.scatter(last_obs_px[0], last_obs_px[1], c="blue", marker="*", s=100) # Last observation point
+    
+    if goals_px_x is not None:
+        if label is not None:
+            u_labels = np.unique(label) # get unique labels
+            for i in u_labels:
+                if final_clusters: goal_size=80
+                else: goal_size = 10
+                plt.scatter(goals_px_x[label == i] , goals_px_y[label == i] , 
+                            label = i, marker="8", s=goal_size) # Goal points clustered
+        else:
+            plt.scatter(goals_px_x, goals_px_y, color="purple", marker="8", s=10) # Goal points
 
     plt.imshow(img_aux)
 
     if radius:
-      circ_car = plt.Circle((car_px[0], car_px[1]), radius, color="purple", fill=False)
+      circ_car = plt.Circle((last_obs_px[0], last_obs_px[1]), radius, color="purple", fill=False)
       ax.add_patch(circ_car)
 
     plt.axis("off")
@@ -110,9 +122,12 @@ def plot_fepoints(img, filename, obs_px_x, obs_px_y, car_px,
         plt.title(filename) 
         plt.show()
 
-    
-    plt.savefig(filename, bbox_inches='tight', facecolor=fig.get_facecolor(), 
-                edgecolor='none', pad_inches=0)
+    if change_bg:
+        img_aux = change_bg_color(img)
+
+    if save_fig:
+        plt.savefig(filename, bbox_inches='tight', facecolor=fig.get_facecolor(), 
+                    edgecolor='none', pad_inches=0)
 
     plt.close('all')
 

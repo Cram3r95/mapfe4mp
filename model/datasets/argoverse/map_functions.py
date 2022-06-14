@@ -175,7 +175,7 @@ def map_generator(curr_num_seq,
     fig, ax = plt.subplots(figsize=(6,6), facecolor="black")
     plt.xlim(x_min, x_max)
     plt.ylim(y_min, y_max)
-    plt.axis("off") # Comment if you want to generate images without x|y-labels
+    plt.axis("off") # Comment if you want to generate images with x|y-labels
     
     ## Plot nearby segments
 
@@ -190,7 +190,8 @@ def map_generator(curr_num_seq,
                                                                           #"black"  
         ax.fill(lane_polygon[:, 0], lane_polygon[:, 1], "white", edgecolor='white', fill=True)
                                                         #"grey"
-        ax.plot(lane_cl[:, 0], lane_cl[:, 1], "-", color="black", linewidth=1.5, alpha=1.0, zorder=1)
+        ax.plot(lane_cl[:, 0], lane_cl[:, 1], "-", color="grey", linewidth=1.5, alpha=1.0, zorder=2)
+        # N.B. zorder must be 2 (Line2D) in order to represent the whole line, with 1 (Path) there are some problems
 
     # print("Time consumed by plot drivable area and lane centerlines: ", time.time()-t0)
 

@@ -24,8 +24,6 @@ from torch.utils.data import Dataset
 
 # Custom imports
 
-from argoverse.map_representation.map_api import ArgoverseMap
-
 import model.datasets.argoverse.dataset_utils as dataset_utils
 import model.datasets.argoverse.geometric_functions as geometric_functions
 import model.datasets.argoverse.data_augmentation_functions as data_augmentation_functions
@@ -50,7 +48,6 @@ data_imgs_folder = None
 PHYSICAL_CONTEXT = "Dummy"
 
 frames_path = None
-avm = ArgoverseMap()
 dist_around = 40
 dist_rasterized_map = [-dist_around, dist_around, -dist_around, dist_around]
 
@@ -68,14 +65,9 @@ def seq_collate(data):
 
     batch_size = len(ego_vehicle_origin) # tuple of tensors
 
-    # pdb.set_trace()
-
     _len = [len(seq) for seq in obs_traj]
     cum_start_idx = [0] + np.cumsum(_len).tolist()
     seq_start_end = [[start, end] for start, end in zip(cum_start_idx, cum_start_idx[1:])]
-
-    # Data format: batch, input_size, seq_len
-    # LSTM input format: seq_len, batch, input_size
 
     obs_traj = torch.cat(obs_traj, dim=0).permute(2, 0, 1) # Past Observations x Num_agents · batch_size x 2                                                          
     pred_traj_gt = torch.cat(pred_traj_gt, dim=0).permute(2, 0, 1)
@@ -346,7 +338,7 @@ class ArgoverseMotionForecastingDataset(Dataset):
 
         self.dataset_name = dataset_name
         self.root_folder = root_folder
-        data_processed_folder = root_folder + split + "/data_processed_10"
+        data_processed_folder = root_folder + split + "/data_processed_" + str(int(split_percentage*100)) + "_percent"
 
         self.obs_len, self.pred_len = obs_len, pred_len
         self.seq_len = self.obs_len + self.pred_len
@@ -372,7 +364,7 @@ class ArgoverseMotionForecastingDataset(Dataset):
         # Preprocess data (from raw .csvs to torch Tensors, at least including the 
         # AGENT (most important vehicle) and AV
 
-        if PREPROCESS_DATA:
+        if PREPROCESS_DATA and not os.path.isdir(data_processed_folder):
             folder = root_folder + split + "/data/"
             files, num_files = dataset_utils.load_list_from_folder(folder)
 
@@ -424,7 +416,7 @@ class ArgoverseMotionForecastingDataset(Dataset):
 
                 # Check if the current AGENT trajectory can be considered as a curve or straight trajectory
                 # (so for further training we can focus on the most difficult samples -> sequences in which
-                # the AGENT is permorming a curved trajectory)
+                # the AGENT is performing a curved trajectory)
 
                 if self.class_balance >= 0.0:
                     agent_idx = int(np.where(object_class_list==1)[0])
