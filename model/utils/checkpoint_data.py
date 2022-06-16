@@ -53,8 +53,9 @@ class Checkpoint():
         self.config_cp["d_best_state_nl"] = config.d_best_state_nl
         self.config_cp["best_t_nl"] = config.best_t_nl
 
-
 def get_total_norm(parameters, norm_type=2):
+    """
+    """
     if norm_type == float('inf'):
         total_norm = max(p.grad.data.abs().max() for p in parameters)
     else:

@@ -1,14 +1,26 @@
+#!/usr/bin/env python3.8
+# -*- coding: utf-8 -*-
+
+## Decoder functions
+
+"""
+Created on Fri Feb 25 12:19:38 2022
+@author: Carlos Gómez-Huélamo, Miguel Eduardo Ortiz Huamaní and Marcos V. Conde
+"""
+
+# General purpose imports
+
+import pdb
+
+# DL & Math imports
+
 import torch
 from torch import nn
 import torch.nn.functional as F
-from fractions import gcd
-from typing import Any, Callable, Dict, List, Optional, Tuple, Type, Union
-import pdb
-
-from model.modules.layers import MLP, TrajConf, LinearRes
 
 class DecoderLSTM(nn.Module):
- 
+    """
+    """
     def __init__(self, seq_len=30, h_dim=64, embedding_dim=16):
         super().__init__()
 
@@ -44,7 +56,8 @@ class DecoderLSTM(nn.Module):
         return pred_traj_fake_rel
 
 class TemporalDecoderLSTM(nn.Module):
-
+    """
+    """
     def __init__(self, seq_len=30, h_dim=64, embedding_dim=16):
         super().__init__()
 
@@ -82,6 +95,55 @@ class TemporalDecoderLSTM(nn.Module):
 
         pred_traj_fake_rel = torch.stack(pred_traj_fake_rel, dim=0)
         return pred_traj_fake_rel
+
+class MM_DecoderLSTM(nn.Module):
+
+    def __init__(self, seq_len=30, h_dim=64, embedding_dim=16, n_samples=3):
+        super().__init__()
+
+        self.seq_len = seq_len
+        self.h_dim = h_dim
+        self.embedding_dim = embedding_dim
+        self.n_samples = n_samples
+
+        traj_points = self.n_samples*2
+        self.decoder = nn.LSTM(self.embedding_dim, self.h_dim, 1)
+        self.spatial_embedding = nn.Linear(traj_points, self.embedding_dim) # Last obs * 2 points
+        self.hidden2pos = nn.Linear(self.h_dim, traj_points)
+        self.confidences = nn.Linear(self.h_dim, self.n_samples)
+
+    def forward(self, traj_abs, traj_rel, state_tuple):
+        """
+            traj_abs (1, b, 2)
+            traj_rel (1, b, 2)
+            state_tuple: h and c
+                h : c : (1, b, self.h_dim)
+            goals: b x 32 x 2
+        """
+
+        t, batch_size, f = traj_abs.shape
+        traj_rel = traj_rel.view(t,batch_size,1,f)
+        traj_rel = traj_rel.repeat_interleave(self.n_samples, dim=2)
+        traj_rel = traj_rel.view(t, batch_size, -1)
+
+        pred_traj_fake_rel = []
+        decoder_input = F.leaky_relu(self.spatial_embedding(traj_rel.contiguous().view(batch_size, -1))) # bx16
+        decoder_input = decoder_input.contiguous().view(1, batch_size, self.embedding_dim) # 1 x batch x 16
+        for _ in range(self.seq_len):
+            output, state_tuple = self.decoder(decoder_input, state_tuple) # output (1, b, 32)
+
+            rel_pos = self.hidden2pos(state_tuple[0].contiguous().view(-1, self.h_dim)) #(b, 2*m)
+
+            decoder_input = F.leaky_relu(self.spatial_embedding(rel_pos.contiguous().view(batch_size, -1)))
+            decoder_input = decoder_input.contiguous().view(1, batch_size, self.embedding_dim)
+            pred_traj_fake_rel.append(rel_pos.contiguous().view(batch_size,-1))
+
+        pred_traj_fake_rel = torch.stack(pred_traj_fake_rel, dim=0)
+        pred_traj_fake_rel = pred_traj_fake_rel.view(self.seq_len, batch_size, self.n_samples, -1)
+        pred_traj_fake_rel = pred_traj_fake_rel.permute(1,2,0,3) #(b, m, 30, 2)
+        conf = self.confidences(state_tuple[0].contiguous().view(-1, self.h_dim))
+        conf = torch.softmax(conf, dim=1)
+        return pred_traj_fake_rel, conf
 
 class GoalDecoderLSTM(nn.Module):
 
@@ -135,56 +197,7 @@ class GoalDecoderLSTM(nn.Module):
         pred_traj_fake_rel = torch.stack(pred_traj_fake_rel, dim=0)
         return pred_traj_fake_rel
 
-class MMDecoderLSTM(nn.Module):
-
-    def __init__(self, seq_len=30, h_dim=64, embedding_dim=16, n_samples=3):
-        super().__init__()
-
-        self.seq_len = seq_len
-        self.h_dim = h_dim
-        self.embedding_dim = embedding_dim
-        self.n_samples = n_samples
-
-        traj_points = self.n_samples*2
-        self.decoder = nn.LSTM(self.embedding_dim, self.h_dim, 1)
-        self.spatial_embedding = nn.Linear(traj_points, self.embedding_dim) # Last obs * 2 points
-        self.hidden2pos = nn.Linear(self.h_dim, traj_points)
-        self.confidences = nn.Linear(self.h_dim, self.n_samples)
-
-    def forward(self, traj_abs, traj_rel, state_tuple):
-        """
-            traj_abs (1, b, 2)
-            traj_rel (1, b, 2)
-            state_tuple: h and c
-                h : c : (1, b, self.h_dim)
-            goals: b x 32 x 2
-        """
-
-        t, batch_size, f = traj_abs.shape
-        traj_rel = traj_rel.view(t,batch_size,1,f)
-        traj_rel = traj_rel.repeat_interleave(self.n_samples, dim=2)
-        traj_rel = traj_rel.view(t, batch_size, -1)
-
-        pred_traj_fake_rel = []
-        decoder_input = F.leaky_relu(self.spatial_embedding(traj_rel.contiguous().view(batch_size, -1))) # bx16
-        decoder_input = decoder_input.contiguous().view(1, batch_size, self.embedding_dim) # 1 x batch x 16
-        for _ in range(self.seq_len):
-            output, state_tuple = self.decoder(decoder_input, state_tuple) # output (1, b, 32)
-
-            rel_pos = self.hidden2pos(state_tuple[0].contiguous().view(-1, self.h_dim)) #(b, 2*m)
-
-            decoder_input = F.leaky_relu(self.spatial_embedding(rel_pos.contiguous().view(batch_size, -1)))
-            decoder_input = decoder_input.contiguous().view(1, batch_size, self.embedding_dim)
-            pred_traj_fake_rel.append(rel_pos.contiguous().view(batch_size,-1))
-
-        pred_traj_fake_rel = torch.stack(pred_traj_fake_rel, dim=0)
-        pred_traj_fake_rel = pred_traj_fake_rel.view(self.seq_len, batch_size, self.n_samples, -1)
-        pred_traj_fake_rel = pred_traj_fake_rel.permute(1,2,0,3) #(b, m, 30, 2)
-        conf = self.confidences(state_tuple[0].contiguous().view(-1, self.h_dim))
-        conf = torch.softmax(conf, dim=1)
-        return pred_traj_fake_rel, conf
-
-class GoalMMDecoderLSTM(nn.Module):
+class MM_GoalDecoderLSTM(nn.Module):
 
     def __init__(self, seq_len=30, h_dim=64, embedding_dim=16, n_samples=3):
         super().__init__()
@@ -345,90 +358,6 @@ class CGH_MMDecoderLSTM(nn.Module): # Carlos (NOT WORKING A LINEAR PER MODE AT T
         conf = torch.softmax(conf, dim=1) # batch_size x num_samples
         # pdb.set_trace()
         return pred_traj_fake_rel_mm, conf
-
-class PredNet(nn.Module):
-    """
-    Final motion forecasting with Linear Residual block
-    """
-    def __init__(self, config):
-        super(PredNet, self).__init__()
-        self.config = config
-        norm = "GN"
-        ng = 1
-
-        n_actor = config["n_actor"]
-
-        pred = []
-        for i in range(config["num_mods"]):
-            pred.append(
-                nn.Sequential(
-                    LinearRes(n_actor, n_actor, norm=norm, ng=ng),
-                    nn.Linear(n_actor, 2 * config["num_preds"]),
-                )
-            )
-        self.pred = nn.ModuleList(pred)
-
-        self.att_dest = AttDest(n_actor)
-        self.cls = nn.Sequential(
-            LinearRes(n_actor, n_actor, norm=norm, ng=ng), nn.Linear(n_actor, 1)
-        )
-
-    def forward(self, actors: torch.Tensor, actor_idcs: List[torch.Tensor], actor_ctrs: List[torch.Tensor]) -> Dict[str, List[torch.Tensor]]:
-        preds = []
-        for i in range(len(self.pred)):
-            preds.append(self.pred[i](actors))
-        reg = torch.cat([x.unsqueeze(1) for x in preds], 1)
-        reg = reg.view(reg.size(0), reg.size(1), -1, 2)
-
-        for i in range(len(actor_idcs)):
-            idcs = actor_idcs[i]
-            ctrs = actor_ctrs[i].view(-1, 1, 1, 2)
-            reg[idcs] = reg[idcs] + ctrs
-
-        dest_ctrs = reg[:, :, -1].detach()
-        feats = self.att_dest(actors, torch.cat(actor_ctrs, 0), dest_ctrs)
-        cls = self.cls(feats).view(-1, self.config["num_mods"])
-
-        cls, sort_idcs = cls.sort(1, descending=True)
-        row_idcs = torch.arange(len(sort_idcs)).long().to(sort_idcs.device)
-        row_idcs = row_idcs.view(-1, 1).repeat(1, sort_idcs.size(1)).view(-1)
-        sort_idcs = sort_idcs.view(-1)
-        reg = reg[row_idcs, sort_idcs].view(cls.size(0), cls.size(1), -1, 2)
-
-        out = dict()
-        out["cls"], out["reg"] = [], []
-        for i in range(len(actor_idcs)):
-            idcs = actor_idcs[i]
-            ctrs = actor_ctrs[i].view(-1, 1, 1, 2)
-            out["cls"].append(cls[idcs])
-            out["reg"].append(reg[idcs])
-        return out
-
-class AttDest(nn.Module):
-    def __init__(self, n_agt: int):
-        super(AttDest, self).__init__()
-        norm = "GN"
-        ng = 1
-
-        self.dist = nn.Sequential(
-            nn.Linear(2, n_agt),
-            nn.ReLU(inplace=True),
-            Linear(n_agt, n_agt, norm=norm, ng=ng),
-        )
-
-        self.agt = Linear(2 * n_agt, n_agt, norm=norm, ng=ng)
-
-    def forward(self, agts: torch.Tensor, agt_ctrs: torch.Tensor, dest_ctrs: torch.Tensor) -> torch.Tensor:
-        n_agt = agts.size(1)
-        num_mods = dest_ctrs.size(1)
-
-        dist = (agt_ctrs.unsqueeze(1) - dest_ctrs).view(-1, 2)
-        dist = self.dist(dist)
-        agts = agts.unsqueeze(1).repeat(1, num_mods, 1).view(-1, n_agt)
-
-        agts = torch.cat((dist, agts), 1)
-        agts = self.agt(agts)
-        return agts
 
 class BaseDecoder(nn.Module):
     """The base decoder interface for the encoder-decoder architecture.

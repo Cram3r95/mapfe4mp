@@ -1,20 +1,32 @@
-# Adversarial Loss + L2 loss
+#!/usr/bin/env python3.8
+# -*- coding: utf-8 -*-
+
+## losses
+
+"""
+Created on Fri Feb 25 12:19:38 2022
+@author: Carlos Gómez-Huélamo and Miguel Eduardo Ortiz Huamaní
+"""
+
+# General purpose imports
+
+import pdb
+
+# DL & Math imports
+
 import torch
 import random
 import numpy as np
 from torch import Tensor
-import pdb
 
 def bce_loss(input, target):
     neg_abs = -input.abs()
     loss = input.clamp(min=0) - input * target + (1 + neg_abs.exp()).log()
     return loss.mean()
 
-
 def gan_g_loss(scores_fake):
     y_fake = torch.ones_like(scores_fake) * random.uniform(0.7, 1)
     return bce_loss(scores_fake, y_fake)
-
 
 def gan_d_loss(scores_real, scores_fake):
     y_real = torch.ones_like(scores_real) * random.uniform(0.8, 1)

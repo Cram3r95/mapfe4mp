@@ -1,43 +1,66 @@
+#!/usr/bin/env python3.8
+# -*- coding: utf-8 -*-
+
+## Attention functions
+
+"""
+Created on Fri Feb 25 12:19:38 2022
+@author: Carlos Gómez-Huélamo, Miguel Eduardo Ortiz Huamaní and Marcos V. Conde
+"""
+
+# General purpose imports
+
+import pdb
+
+# DL & Math imports
+
 import torch
-import math
 from torch import nn
 import torch.nn.functional as F
-import pdb
+import math
+
+# Custom imports
 
 from model.modules.encoders import BaseEncoder
 from model.modules.decoders import BaseDecoder
 from model.modules.backbones import CNN
 
 def transpose_qkv(X, num_heads):
-    """Transposition for parallel computation of multiple attention heads.
-    Defined in :numref:`sec_multihead-attention`"""
+    """
+    Transposition for parallel computation of multiple attention heads.
+    Defined in :numref:`sec_multihead-attention`
+    """
     # Shape of input `X`:
     # (`batch_size`, no. of queries or key-value pairs, `num_hiddens`).
     # Shape of output `X`:
     # (`batch_size`, no. of queries or key-value pairs, `num_heads`,
     # `num_hiddens` / `num_heads`)
-    X = X.reshape(X.shape[0], X.shape[1], num_heads, -1) # 1x80x10x32
+    X = X.reshape(X.shape[0], X.shape[1], num_heads, -1)
 
     # Shape of output `X`:
     # (`batch_size`, `num_heads`, no. of queries or key-value pairs,
     # `num_hiddens` / `num_heads`)
-    X = X.permute(0, 2, 1, 3) # 1x10x80x32
+    X = X.permute(0, 2, 1, 3)
 
     # Shape of `output`:
     # (`batch_size` * `num_heads`, no. of queries or key-value pairs,
     # `num_hiddens` / `num_heads`)
-    return X.reshape(-1, X.shape[2], X.shape[3]) # 
+    return X.reshape(-1, X.shape[2], X.shape[3]) 
 
 def transpose_output(X, num_heads):
-    """Reverse the operation of `transpose_qkv`.
-    Defined in :numref:`sec_multihead-attention`"""
+    """
+    Reverse the operation of `transpose_qkv`.
+    Defined in :numref:`sec_multihead-attention`
+    """
     X = X.reshape(-1, num_heads, X.shape[1], X.shape[2])
     X = X.permute(0, 2, 1, 3)
     return X.reshape(X.shape[0], X.shape[1], -1)
 
 def sequence_mask(X, valid_len, value=0):
-    """Mask irrelevant entries in sequences.
-    Defined in :numref:`sec_utils`"""
+    """
+    Mask irrelevant entries in sequences.
+    Defined in :numref:`sec_utils`
+    """
     maxlen = X.size(1)
     mask = torch.arange((maxlen), dtype=torch.float32,
                         device=X.device)[None, :] < valid_len[:, None]
@@ -58,7 +81,9 @@ def masked_softmax(X, valid_lens):
         return F.softmax(X.reshape(shape), dim=-1)
 
 class SATAttentionModule(nn.Module):
-    
+    """
+    Social Attention
+    """
     def __init__(self, config):
         super(SATAttentionModule, self).__init__()
         self.config = config
@@ -100,7 +125,6 @@ class SATAttentionModule(nn.Module):
                 feature_1_ind = feature_1_ind.contiguous().view(-1,feature_1_ind.size(2)*feature_1_ind.size(3)) # 4D -> 2D
             elif (len(feature_1.size()) == 3):
                 # Joint Extractor
-
 
                 feature_1_ind = feature_1[:,num_agents*i:num_agents*(i+1),:]
                 feature_1_ind = feature_1_ind.contiguous().view(-1, num_agents) # 3D -> 2D
@@ -232,7 +256,6 @@ class AddNorm(nn.Module):
     def forward(self, X, Y):
         return self.ln(self.dropout(Y) + X)
 
-
 class PositionWiseFFN(nn.Module):
     """
     Positionwise feed-forward network.
@@ -251,7 +274,6 @@ class PositionWiseFFN(nn.Module):
         output: (batch size, number of time steps, ffn_num_outputs)
         """
         return self.dense2(self.relu(self.dense1(X)))
-
 
 class EncoderBlock(nn.Module):
     """
@@ -312,7 +334,6 @@ class TransformerEncoder(BaseEncoder):
             X = blk(X, valid_lens)
         return X
 
-
 class DecoderBlock(nn.Module):
     """
     Transformer decoder block.
@@ -367,7 +388,7 @@ class DecoderBlock(nn.Module):
         Y2 = self.attention2(Y, enc_outputs, enc_outputs, enc_valid_lens)
         Z = self.addnorm2(Y, Y2)
         return self.addnorm3(Z, self.ffn(Z)), state
-
+        
 class TransformerDecoder(BaseDecoder):
 
     def __init__(self, traj_size, key_size, query_size, value_size,

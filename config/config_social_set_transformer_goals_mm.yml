@@ -54,7 +54,6 @@ hyperparameters:
     obs_len: &obs_len 20 
     pred_len: &pred_len 30 # Must be 0 for the split test since we do not have the predictions of the agents
                            # Only the observations (0 to obs_len-1 past observations)
-    num_agents_per_obs: &num_agents_per_obs 10
     distance_threshold: 40 # It depends on a statistical study (see get_sequences_as_array function), 
                            # where we determine which is the optimal distance for which most agents
                            # are observed for our AGENT 

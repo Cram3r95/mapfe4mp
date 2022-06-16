@@ -9,59 +9,75 @@ dataset:
     path: data/datasets/argoverse/motion-forecasting/
     split: "train"
     batch_size: 64
+    num_workers: 0
     start_from_percentage: 0.0 # By default, 0. If you want to analize a particular bunch of files (e.g. from 25 % to 50 %)
                                # then write here 0.25 and in split_percentage 0.25
-    split_percentage: 0.01 # % of the dataset (0-1)
-    shuffle: False # False to check the input data, always set to True
+    split_percentage: 0.1 # % of the dataset (0-1)
+    shuffle: True # False to check the input data, always set to True
     data_augmentation: False # Rotation, Swapping, Dropout, Gaussian noise
     class_balance: 0.7 # % of straight trajectories (considering the AGENT). Remaining % are curved trajectories
                        # (again, considering the AGENT). -1.0 if no class balance is used (get_item takes the corresponding
                        # sequence regardless if it is straight or curved)
     preprocess_data: False
     save_data: False
-    num_workers: 0
 optim_parameters:
     g_learning_rate: 1.0e-3
     g_weight_decay: 0
-    d_learning_rate: 1.0e-3
-    d_weight_decay: 0
 hyperparameters:
-    loss_type_g: "mse_w+nll" # (mse|mse_w) nll (mse|mse_w)+nll
-    lr_schduler: True # ExponentialLR
-    output_single_agent: True
-    tensorboard_active: True
-    num_iterations: 20000000 
-    num_epochs: 5000000 #75
-    d_steps: 2
-    g_steps: 1
-    timing: 0 # Waits for all kernels in all streams on a CUDA device to complete
-    print_every: 10
-    checkpoint_every: 1000
-    checkpoint_train_every: 2500
-    output_dir: "save/argoverse/social_lstm_mhsa/exp6"
-    exp_description: "1 % dataset (both train and val). Print train metrics. Generator h_dim 32 -> 128"
-    checkpoint_name: "0"
-    checkpoint_start_from: "save/argoverse/social_lstm_mhsa/exp6/argoverse_motion_forecasting_dataset_0_with_model.pt"
-    restore_from_checkpoint: 
-    clipping_threshold_d: 0
-    clipping_threshold_g: 1.1
-    best_k: 10
-    l2_loss_weight: 0.05 # If different from 0, L2 loss is considered when training
-    num_samples_check: 5000
     obs_origin: 20 # This frame will be the origin, tipically the first observation (1) or last observation 
                    # (obs_len) of the AGENT (object to be predicted in Argoverse 1.0). Note that in the code
                    # it will be 0 and 19 respectively
     obs_len: &obs_len 20 
     pred_len: &pred_len 30 # Must be 0 for the split test since we do not have the predictions of the agents
                            # Only the observations (0 to obs_len-1 past observations)
-    num_agents_per_obs: &num_agents_per_obs 10
     distance_threshold: 40 # It depends on a statistical study (see get_sequences_as_array function), 
                            # where we determine which is the optimal distance for which most agents
-                           # are observed for our AGENT 
-    hidden_dim_lstm_decoder: &hidden_dim_lstm_decoder 128
+                           # are observed for our AGENT
+    output_single_agent: True
 
+    num_epochs: 200
+    print_every: 250
+    checkpoint_name: "0"
+    checkpoint_val_percentage: 0.05 # (0 - 1) Check accuracy in validation split every
+                                    # checkpoint_val_percentage * total_num_iterations
+    checkpoint_train_percentage: 0.1 # (0 - 1)
+    num_samples_check: 5000 # Check a maximum of num_samples_check in the check_accuracy function
+
+    loss_type_g: "mse_w" # (mse|mse_w) nll (mse|mse_w)+nll
+    loss_ade_weight: 1 
+    loss_fde_weight: 1
+
+    lr_scheduler: True # ExponentialLR
+    lr_decay_factor: 0.8
+    lr_epoch_percentage_patience: 0.5 # (0-1) E.g. If 0.5 -> the patience will be the half of the iterations
+                                      # that correspond to an epoch. Note: In the Pytorch doc, it refers to 
+                                      # num epochs, but actually is when you evaluate the scheduler 
+                                      # (see our trainer)
+    
+    
+    g_steps: 1
+    clipping_threshold_g: 1.1
+
+    output_dir: "save/argoverse/social_lstm_mhsa/exp1"
+    checkpoint_start_from: #"save/argoverse/social_lstm_mhsa/exp6/argoverse_motion_forecasting_dataset_0_with_model.pt"
+    exp_description: "10 % dataset (both train and val). Print train metrics. 
+                      Generator h_dim 32 -> 256.
+                      Only MSE.
+                      Remove noise (decoder input).
+                      For loop to encode trajectories.
+                      Remove spatial embedding in encoder.
+                      Bidirectional encoder = True.
+                      num_layers encoder 1 -> 2."
+    tensorboard_active: True
+    
 # Model
 
 model:
-    generator: 
-        hdim: 128 # 32 (original from SoPhie)
+    generator:
+        encoder_lstm:
+            hdim: 256 # 32 (original from SoPhie)
+            num_layers: 2
+            bidirectional: True
+            dropout: 0.2
+        decoder_lstm:
+            hdim: 

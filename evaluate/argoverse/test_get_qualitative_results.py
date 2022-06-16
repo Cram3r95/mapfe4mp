@@ -34,7 +34,6 @@ with open(config_path) as config:
 # Fill some additional dimensions
 
 past_observations = config.hyperparameters.obs_len
-num_agents_per_obs = config.hyperparameters.num_agents_per_obs
 
 config.dataset.split = "val"
 config.dataset.split_percentage = 0.55 # To generate the final results, must be 1 (whole split test) 0.0001

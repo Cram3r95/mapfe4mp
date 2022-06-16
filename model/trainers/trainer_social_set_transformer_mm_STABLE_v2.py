@@ -1,8 +1,21 @@
+#!/usr/bin/env python3.8
+# -*- coding: utf-8 -*-
+
+## Trainer Set Transformer Multimodal
+
+"""
+Created on Fri Feb 25 12:19:38 2022
+@author: Carlos Gómez-Huélamo and Miguel Eduardo Ortiz Huamaní
+"""
+
+# General purpose imports
+
 import gc
 import os
-import time
-import pdb
 import numpy as np
+import pdb
+
+# DL & Math imports
 
 import torch
 import torch.nn as nn
@@ -10,6 +23,9 @@ import torch.optim as optim
 from torch.utils.data import DataLoader
 import torch.optim.lr_scheduler as lrs
 from torch.cuda.amp import GradScaler, autocast 
+from torch.utils.tensorboard import SummaryWriter
+
+# Custom imports
 
 from model.datasets.argoverse.dataset import ArgoverseMotionForecastingDataset, seq_collate
 from model.models.social_set_transformer_mm import TrajectoryGenerator
@@ -19,23 +35,30 @@ from model.utils.checkpoint_data import Checkpoint, get_total_norm
 from model.datasets.argoverse.dataset_utils import relative_to_abs_sgan_multimodal
 from model.utils.utils import create_weights
 
-from torch.utils.tensorboard import SummaryWriter
+# Global variables
 
 torch.backends.cudnn.benchmark = True
 scaler = GradScaler()
-
 current_cuda = None
 
+# Aux functions
+
 def get_lr(optimizer):
+    """
+    """
     for param_group in optimizer.param_groups:
         return param_group['lr']
 
 def init_weights(m):
+    """
+    """
     classname = m.__class__.__name__
     if classname.find('Linear') != -1:
         nn.init.kaiming_normal_(m.weight)
 
 def get_dtypes(use_gpu):
+    """
+    """
     long_dtype = torch.LongTensor
     float_dtype = torch.FloatTensor
     if use_gpu == 1:
@@ -59,11 +82,15 @@ def handle_batch(batch, is_single_agent_out):
 
     return (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel, non_linear_obj,
      loss_mask, seq_start_end, frames, object_cls, obj_id, ego_origin, num_seq_list)
-     
+
+# Aux functions losses
+ 
 def calculate_nll_loss(gt, pred, loss_f, confidences):
-    time, bs, _ = gt.shape
+    """
+    """
+    time, bs, _ = pred.shape
     gt = gt.permute(1,0,2)
-    avails = torch.ones(bs,time).cuda()
+    avails = torch.ones(bs,time).cuda(current_cuda)
     loss = loss_f(
         gt, 
         pred,
@@ -75,6 +102,7 @@ def calculate_nll_loss(gt, pred, loss_f, confidences):
 def calculate_mse_loss(gt, pred, loss_f):
     """
     pred: (b,m,t,2)
+    m = Multimodality
     """
     b,m,t,_ = pred.shape
     pred = pred.permute(1,2,0,3) # (m,t,b,2)
@@ -85,10 +113,58 @@ def calculate_mse_loss(gt, pred, loss_f):
         loss_fde += loss_f(pred[i][-1].unsqueeze(0), gt[-1].unsqueeze(0))
     return loss_ade/m, loss_fde/m
 
+def cal_l2_losses(
+    pred_traj_gt, pred_traj_gt_rel, pred_traj_fake, pred_traj_fake_rel
+):
+    g_l2_loss_abs = l2_loss_multimodal(
+        pred_traj_fake, pred_traj_gt, mode='sum'
+    )
+    g_l2_loss_rel = l2_loss_multimodal(
+        pred_traj_fake_rel, pred_traj_gt_rel, mode='sum'
+    )
+    return g_l2_loss_abs, g_l2_loss_rel
+
+def cal_ade(pred_traj_gt, pred_traj_fake, linear_obj, non_linear_obj, consider_ped):
+    b,m,t,_ = pred_traj_fake.shape
+    ade = []
+    for i in range(b):
+        _ade = []
+        for j in range(m):
+            __ade = displacement_error(
+                pred_traj_fake[i,j,:,:].unsqueeze(0).permute(1,0,2), pred_traj_gt[:,i,:].unsqueeze(1), consider_ped
+            )
+            _ade.append(__ade.item())
+        ade.append(_ade)
+    ade = np.array(ade)
+    min_ade = np.min(ade, 1)
+    return ade, min_ade
+
+def cal_fde(
+    pred_traj_gt, pred_traj_fake, linear_obj, non_linear_obj, consider_ped
+):
+    b,m,t,_ = pred_traj_fake.shape
+    fde = []
+    for i in range(b):
+        _fde = []
+        for j in range(m):
+            __fde = final_displacement_error(
+                pred_traj_fake[i,j,-1,:].unsqueeze(0), pred_traj_gt[-1,i].unsqueeze(0), consider_ped
+            )
+            _fde.append(__fde.item())
+        fde.append(_fde)
+    fde = np.array(fde)
+    min_fde = np.min(fde, 1)
+    return fde, min_fde
+
+# Main function
 
 def model_trainer(config, logger):
     """
     """
+
+    # Aux variables
+
+    ## Set specific device for both data and model
 
     global current_cuda
     current_cuda = torch.device(f"cuda:{config.device_gpu}")
@@ -98,6 +174,8 @@ def model_trainer(config, logger):
 
     logger.info('Configuration: ')
     logger.info(config)
+
+    # Initialize train dataloader
 
     logger.info("Initializing train dataset") 
     data_train = ArgoverseMotionForecastingDataset(dataset_name=config.dataset_name,
@@ -120,6 +198,8 @@ def model_trainer(config, logger):
                               num_workers=config.dataset.num_workers,
                               collate_fn=seq_collate)
 
+    # Initialize validation dataloader
+
     logger.info("Initializing val dataset")
     data_val = ArgoverseMotionForecastingDataset(dataset_name=config.dataset_name,
                                                  root_folder=config.dataset.path,
@@ -139,61 +219,79 @@ def model_trainer(config, logger):
                             num_workers=config.dataset.num_workers,
                             collate_fn=seq_collate)
 
+    # Model and optimizer hyperparameters
 
     hyperparameters = config.hyperparameters
     optim_parameters = config.optim_parameters
 
+    ## Compute total number of iterations (iterations_per_epoch * num_epochs)
+
     iterations_per_epoch = len(data_train) / config.dataset.batch_size
     if hyperparameters.num_epochs:
-        hyperparameters.num_iterations = int(iterations_per_epoch * hyperparameters.num_epochs)
-        hyperparameters.num_iterations = hyperparameters.num_iterations if hyperparameters.num_iterations != 0 else 1
+        hyperparameters.num_iterations = int(iterations_per_epoch * hyperparameters.num_epochs) # compute total iterations
+        assert hyperparameters.num_iterations != 0
 
     logger.info(
         'There are {} iterations per epoch'.format(hyperparameters.num_iterations)
     )
 
+    # Initialize motion prediction generator
+
     generator = TrajectoryGenerator()
     generator.to(device)
     generator.apply(init_weights)
-    generator.type(float_dtype).train()
+    generator.type(float_dtype).train() # train mode (if you compute metrics -> .eval() mode)
     logger.info('Generator model:')
     logger.info(generator)
 
-    # optimizer, scheduler and loss functions
-
-    loss_f = {
-        "mse": mse_custom ,
-        "nll": pytorch_neg_multi_log_likelihood_batch
-    }
-
-    optimizer_g = optim.Adam(generator.parameters(), lr=optim_parameters.g_learning_rate, weight_decay=optim_parameters.g_weight_decay)
-    if hyperparameters.lr_schduler:
-        # scheduler_g = lrs.ExponentialLR(optimizer_g, gamma=hyperparameters.lr_scheduler_gamma_g)
-        scheduler_g = lrs.ReduceLROnPlateau(
-            optimizer_g, "min", min_lr=1e-6, verbose=True, factor=0.5, patience=6010,
-        )
+    ## Restore from checkpoint if specified in config file
 
     restore_path = None
     if hyperparameters.checkpoint_start_from is not None:
         restore_path = hyperparameters.checkpoint_start_from
-    elif hyperparameters.restore_from_checkpoint == 1:
-        restore_path = os.path.join(hyperparameters.output_dir,
-                                    '%s_with_model.pt' % hyperparameters.checkpoint_name)
-
 
     if restore_path is not None and os.path.isfile(restore_path):
         logger.info('Restoring from checkpoint {}'.format(restore_path))
         checkpoint = torch.load(restore_path, map_location=current_cuda)
         generator.load_state_dict(checkpoint.config_cp['g_best_state'], strict=False)
         optimizer_g.load_state_dict(checkpoint.config_cp['g_optim_state'])
-        t = checkpoint.config_cp['counters']['t']
+
+        t = checkpoint.config_cp['counters']['t'] # Restore num_iters and epochs from checkpoint
         epoch = checkpoint.config_cp['counters']['epoch']
-        # t, epoch = 0, 0
+        # t,epoch = 0,0 # set to 0, though it starts from a specific checkpoint
+                        # E.g. You have trained for 30k iterations, you take that checkpoint but
+                        # you want to start from 0 iterations (only a number), but the model already
+                        # has the corresponding weights after 30k iterations
         checkpoint.config_cp['restore_ts'].append(t)
     else:
-        # Starting from scratch, so initialize checkpoint data structure
+        # Start from scratch, so initialize checkpoint data structure
         t, epoch = 0, 0
-        checkpoint = Checkpoint()
+        checkpoint = Checkpoint() 
+
+    # Optimizer, scheduler and loss functions
+
+    optimizer_g = optim.Adam(generator.parameters(), lr=optim_parameters.g_learning_rate, weight_decay=optim_parameters.g_weight_decay)
+    
+    if hyperparameters.lr_scheduler: # Patience: Number of epochs with no improvement after 
+                                     # which learning rate will be reduced
+        scheduler_g = lrs.ReduceLROnPlateau(optimizer_g, "min", min_lr=1e-6, 
+                                            verbose=True, factor=0.5, patience=15000)
+
+    if hyperparameters.loss_type_g == "mse" or hyperparameters.loss_type_g == "mse_w":
+        loss_f = mse_custom
+    elif hyperparameters.loss_type_g == "nll":
+        loss_f = pytorch_neg_multi_log_likelihood_batch
+    elif hyperparameters.loss_type_g == "mse+nll" or hyperparameters.loss_type_g == "mse_w+nll":
+        loss_f = {
+            "mse": mse_custom,
+            "nll": pytorch_neg_multi_log_likelihood_batch
+        }
+    else:
+        assert 1 == 0, "loss_type_g is not correct"
+
+    w_loss = create_weights(config.dataset.batch_size, 1, 8).cuda(current_cuda)
+
+    # Tensorboard
 
     if hyperparameters.tensorboard_active:
         exp_path = os.path.join(
@@ -205,15 +303,18 @@ def model_trainer(config, logger):
     logger.info(f"Train {len(train_loader)}")
     logger.info(f"Val {len(val_loader)}")
 
-    ## start training
+    ###################################
+    #### Main Loop. Start training ####
+    ###################################
+
     while t < hyperparameters.num_iterations:
         gc.collect()
         epoch += 1
         logger.info('Starting epoch {}'.format(epoch))
-        for batch in train_loader: # bottleneck
+        for batch in train_loader:
 
-            losses_g = generator_step(hyperparameters, batch, generator,
-                                        optimizer_g, loss_f)
+            losses_g = generator_step(hyperparameters, batch, generator, optimizer_g, loss_f)
+
             checkpoint.config_cp["norm_g"].append(
                 get_total_norm(generator.parameters())
             )
@@ -230,13 +331,14 @@ def model_trainer(config, logger):
                     checkpoint.config_cp["G_losses"][k].append(v)
                 checkpoint.config_cp["losses_ts"].append(t)
 
-            # Check training metrics
+                # Check training metrics
 
             if t > 0 and t % hyperparameters.checkpoint_train_every == 0:
                 logger.info('Checking stats on train ...')
+                split = "train"
 
                 metrics_train = check_accuracy(
-                    hyperparameters, train_loader, generator, split="train"
+                    hyperparameters, train_loader, generator, split=split
                 )
 
                 for k, v in sorted(metrics_train.items()):
@@ -250,14 +352,12 @@ def model_trainer(config, logger):
             # Check validation metrics
 
             if t > 0 and t % hyperparameters.checkpoint_every == 0:
+                logger.info('Checking stats on val ...')
+                split = "val"
+
                 checkpoint.config_cp["counters"]["t"] = t
                 checkpoint.config_cp["counters"]["epoch"] = epoch
                 checkpoint.config_cp["sample_ts"].append(t)
-
-                # Check stats on the validation set
-                logger.info('Checking stats on val ...')
-
-                split = "val"
 
                 metrics_val = check_accuracy(
                     hyperparameters, val_loader, generator, split=split
@@ -286,8 +386,9 @@ def model_trainer(config, logger):
                     checkpoint.config_cp["best_t_nl"] = t
                     checkpoint.config_cp["g_best_nl_state"] = generator.state_dict()
 
-                # Save another checkpoint with model weights and
+                # If val_min_ade, save another checkpoint with model weights and
                 # optimizer state
+
                 if metrics_val[f'{split}_ade'] <= min_ade:
                     checkpoint.config_cp["g_state"] = generator.state_dict()
                     checkpoint.config_cp["g_optim_state"] = optimizer_g.state_dict()
@@ -319,67 +420,27 @@ def model_trainer(config, logger):
             t += 1
             if t >= hyperparameters.num_iterations:
                 break
-            
-            if hyperparameters.lr_schduler:
+
+            if hyperparameters.lr_scheduler:
                 scheduler_g.step(losses_g["G_total_loss"])
                 g_lr = get_lr(optimizer_g)
                 writer.add_scalar("G_lr", g_lr, epoch+1)
-    ###
+
     logger.info("Training finished")
 
-    # Check stats on the validation set (again. required?)
-    
-    t += 1
-    epoch += 1
-    checkpoint.config_cp["counters"]["t"] = t
-    checkpoint.config_cp["counters"]["epoch"] = epoch+1
-    checkpoint.config_cp["sample_ts"].append(t)
-    logger.info('Checking stats on val ...')
-    metrics_val = check_accuracy(
-        hyperparameters, val_loader, generator
-    )
+def generator_step(hyperparameters, batch, generator, optimizer_g, 
+                   loss_f):
+    """
+    """
+    # Load data in device
 
-    for k, v in sorted(metrics_val.items()):
-        logger.info('  [val] {}: {:.3f}'.format(k, v))
-        if hyperparameters.tensorboard_active:
-            writer.add_scalar(k, v, t+1)
-        if k not in checkpoint.config_cp["metrics_val"].keys():
-            checkpoint.config_cp["metrics_val"][k] = []
-        checkpoint.config_cp["metrics_val"][k].append(v)
-
-    min_ade = min(checkpoint.config_cp["metrics_val"]['ade'])
-    min_ade_nl = min(checkpoint.config_cp["metrics_val"]['ade_nl'])
-
-    if metrics_val['ade'] <= min_ade:
-        logger.info('New low for avg_disp_error')
-        checkpoint.config_cp["best_t"] = t
-        checkpoint.config_cp["g_best_state"] = generator.state_dict()
-
-    if metrics_val['ade_nl'] <= min_ade_nl:
-        logger.info('New low for avg_disp_error_nl')
-        checkpoint.config_cp["best_t_nl"] = t
-        checkpoint.config_cp["g_best_nl_state"] = generator.state_dict()
-
-    # Save another checkpoint with model weights and
-    # optimizer state
-    checkpoint.config_cp["g_state"] = generator.state_dict()
-    checkpoint.config_cp["g_optim_state"] = optimizer_g.state_dict()
-    checkpoint_path = os.path.join(
-        config.base_dir, hyperparameters.output_dir, "{}_{}_with_model.pt".format(config.dataset_name, hyperparameters.checkpoint_name)
-    )
-
-
-def generator_step(
-    hyperparameters, batch, generator, optimizer_g, loss_f
-):
-    batch = [tensor.cuda() for tensor in batch]
+    batch = [tensor.cuda(current_cuda) for tensor in batch]
 
     (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel, non_linear_obj,
      loss_mask, seq_start_end, frames, object_cls, obj_id, ego_origin, _, _) = batch
 
-    # place holder loss
-    losses = {}
-    # single agent output idx
+    # Take (if specified) data of only the AGENT of interest
+
     agent_idx = None
     if hyperparameters.output_single_agent:
         agent_idx = torch.where(object_cls==1)[0].cpu().numpy()
@@ -387,61 +448,63 @@ def generator_step(
     if hyperparameters.output_single_agent:
         loss_mask = loss_mask[agent_idx, hyperparameters.obs_len:]
         pred_traj_gt_rel = pred_traj_gt_rel[:, agent_idx, :]
-    else:  # 160x30 -> 0 o 1
+    else:
         loss_mask = loss_mask[:, hyperparameters.obs_len:]
 
-    # forward
+    # Forward
+
     optimizer_g.zero_grad()
-    generator_out, conf = generator(
-        obs_traj_rel, seq_start_end
-    )
+    with autocast():
+        generator_out, conf = generator(obs_traj_rel, seq_start_end)
 
-    pred_traj_fake_rel = generator_out
-    if hyperparameters.output_single_agent:
-        pred_traj_fake = relative_to_abs_sgan_multimodal(pred_traj_fake_rel, obs_traj[-1,agent_idx, :])
-    else:
-        pred_traj_fake = relative_to_abs_sgan_multimodal(pred_traj_fake_rel, obs_traj[-1])
-        
+        pred_traj_fake_rel = generator_out
 
-    # handle single agent output
-    if hyperparameters.output_single_agent:
-        obs_traj = obs_traj[:,agent_idx, :]
-        pred_traj_gt = pred_traj_gt[:,agent_idx, :]
-        obs_traj_rel = obs_traj_rel[:, agent_idx, :]
+        if hyperparameters.output_single_agent:
+            pred_traj_fake = relative_to_abs_sgan_multimodal(pred_traj_fake_rel, obs_traj[-1,agent_idx, :])
+        else:
+            pred_traj_fake = relative_to_abs_sgan_multimodal(pred_traj_fake_rel, obs_traj[-1])
+            
 
-    if hyperparameters.loss_type_g == "mse" or hyperparameters.loss_type_g == "mse_w":
-        _,b,_ = pred_traj_gt_rel.shape
-        w_loss = w_loss[:b, :]
-        loss_ade, loss_fde = calculate_mse_loss(
-            pred_traj_gt_rel, pred_traj_fake_rel, loss_f["mse"]
-        )
-        loss = loss_ade + loss_fde
-        losses["G_mse_ade_loss"] = loss_ade.item()
-        losses["G_mse_fde_loss"] = loss_fde.item()
-    elif hyperparameters.loss_type_g == "nll":
-        loss = calculate_nll_loss(pred_traj_gt_rel, pred_traj_fake_rel,loss_f)
-        losses["G_nll_loss"] = loss.item()
-    elif hyperparameters.loss_type_g == "mse+nll" or hyperparameters.loss_type_g == "mse_w+nll":
-        _,b,_ = pred_traj_gt_rel.shape
-        loss_ade, loss_fde = calculate_mse_loss(
-            pred_traj_gt_rel, pred_traj_fake_rel, loss_f["mse"]
-        )
-        loss_nll = calculate_nll_loss(pred_traj_gt_rel, pred_traj_fake_rel,loss_f["nll"], conf)
-        
-        alfa = 1
-        beta = 2.5
-        ganma = 1.5
-        loss = alfa*loss_ade + beta*loss_fde + ganma*loss_nll
+        # Take (if specified) data of only the AGENT of interest
 
-        losses["G_mse_ade_loss"] = loss_ade.item()
-        losses["G_mse_fde_loss"] = loss_fde.item()
-        losses["G_nll_loss"] = loss_nll.item()
+        if hyperparameters.output_single_agent:
+            obs_traj = obs_traj[:,agent_idx, :]
+            pred_traj_gt = pred_traj_gt[:,agent_idx, :]
+            obs_traj_rel = obs_traj_rel[:, agent_idx, :]
+
+        # TODO: Check if in other configurations the losses are computed using relative or absolute
+        # coordinates
+
+        losses = {}
+
+        if hyperparameters.loss_type_g == "mse" or hyperparameters.loss_type_g == "mse_w":
+            _,b,_ = pred_traj_gt_rel.shape
+            w_loss = w_loss[:b, :]
+            loss_ade, loss_fde = calculate_mse_loss(pred_traj_gt_rel, pred_traj_fake_rel, 
+                                                    loss_f["mse"])
+            loss = loss_ade + loss_fde
+            losses["G_mse_ade_loss"] = loss_ade.item()
+            losses["G_mse_fde_loss"] = loss_fde.item()
+        elif hyperparameters.loss_type_g == "nll":
+            loss = calculate_nll_loss(pred_traj_gt_rel, pred_traj_fake_rel,loss_f)
+            losses["G_nll_loss"] = loss.item()
+        elif hyperparameters.loss_type_g == "mse+nll" or hyperparameters.loss_type_g == "mse_w+nll":
+            _,b,_ = pred_traj_gt_rel.shape
+            loss_ade, loss_fde = calculate_mse_loss(
+                pred_traj_gt_rel, pred_traj_fake_rel, loss_f["mse"]
+            )
+            loss_nll = calculate_nll_loss(pred_traj_gt_rel, pred_traj_fake_rel,loss_f["nll"], conf)
+
+            loss = 1*loss_ade + 2.5*loss_fde + 1.5*loss_nll # TODO: Set these weights in config file
+
+            losses["G_mse_ade_loss"] = loss_ade.item()
+            losses["G_mse_fde_loss"] = loss_fde.item()
+            losses["G_nll_loss"] = loss_nll.item()
     
     losses['G_total_loss'] = loss.item()
 
     
-    # scaler.scale(loss).backward()
-    loss.backward()
+    loss.backward() # scaler.scale(loss).backward()
     if hyperparameters.clipping_threshold_g > 0:
         nn.utils.clip_grad_norm_(
             generator.parameters(), hyperparameters.clipping_threshold_g
@@ -465,7 +528,7 @@ def check_accuracy(
 
     with torch.no_grad():
         for batch in loader:
-            batch = [tensor.cuda(current_cuda) for tensor in batch]
+            batch = [tensor.cuda() for tensor in batch]
 
             (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel, non_linear_obj,
              loss_mask, seq_start_end, frames, object_cls, obj_id, ego_origin, _, _) = batch
@@ -478,6 +541,7 @@ def check_accuracy(
             # mask and linear
             if not hyperparameters.output_single_agent: # TODO corregir con el nuevo dataset
                 mask = np.where(obj_id.cpu() == -1, 0, 1)
+                pdb.set_trace()
                 mask = torch.tensor(mask, device=obj_id.device).reshape(-1)
             if hyperparameters.output_single_agent:
                 # mask = mask[agent_idx]
@@ -554,46 +618,3 @@ def check_accuracy(
 
     generator.train()
     return metrics
-
-def cal_l2_losses(
-    pred_traj_gt, pred_traj_gt_rel, pred_traj_fake, pred_traj_fake_rel
-):
-    g_l2_loss_abs = l2_loss_multimodal(
-        pred_traj_fake, pred_traj_gt, mode='sum'
-    )
-    g_l2_loss_rel = l2_loss_multimodal(
-        pred_traj_fake_rel, pred_traj_gt_rel, mode='sum'
-    )
-    return g_l2_loss_abs, g_l2_loss_rel
-
-def cal_ade(pred_traj_gt, pred_traj_fake, linear_obj, non_linear_obj, consider_ped):
-    b,m,t,_ = pred_traj_fake.shape
-    ade = []
-    for i in range(b):
-        _ade = []
-        for j in range(m):
-            __ade = displacement_error(
-                pred_traj_fake[i,j,:,:].unsqueeze(0).permute(1,0,2), pred_traj_gt[:,i,:].unsqueeze(1), consider_ped
-            )
-            _ade.append(__ade.item())
-        ade.append(_ade)
-    ade = np.array(ade)
-    min_ade = np.min(ade, 1)
-    return ade, min_ade
-
-def cal_fde(
-    pred_traj_gt, pred_traj_fake, linear_obj, non_linear_obj, consider_ped
-):
-    b,m,t,_ = pred_traj_fake.shape
-    fde = []
-    for i in range(b):
-        _fde = []
-        for j in range(m):
-            __fde = final_displacement_error(
-                pred_traj_fake[i,j,-1,:].unsqueeze(0), pred_traj_gt[-1,i].unsqueeze(0), consider_ped
-            )
-            _fde.append(__fde.item())
-        fde.append(_fde)
-    fde = np.array(fde)
-    min_fde = np.min(fde, 1)
-    return fde, min_fde

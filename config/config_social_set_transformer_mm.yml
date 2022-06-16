@@ -26,7 +26,7 @@ optim_parameters:
     d_weight_decay: 0
 hyperparameters:
     loss_type_g: "mse_w+nll" # (mse|mse_w) nll (mse|mse_w)+nll
-    lr_schduler: True # ExponentialLR
+    lr_scheduler: True # ExponentialLR
     output_single_agent: True
     tensorboard_active: True
     num_iterations: 20000
@@ -34,8 +34,9 @@ hyperparameters:
     d_steps: 2
     g_steps: 1
     timing: 0 # Waits for all kernels in all streams on a CUDA device to complete
-    print_every: 10
-    checkpoint_every: 2000 
+    print_every: 250
+    checkpoint_every: 1000
+    checkpoint_train_every: 2500 
     output_dir:  "save/argoverse/social_set_transformer_mm/exp5"
     exp_description: "1 % dataset + scheduler. From checkpoint"
     checkpoint_name: "0"
@@ -52,7 +53,6 @@ hyperparameters:
     obs_len: &obs_len 20 
     pred_len: &pred_len 30 # Must be 0 for the split test since we do not have the predictions of the agents
                            # Only the observations (0 to obs_len-1 past observations)
-    num_agents_per_obs: &num_agents_per_obs 10
     distance_threshold: 40 # It depends on a statistical study (see get_sequences_as_array function), 
                            # where we determine which is the optimal distance for which most agents
                            # are observed for our AGENT 
@@ -63,23 +63,3 @@ hyperparameters:
 model:
     generator: 
       test: "test"
-    discriminator:
-        # Encoder
-        encoder:
-            num_layers: 1
-            hidden_dim: 64
-            emb_dim: 16 # embedding input from mlp
-            mlp_config:
-                dim_list: [2, 16] # From 2 (x,y) to 16 (original embedding of the paper)
-                activation: 'relu'
-                batch_norm: True
-                dropout: 0.5
-            dropout: 0
-
-        # Classifier
-        classifier:
-            mlp_config:
-                dim_list: [64, 1024, 1]
-                activation: 'relu'
-                batch_norm: True
-                dropout: 0.5
