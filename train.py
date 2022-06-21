@@ -48,6 +48,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--trainer", required=True, type=str, choices=TRAINER_LIST)
     parser.add_argument("--device_gpu", required=True, type=int)
+    parser.add_argument("--from_ckpt", type=str, default=None)
+    parser.add_argument("--num_ckpt", type=str, default="0")
     args = parser.parse_args()
     print(args.trainer)
     
@@ -59,7 +61,14 @@ if __name__ == "__main__":
 
     # Get configuration for the current architecture
 
-    config_path = "./config/config_%s.yml" % args.trainer
+    if not args.from_ckpt: # Initialize new experiment from your current config file in configs folder
+        config_path = "./config/config_%s.yml" % args.trainer
+    elif os.path.isdir(args.from_ckpt): # Continue training from previous checkpoint with the 
+                                        # corresponding config file
+        config_path = os.path.join(args.from_ckpt,"config_file.yml")
+    else:
+        assert 1 == 0, "Checkpoint not found!" 
+        
     print("BASE_DIR: ", BASE_DIR)
 
     with open(config_path) as config_file:
@@ -69,6 +78,12 @@ if __name__ == "__main__":
         config_file["base_dir"] = BASE_DIR
         exp_path = os.path.join(config_file["base_dir"], config_file["hyperparameters"]["output_dir"])   
         route_path = exp_path + "/config_file.yml"
+
+        if args.from_ckpt and os.path.isdir(args.from_ckpt): # Overwrite checkpoint_start_from
+            model = config_file["dataset_name"] + "_" + args.num_ckpt + "_with_model.pt"
+
+            config_file["hyperparameters"]["checkpoint_start_from"] = os.path.join(args.from_ckpt,
+                                                                             model)
 
         if not os.path.exists(exp_path):
             print("Create experiment path: ", exp_path)

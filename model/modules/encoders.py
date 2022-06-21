@@ -26,13 +26,15 @@ from model.modules.layers import MLP
 class EncoderLSTM(nn.Module):
     """
     """
-    def __init__(self, embedding_dim=16, h_dim=64, num_layers=1, bidirectional=False, current_cuda="cuda:0"):
+    def __init__(self, embedding_dim=16, h_dim=64, num_layers=1, bidirectional=False, 
+                       dropout=0.5, current_cuda="cuda:0"):
         super().__init__()
 
         self.data_dim = 2 # x,y
         self.embedding_dim = embedding_dim
         self.h_dim = h_dim # Number of LSTM units (per layer)
         self.num_layers = num_layers
+        self.current_cuda = current_cuda
 
         if bidirectional: self.D = 2
         else: self.D = 1
@@ -44,9 +46,8 @@ class EncoderLSTM(nn.Module):
         # self.encoder = nn.LSTM(self.embedding_dim, self.h_dim, 1)#, bidirectional=bidirectional)
         # self.encoder = nn.LSTM(self.embedding_dim, self.h_dim, num_layers, bidirectional=bidirectional)
 
-        self.encoder = nn.LSTM(self.data_dim, self.h_dim, num_layers, bidirectional=bidirectional)
-        
-        self.current_cuda = current_cuda
+        self.encoder = nn.LSTM(self.data_dim, self.h_dim, num_layers, 
+                               bidirectional=bidirectional, dropout=dropout)
 
     def init_hidden(self, batch):
         """
@@ -57,12 +58,13 @@ class EncoderLSTM(nn.Module):
 
     def forward(self, obs_traj):
         """
+        obs_traj_rel in this case
         """
         n_agents = obs_traj.size(1)
         state = self.init_hidden(n_agents)
 
         # TODO: Spatial embedding required?
-        
+
         # obs_traj_embedding = F.leaky_relu(self.spatial_embedding(obs_traj.contiguous().view(-1, 2)))
         # obs_traj_embedding = obs_traj_embedding.view(-1, n_agents, self.embedding_dim)
         # output, state = self.encoder(obs_traj_embedding, state)
@@ -70,9 +72,12 @@ class EncoderLSTM(nn.Module):
         output, state = self.encoder(obs_traj, state)
 
         if self.D == 2: # LSTM bidirectional
-            final_h = state[0][0,:,:] # Take the forward information from the state, not the reverse
+            final_h = state[0][-2,:,:] # Take the forward information from the last stacked LSTM layer
+                                       # state, not the reverse
+
+                                       # L0(F->R) -> L1(F->R) -> L2(F->R) ...
         else:
-            final_h = state[0]
+            final_h = state[0][-1,:,:] # Take the information from the last LSTM layer
 
         final_h = final_h.view(n_agents, self.h_dim)
         

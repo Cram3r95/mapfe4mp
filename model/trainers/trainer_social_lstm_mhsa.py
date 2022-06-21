@@ -14,6 +14,8 @@ import gc
 import os
 import numpy as np
 import pdb
+import time
+import copy
 
 # DL & Math imports
 
@@ -40,6 +42,10 @@ from model.utils.utils import create_weights
 torch.backends.cudnn.benchmark = True
 scaler = GradScaler()
 current_cuda = None
+
+MAX_TIME_TO_CHECK_TRAIN = 45 # minutes
+MAX_TIME_TO_CHECK_VAL = 30 # minutes
+MAX_TIME_PATIENCE_LR_SCHEDULER = 60 # minutes
 
 # Aux functions
 
@@ -147,6 +153,9 @@ def model_trainer(config, logger):
 
     # Aux variables
 
+    hyperparameters = config.hyperparameters
+    optim_parameters = config.optim_parameters
+
     ## Set specific device for both data and model
 
     global current_cuda
@@ -202,49 +211,25 @@ def model_trainer(config, logger):
                             num_workers=config.dataset.num_workers,
                             collate_fn=seq_collate)
 
-    # Model and optimizer hyperparameters
+    # Initialize motion prediction generator and optimizer
 
-    hyperparameters = config.hyperparameters
-    optim_parameters = config.optim_parameters
-
-    ## Compute total number of iterations (iterations_per_epoch * num_epochs)
-    
-    iterations_per_epoch = len(data_train) / config.dataset.batch_size
-    
-
-    if hyperparameters.num_epochs:
-        hyperparameters.num_iterations = int(iterations_per_epoch * hyperparameters.num_epochs) # compute total iterations
-        assert hyperparameters.num_iterations != 0
-
-    logger.info(
-        'Iterations per epoch: {} \n \
-         Total epochs: {} \n \
-         Total iterations: {}'.format(iterations_per_epoch, 
-                                      hyperparameters.num_epochs,
-                                      hyperparameters.num_iterations))
-
-    ## Compute num iterations to compute accuracy (both train and val)
-
-    hyperparameters.checkpoint_train_every = int(hyperparameters.checkpoint_train_percentage * hyperparameters.num_iterations)
-    hyperparameters.checkpoint_val_every = int(hyperparameters.checkpoint_val_percentage * hyperparameters.num_iterations)
-
-    # Initialize motion prediction generator
-
-    generator = TrajectoryGenerator(h_dim=config.model.generator.encoder_lstm.hdim,
-                                    num_layers=config.model.generator.encoder_lstm.num_layers,
-                                    bidirectional=config.model.generator.encoder_lstm.bidirectional,
+    generator = TrajectoryGenerator(config_encoder_lstm=config.model.generator.encoder_lstm,
+                                    config_decoder_lstm=config.model.generator.decoder_lstm,
+                                    config_mhsa=config.model.generator.mhsa,
                                     current_cuda=current_cuda)
     generator.to(device)
     generator.apply(init_weights)
     generator.type(float_dtype).train() # train mode (if you compute metrics -> .eval() mode)
-    logger.info('Generator model:')
-    logger.info(generator)
+
+    optimizer_g = optim.Adam(generator.parameters(), lr=optim_parameters.g_learning_rate, weight_decay=optim_parameters.g_weight_decay)
 
     ## Restore from checkpoint if specified in config file
 
     restore_path = None
     if hyperparameters.checkpoint_start_from is not None:
         restore_path = hyperparameters.checkpoint_start_from
+
+    previous_t = 0 # Previous iterations
 
     if restore_path is not None and os.path.isfile(restore_path):
         logger.info('Restoring from checkpoint {}'.format(restore_path))
@@ -254,24 +239,41 @@ def model_trainer(config, logger):
 
         t = checkpoint.config_cp['counters']['t'] # Restore num_iters and epochs from checkpoint
         epoch = checkpoint.config_cp['counters']['epoch']
-        # t,epoch = 0,0 # set to 0, though it starts from a specific checkpoint
-                        # E.g. You have trained for 30k iterations, you take that checkpoint but
-                        # you want to start from 0 iterations (only a number), but the model already
-                        # has the corresponding weights after 30k iterations
+        previous_t = copy.copy(t)
+        # t,epoch = 0,0 # set to 0, though it starts from a specific checkpoint. 
+                        # Repeat all iterations/epochs again
+                        
         checkpoint.config_cp['restore_ts'].append(t)
     else:
         # Start from scratch, so initialize checkpoint data structure
         t, epoch = 0, 0
         checkpoint = Checkpoint()
 
-    # Optimizer, scheduler and loss functions
+    logger.info('Generator model:')
+    logger.info(generator)
+    logger.info('Optimizer:')
+    logger.info(optimizer_g)
 
-    optimizer_g = optim.Adam(generator.parameters(), lr=optim_parameters.g_learning_rate, weight_decay=optim_parameters.g_weight_decay)
+    ## Compute total number of iterations (iterations_per_epoch * num_epochs)
+    
+    iterations_per_epoch = len(data_train) / config.dataset.batch_size
+    
+    if hyperparameters.num_epochs:
+        hyperparameters.num_iterations = int(iterations_per_epoch * hyperparameters.num_epochs) # compute total iterations
+        assert hyperparameters.num_iterations != 0
+
+    ## Compute num iterations to calculate accuracy (both train and val)
+
+    hyperparameters.checkpoint_train_every = round(hyperparameters.checkpoint_train_percentage * hyperparameters.num_iterations)
+    hyperparameters.checkpoint_val_every = round(hyperparameters.checkpoint_val_percentage * hyperparameters.num_iterations)
+
+    # Scheduler and loss functions
     
     if hyperparameters.lr_scheduler: 
-        patience = int(hyperparameters.lr_epoch_percentage_patience * iterations_per_epoch)
+        lr_scheduler_patience = int(hyperparameters.lr_epoch_percentage_patience * hyperparameters.num_iterations) # Every N epochs
         scheduler_g = lrs.ReduceLROnPlateau(optimizer_g, "min", min_lr=1e-5, 
-                                            verbose=True, factor=hyperparameters.lr_decay_factor, patience=patience)
+                                            verbose=True, factor=hyperparameters.lr_decay_factor, 
+                                            patience=lr_scheduler_patience)
 
     if hyperparameters.loss_type_g == "mse" or hyperparameters.loss_type_g == "mse_w":
         loss_f = mse_custom
@@ -296,39 +298,96 @@ def model_trainer(config, logger):
         os.makedirs(exp_path, exist_ok=True)
         writer = SummaryWriter(exp_path)
 
-    logger.info(f"Train {len(train_loader)}")
-    logger.info(f"Val {len(val_loader)}")
-
     ###################################
     #### Main Loop. Start training ####
     ###################################
 
-    while t < hyperparameters.num_iterations:
+    # N.B. Despite the fact the main loop depends on t, since we consider all previous iterations
+    # we are only training right now the specified number of epochs / iterations (given by current_iteration and
+    # hyperparameters.num_iterations)
+    
+    time_iterations = float(0)
+    time_per_iteration = float(0)
+    current_iteration = 0 # Current iteration, regardless the model had previous training
+    flag_check_every = False
+
+    while t < hyperparameters.num_iterations + previous_t:
         gc.collect()
         epoch += 1
         logger.info('Starting epoch {}'.format(epoch))
         for batch in train_loader:
+            start = time.time()
             losses_g = generator_step(hyperparameters, batch, generator, optimizer_g, loss_f, w_loss)
-            
+            end = time.time()
             checkpoint.config_cp["norm_g"].append(
                 get_total_norm(generator.parameters())
             )
+            
+            time_iterations += end-start
+            time_per_iteration = time_iterations / (current_iteration+1)
 
-            if t % hyperparameters.print_every == 0:
-                # print logger
-                logger.info('t = {} / {}'.format(t + 1, hyperparameters.num_iterations))
+            # Compute approximate time to compute train and val metrics
+
+            if not flag_check_every:
+                seconds_to_check_train = time_per_iteration*hyperparameters.checkpoint_train_every
+                seconds_to_check_val = time_per_iteration*hyperparameters.checkpoint_val_every
+                seconds_lr_patience = time_per_iteration*lr_scheduler_patience
+
+                if seconds_to_check_train > MAX_TIME_TO_CHECK_TRAIN*60:
+                    hyperparameters.checkpoint_train_every = round((MAX_TIME_TO_CHECK_TRAIN*60) / time_per_iteration)
+                if seconds_to_check_val > MAX_TIME_TO_CHECK_VAL*60:
+                    hyperparameters.checkpoint_val_every = round((MAX_TIME_TO_CHECK_VAL*60) / time_per_iteration)
+                if seconds_lr_patience > MAX_TIME_PATIENCE_LR_SCHEDULER*60:
+                    lr_scheduler_patience = round((MAX_TIME_PATIENCE_LR_SCHEDULER*60) / time_per_iteration)
+
+                    scheduler_g = lrs.ReduceLROnPlateau(optimizer_g, "min", min_lr=1e-5, 
+                                                verbose=True, factor=hyperparameters.lr_decay_factor, 
+                                                patience=lr_scheduler_patience)
+                                                
+                mins_to_check_train = round((time_per_iteration*hyperparameters.checkpoint_train_every)/60)
+                mins_to_check_val = round((time_per_iteration*hyperparameters.checkpoint_val_every)/60)
+                mins_to_complete = round((time_per_iteration*hyperparameters.num_iterations)/60)
+                mins_to_decrease_lr = round((time_per_iteration*lr_scheduler_patience)/60)
+
+                logger.info(
+                            '\n Iterations per epoch: {} \n \
+                             Total epochs: {} \n \
+                             Total iterations: {} (Aprox. {} min) \n \
+                             Checkpoint train every: {} iterations (Aprox. {} min) \n \
+                             Checkpoint val every: {} iterations (Aprox. {} min) \n \
+                             Decrease LR if condition not met every: {} (Aprox. {} min)'
+                             .format(iterations_per_epoch, 
+                                     hyperparameters.num_epochs,
+                                     hyperparameters.num_iterations,
+                                     mins_to_complete,
+                                     hyperparameters.checkpoint_train_every,
+                                     mins_to_check_train,
+                                     hyperparameters.checkpoint_val_every,
+                                     mins_to_check_val,
+                                     lr_scheduler_patience,
+                                     mins_to_decrease_lr))
+
+                flag_check_every = True
+
+            # Print losses info
+
+            if current_iteration % hyperparameters.print_every == 0:
+                logger.info('Iteration = {} / {}'.format(t + 1, hyperparameters.num_iterations + previous_t))
+                logger.info('Time per iteration: {}'.format(time_per_iteration))
+
                 for k, v in sorted(losses_g.items()):
                     logger.info('  [G] {}: {:.3f}'.format(k, v))
                     if hyperparameters.tensorboard_active:
                         writer.add_scalar(k, v, t+1)
                     if k not in checkpoint.config_cp["G_losses"].keys():
                         checkpoint.config_cp["G_losses"][k] = [] 
+                        
                     checkpoint.config_cp["G_losses"][k].append(v)
                 checkpoint.config_cp["losses_ts"].append(t)
 
             # Check training metrics
 
-            if t > 0 and t % hyperparameters.checkpoint_train_every == 0:
+            if current_iteration > 0 and current_iteration % hyperparameters.checkpoint_train_every == 0:
                 logger.info('Checking stats on train ...')
                 split = "train"
 
@@ -346,7 +405,7 @@ def model_trainer(config, logger):
 
             # Check validation metrics
 
-            if t > 0 and t % hyperparameters.checkpoint_val_every == 0:
+            if current_iteration > 0 and current_iteration % hyperparameters.checkpoint_val_every == 0:
                 logger.info('Checking stats on val ...')
                 split = "val"
 
@@ -381,9 +440,9 @@ def model_trainer(config, logger):
                     checkpoint.config_cp["best_t_nl"] = t
                     checkpoint.config_cp["g_best_nl_state"] = generator.state_dict()
 
-                # If val_min_ade, save another checkpoint with model weights and
+                # If val_min_ade < min_ade, save another checkpoint with model weights and
                 # optimizer state
-
+                
                 if metrics_val[f'{split}_ade'] <= min_ade:
                     checkpoint.config_cp["g_state"] = generator.state_dict()
                     checkpoint.config_cp["g_optim_state"] = optimizer_g.state_dict()
@@ -413,7 +472,9 @@ def model_trainer(config, logger):
                     logger.info('Done.')
 
             t += 1
-            if t >= hyperparameters.num_iterations:
+            current_iteration += 1
+
+            if current_iteration >= hyperparameters.num_iterations:
                 break
         
             if hyperparameters.lr_scheduler:
@@ -422,6 +483,94 @@ def model_trainer(config, logger):
                 writer.add_scalar("G_lr", g_lr, t+1)
 
     logger.info("Training finished")
+
+    # Check train and validation metrics once the training is finished
+    # Because you check every N iterations, but not specifically the last one
+
+    ## Check train metrics
+
+    logger.info('Checking stats on train ...')
+    split = "train"
+
+    metrics_train = check_accuracy(
+        hyperparameters, train_loader, generator, split=split
+    )
+
+    for k, v in sorted(metrics_train.items()):
+        logger.info('  [train] {}: {:.3f}'.format(k, v))
+        if hyperparameters.tensorboard_active:
+            writer.add_scalar(k, v, t+1)
+        if k not in checkpoint.config_cp["metrics_train"].keys():
+            checkpoint.config_cp["metrics_train"][k] = []
+        checkpoint.config_cp["metrics_train"][k].append(v)
+
+    ## Check val metrics
+
+    logger.info('Checking stats on val ...')
+    split = "val"
+
+    checkpoint.config_cp["counters"]["t"] = t
+    checkpoint.config_cp["counters"]["epoch"] = epoch
+    checkpoint.config_cp["sample_ts"].append(t)
+
+    metrics_val = check_accuracy(
+        hyperparameters, val_loader, generator, split=split
+    )
+
+    for k, v in sorted(metrics_val.items()):
+        logger.info('  [val] {}: {:.3f}'.format(k, v))
+        if hyperparameters.tensorboard_active:
+            writer.add_scalar(k, v, t+1)
+        if k not in checkpoint.config_cp["metrics_val"].keys():
+            checkpoint.config_cp["metrics_val"][k] = []
+        checkpoint.config_cp["metrics_val"][k].append(v)
+
+    min_ade = min(checkpoint.config_cp["metrics_val"][f'{split}_ade'])
+    min_fde = min(checkpoint.config_cp["metrics_val"][f'{split}_fde'])
+    min_ade_nl = min(checkpoint.config_cp["metrics_val"][f'{split}_ade_nl'])
+    logger.info("Min ADE: {}".format(min_ade))
+    logger.info("Min FDE: {}".format(min_fde))
+    if metrics_val[f'{split}_ade'] <= min_ade:
+        logger.info('New low for avg_disp_error')
+        checkpoint.config_cp["best_t"] = t
+        checkpoint.config_cp["g_best_state"] = generator.state_dict()
+
+    if metrics_val[f'{split}_ade_nl'] <= min_ade_nl:
+        logger.info('New low for avg_disp_error_nl')
+        checkpoint.config_cp["best_t_nl"] = t
+        checkpoint.config_cp["g_best_nl_state"] = generator.state_dict()
+
+    # If val_min_ade, save another checkpoint with model weights and
+    # optimizer state
+
+    if metrics_val[f'{split}_ade'] <= min_ade:
+        checkpoint.config_cp["g_state"] = generator.state_dict()
+        checkpoint.config_cp["g_optim_state"] = optimizer_g.state_dict()
+        checkpoint_path = os.path.join(
+            config.base_dir, hyperparameters.output_dir, "{}_{}_with_model.pt".format(config.dataset_name, hyperparameters.checkpoint_name)
+        )
+        logger.info('Saving checkpoint to {}'.format(checkpoint_path))
+        torch.save(checkpoint, checkpoint_path)
+        logger.info('Done.')
+
+        # Save a checkpoint with no model weights by making a shallow. 
+        # Copy of the checkpoint excluding some items
+
+        checkpoint_path = os.path.join(
+            config.base_dir, hyperparameters.output_dir, "{}_{}_no_model.pt".format(config.dataset_name, hyperparameters.checkpoint_name)
+        )
+        logger.info('Saving checkpoint to {}'.format(checkpoint_path))
+        key_blacklist = [
+            'g_state', 'd_state', 'g_best_state', 'g_best_nl_state',
+            'g_optim_state', 'd_optim_state', 'd_best_state',
+            'd_best_nl_state'
+        ]
+        small_checkpoint = {}
+        for k, v in checkpoint.config_cp.items():
+            if k not in key_blacklist:
+                small_checkpoint[k] = v
+        torch.save(small_checkpoint, checkpoint_path)
+        logger.info('Done.')
 
 def generator_step(hyperparameters, batch, generator, optimizer_g, 
                    loss_f, w_loss=None, split="train"):
@@ -475,20 +624,33 @@ def generator_step(hyperparameters, batch, generator, optimizer_g,
         if hyperparameters.loss_type_g == "mse" or hyperparameters.loss_type_g == "mse_w":
             _,b,_ = pred_traj_gt_rel.shape
             w_loss = w_loss[:b, :]
-            loss_ade, loss_fde = calculate_mse_loss(pred_traj_gt_rel, pred_traj_fake_rel, 
+            # loss_ade, loss_fde = calculate_mse_loss(pred_traj_gt_rel, pred_traj_fake_rel, 
+            loss_ade, loss_fde = calculate_mse_loss(pred_traj_gt, pred_traj_fake,
                                                     loss_f, hyperparameters.loss_type_g)
-            loss = loss_ade + loss_fde
+
+            loss = hyperparameters.loss_ade_weight*loss_ade + \
+                   hyperparameters.loss_fde_weight*loss_fde
             losses["G_mse_ade_loss"] = loss_ade.item()
             losses["G_mse_fde_loss"] = loss_fde.item()
+
         elif hyperparameters.loss_type_g == "nll":
-            loss = calculate_nll_loss(pred_traj_gt_rel, pred_traj_fake_rel,loss_f)
+            # loss = calculate_nll_loss(pred_traj_gt_rel, pred_traj_fake_rel,loss_f)
+            loss = calculate_nll_loss(pred_traj_gt, pred_traj_fake,loss_f)
+
             losses["G_nll_loss"] = loss.item()
+
         elif hyperparameters.loss_type_g == "mse+nll" or hyperparameters.loss_type_g == "mse_w+nll":
             _,b,_ = pred_traj_gt_rel.shape
             w_loss = w_loss[:b, :]
-            loss_ade, loss_fde = calculate_mse_loss(pred_traj_gt_rel, pred_traj_fake_rel, loss_f["mse"], hyperparameters.loss_type_g)
-            loss_nll = calculate_nll_loss(pred_traj_gt_rel, pred_traj_fake_rel,loss_f["nll"])
-            loss = 1*loss_ade + 2.5*loss_fde + 1.5*loss_nll # TODO: Set these weights in config file
+            # loss_ade, loss_fde = calculate_mse_loss(pred_traj_gt_rel, pred_traj_fake_rel, loss_f["mse"], hyperparameters.loss_type_g)
+            # loss_nll = calculate_nll_loss(pred_traj_gt_rel, pred_traj_fake_rel,loss_f["nll"])
+            loss_ade, loss_fde = calculate_mse_loss(pred_traj_gt, pred_traj_fake, loss_f["mse"], hyperparameters.loss_type_g)
+            loss_nll = calculate_nll_loss(pred_traj_gt, pred_traj_fake,loss_f["nll"])
+
+            loss = hyperparameters.loss_ade_weight*loss_ade + \
+                   hyperparameters.loss_fde_weight*loss_fde + \
+                   hyperparameters.loss_nll_weight*loss_nll 
+
             losses["G_mse_ade_loss"] = loss_ade.item()
             losses["G_mse_fde_loss"] = loss_fde.item()
             losses["G_nll_loss"] = loss_nll.item()
@@ -595,8 +757,10 @@ def check_accuracy(hyperparameters, loader, generator,
             total_traj += pred_traj_gt.size(1)
             total_traj_l += torch.sum(linear_obj).item()
             total_traj_nl += torch.sum(non_linear_obj).item()
+
             if limit and total_traj >= hyperparameters.num_samples_check:
                 break
+
     metrics[f'{split}_g_l2_loss_abs'] = sum(g_l2_losses_abs) / loss_mask_sum
     metrics[f'{split}_g_l2_loss_rel'] = sum(g_l2_losses_rel) / loss_mask_sum
 

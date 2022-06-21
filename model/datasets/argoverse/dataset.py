@@ -153,7 +153,6 @@ def seq_collate(data):
 def process_window_sequence(idx, frame_data, frames, seq_len, pred_len, 
                             file_id, split, obs_origin, 
                             rot_angle=None, augs=None):
-
     """
     Input:
         idx (int): AV id

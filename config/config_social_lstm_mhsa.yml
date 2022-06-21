@@ -8,14 +8,14 @@ dataset_name: argoverse_motion_forecasting_dataset
 dataset:
     path: data/datasets/argoverse/motion-forecasting/
     split: "train"
-    batch_size: 64
+    batch_size: 1024
     num_workers: 0
     start_from_percentage: 0.0 # By default, 0. If you want to analize a particular bunch of files (e.g. from 25 % to 50 %)
                                # then write here 0.25 and in split_percentage 0.25
-    split_percentage: 0.1 # % of the dataset (0-1)
+    split_percentage: 1.0 # % of the dataset (0-1)
     shuffle: True # False to check the input data, always set to True
     data_augmentation: False # Rotation, Swapping, Dropout, Gaussian noise
-    class_balance: 0.7 # % of straight trajectories (considering the AGENT). Remaining % are curved trajectories
+    class_balance: 0.5 # % of straight trajectories (considering the AGENT). Remaining % are curved trajectories
                        # (again, considering the AGENT). -1.0 if no class balance is used (get_item takes the corresponding
                        # sequence regardless if it is straight or curved)
     preprocess_data: False
@@ -35,49 +35,65 @@ hyperparameters:
                            # are observed for our AGENT
     output_single_agent: True
 
-    num_epochs: 200
-    print_every: 250
+    num_epochs: 100
+    print_every: 50
     checkpoint_name: "0"
     checkpoint_val_percentage: 0.05 # (0 - 1) Check accuracy in validation split every
                                     # checkpoint_val_percentage * total_num_iterations
     checkpoint_train_percentage: 0.1 # (0 - 1)
     num_samples_check: 5000 # Check a maximum of num_samples_check in the check_accuracy function
 
-    loss_type_g: "mse_w" # (mse|mse_w) nll (mse|mse_w)+nll
+    loss_type_g: "mse_w+nll" # (mse|mse_w), nll, (mse|mse_w)+nll
     loss_ade_weight: 1 
-    loss_fde_weight: 1
+    loss_fde_weight: 1.5
+    loss_nll_weight: 1.25
 
-    lr_scheduler: True # ExponentialLR
-    lr_decay_factor: 0.8
-    lr_epoch_percentage_patience: 0.5 # (0-1) E.g. If 0.5 -> the patience will be the half of the iterations
-                                      # that correspond to an epoch. Note: In the Pytorch doc, it refers to 
-                                      # num epochs, but actually is when you evaluate the scheduler 
-                                      # (see our trainer)
-    
+    lr_scheduler: True
+    lr_decay_factor: 0.5
+    lr_epoch_percentage_patience: 0.1 # (0-N) E.g. If 0.05 -> the patience will be the 5 % of the total epochs
     
     g_steps: 1
     clipping_threshold_g: 1.1
 
-    output_dir: "save/argoverse/social_lstm_mhsa/exp1"
+    output_dir: "save/argoverse/social_lstm_mhsa/exp11"
     checkpoint_start_from: #"save/argoverse/social_lstm_mhsa/exp6/argoverse_motion_forecasting_dataset_0_with_model.pt"
-    exp_description: "10 % dataset (both train and val). Print train metrics. 
-                      Generator h_dim 32 -> 256.
-                      Only MSE.
+    exp_description: "100 % dataset (both train and val). Print train metrics. 
+                      Encoder/Decoder h_dim 32 -> 256.
+                      MSE (ADE&FDE) as loss function.
+                      loss_fde_weight = 1 -> 1.5
                       Remove noise (decoder input).
                       For loop to encode trajectories.
                       Remove spatial embedding in encoder.
                       Bidirectional encoder = True.
-                      num_layers encoder 1 -> 2."
+                      num_layers encoder 1 -> 2.
+                      Loss with absolute and only single AGENT.
+                      Batch size = 1024.
+                      Dropout = 0.2 -> 0.5.     
+                      Embedding decoder: 16
+                      mlp_dim: 64,128"
     tensorboard_active: True
-    
+
 # Model
 
 model:
     generator:
         encoder_lstm:
-            hdim: 256 # 32 (original from SoPhie)
+            input_len: *obs_len # Must match with num observations
+            h_dim: &h_dim 256
+            embedding_dim: 16 # TODO: Required?
             num_layers: 2
             bidirectional: True
-            dropout: 0.2
+            dropout: &dropout 0.5
+        mhsa:
+            h_dim: *h_dim
+            num_heads: 4
+            dropout: *dropout
         decoder_lstm:
-            hdim: 
+            input_len: *obs_len # Must match with num observations 
+            output_len: *pred_len # Must match with num predictions
+            h_dim: *h_dim
+            embedding_dim: 16
+            num_layers: 2
+            bidirectional: True
+            mlp_dim: [64,128] # Always in list format, even if it is a single number
+            dropout: *dropout
