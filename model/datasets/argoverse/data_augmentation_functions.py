@@ -86,33 +86,7 @@ def swap_points(traj,num_obs=20,percentage=0.2,post=False):
 
     return swapped_traj
 
-def erase_points(traj,num_obs=20,percentage=0.2,post=False):
-    """
-    Remove (x(i) and subsitute with x(i-1)) 
-    E.g. x(0), x(1), x(2) -> x(0), x(0), x(2)
-    Flag: Substitute with i-1 or i+1
-    Input:
-        - traj: Whole trajectory (2 (x|y) x seq_len)
-        - num_obs: Number of observations of the whole trajectory
-        - percentage: Ratio of pairs to be erased. Typically the number of pairs 
-          to be swapped will be 0.2. E.g. N=4 if num_observations is 20
-        - post: Flag to erase the current point and substitute with the next (x(i+1)) or 
-          previous (x(i-1)) point. By default: False (substitute with the previous point)
-    Output:
-        - erased_traj: Whole trajectory (2 (x|y) x seq_len) with erased non-consecutive points in
-          the range (1,num_obs-1)
-    """
-
-    erased_traj = copy.deepcopy(traj)
-
-    erased_pairs = get_pairs(percentage,num_obs)
-
-    for index_pair in erased_pairs:
-        erased_traj[:,index_pair] = erased_traj[:,index_pair-1]
-
-    return erased_traj
-
-def erase_points_collate(traj,apply_dropout,num_obs=20,percentage=0.2,post=False):
+def dropout_points(traj,apply_dropout,num_obs=20,percentage=0.2,post=False):
     """
     Remove (x(i) and subsitute with x(i-1)) 
     E.g. x(0), x(1), x(2) -> x(0), x(0), x(2)
@@ -145,34 +119,7 @@ def erase_points_collate(traj,apply_dropout,num_obs=20,percentage=0.2,post=False
 
     return erased_traj_aux
 
-## 3. Gaussian noise -> Add gaussian noise to the observation data
-
-def add_gaussian_noise(traj,num_obs=20,multi_point=True,mu=0,sigma=0.5):
-    """
-    Input:
-        - traj: 2 x 50
-    Output: 
-        - noise_traj: 2 x 50 with gaussian noise in the observation points
-    If multi_point = False, apply a single x|y offset to all observation points.
-    Otherwise, apply a particular x|y per observation point.
-    By default, multi_point = True since it is more challenging.
-    """
-
-    noised_traj = copy.deepcopy(traj)
-
-    if multi_point:
-        size = num_obs
-    else:
-        size = 1
-
-    x_offset, y_offset = np.random.normal(mu,sigma,size=size), np.random.normal(mu,sigma,size=size)
-
-    noised_traj[0,:num_obs] += x_offset
-    noised_traj[1,:num_obs] += y_offset
-
-    return noised_traj
-
-def add_gaussian_noise_collate(traj,apply_gaussian_noise,num_agents,num_obs=20,multi_point=True,mu=0,sigma=0.5):
+def add_gaussian_noise(traj,apply_gaussian_noise,num_agents,num_obs=20,multi_point=True,mu=0,sigma=0.5):
     """
     Input:
         - traj: 20 x num_agents x 2
@@ -203,7 +150,30 @@ def add_gaussian_noise_collate(traj,apply_gaussian_noise,num_agents,num_obs=20,m
 
     return noised_traj
 
-## 4. Rotate trajectory
+def NEW_rotate_traj(traj,angle,output_shape=(20,2)):
+    """
+    """
+
+    angle_rad = torch.deg2rad(torch.tensor(angle))
+    print("RAD: ", angle_rad)
+    c, s = torch.cos(angle_rad), torch.sin(angle_rad)
+    R = torch.tensor([[c,-s],  # Rot around the map z-axis
+                      [s, c]])
+
+    # if traj.shape[1] != 2: # 2 x N -> N x 2
+    #     trajectory = traj.transpose()
+    # else:
+    #     trajectory = traj
+    # pdb.set_trace()
+    rotated_traj = torch.matmul(traj,R) # (N x 2) x (2 x 2)
+
+    # # pdb.set_trace()
+    # if rotated_traj.shape[0] != output_shape[0]:
+    #     try: # Numpy
+    #         rotated_traj = rotated_traj.transpose()
+    #     except: # Torch
+
+    return rotated_traj
 
 def rotate_traj(traj,angle,output_shape=(20,2)):
     """
@@ -213,13 +183,14 @@ def rotate_traj(traj,angle,output_shape=(20,2)):
 
     c, s = np.cos(angle_rad), np.sin(angle_rad)
     R = np.array([[c,-s], [s, c]])
+    print("R: ", R)
+    # if traj.shape[1] != 2: # 2 x N -> N x 2
+    #     trajectory = traj.transpose()
+    # else:
+    #     trajectory = traj
 
-    if traj.shape[1] != 2: # 2 x N -> N x 2
-        trajectory = traj.transpose()
-    else:
-        trajectory = traj
-
-    rotated_traj = np.matmul(trajectory,R) # (N x 2) x (2 x 2)
+    rotated_traj = np.matmul(traj,R) # (N x 2) x (2 x 2)
+    pdb.set_trace()
     # pdb.set_trace()
     if rotated_traj.shape[0] != output_shape[0]:
         try: # Numpy

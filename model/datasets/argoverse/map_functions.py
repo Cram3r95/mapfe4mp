@@ -213,14 +213,19 @@ def map_generator(curr_num_seq,
 
 # Plot trajectories for data augmentation testing
 
-def plot_trajectories(filename,obs_seq,first_obs,origin_pos, object_class_id_list,offset,\
+def plot_trajectories(filename,obs_traj_rel,first_obs,map_origin,object_class_id_list,offset,\
                       rot_angle=-1,obs_len=None,smoothen=False,show=False):
     """
-    Plot until plot_len points per trajectory. If plot_len != None, we
+    Check only with batch_size = 1!
+
+    N.B. All inputs must be torch tensors!
+
+    Plot until obs_len points per trajectory. If obs_len != None, we
     must distinguish between observation (color with a marker) and prediction (same color with another marker)
     """
 
-    xcenter, ycenter = origin_pos[0][0], origin_pos[0][1]
+    xcenter, ycenter = map_origin[0].item(), map_origin[1].item()
+
     x_min = xcenter + offset[0]
     x_max = xcenter + offset[1]
     y_min = ycenter + offset[2]
@@ -254,7 +259,7 @@ def plot_trajectories(filename,obs_seq,first_obs,origin_pos, object_class_id_lis
         pdb.set_trace()
 
     for i in range(len(object_class_id_list)):
-        obs_ = obs_seq[:obs_len,i,:].view(-1,2) # 20 x 2 (rel-rel)
+        obs_ = obs_traj_rel[:obs_len,i,:].view(-1,2) # 20 x 2 (rel-rel)
         curr_first_obs = first_obs[i,:].view(-1)
 
         abs_obs_ = dataset_utils.relative_to_abs(obs_, curr_first_obs) # "abs" (around 0)
@@ -341,10 +346,10 @@ def plot_trajectories(filename,obs_seq,first_obs,origin_pos, object_class_id_lis
         img_map = cv2.rotate(img_map, cv2.ROTATE_90_CLOCKWISE)
     elif rot_angle == 180:
         img_map = cv2.rotate(img_map, cv2.ROTATE_180)
-    elif rot_angle == 270:
+    elif rot_angle == 270 or rot_angle == -90:
         img_map = cv2.rotate(img_map, cv2.ROTATE_90_COUNTERCLOCKWISE)
-    else: # -1 (default)
-        rot_angle = 0
+    # else: # -1 (default)
+    #     rot_angle = 0
     height, width = img_map.shape[:-1]
 
     ## Foreground

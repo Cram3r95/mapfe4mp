@@ -77,6 +77,7 @@ class TrajectoryGenerator(nn.Module):
 
         assert config_decoder_lstm.h_dim == config_encoder_lstm.h_dim
 
+        #mlp_decoder_context_dims = [mlp_context_input, config_decoder_lstm.mlp_dim, config_decoder_lstm.h_dim]
         mlp_decoder_context_dims = [mlp_context_input, *config_decoder_lstm.mlp_dim, config_decoder_lstm.h_dim]
         self.mlp_decoder_context = make_mlp(mlp_decoder_context_dims)
 

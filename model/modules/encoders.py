@@ -68,7 +68,7 @@ class EncoderLSTM(nn.Module):
         # obs_traj_embedding = F.leaky_relu(self.spatial_embedding(obs_traj.contiguous().view(-1, 2)))
         # obs_traj_embedding = obs_traj_embedding.view(-1, n_agents, self.embedding_dim)
         # output, state = self.encoder(obs_traj_embedding, state)
-        
+
         output, state = self.encoder(obs_traj, state)
 
         if self.D == 2: # LSTM bidirectional

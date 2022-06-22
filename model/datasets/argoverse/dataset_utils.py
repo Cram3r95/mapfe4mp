@@ -108,12 +108,13 @@ def get_sorted_file_id_list(files):
 
     return sorted_file_id_list, root_file_name
 
-def apply_shuffling_percentage_startfrom(file_id_list, num_files, 
-                                         shuffle=False, split_percentage=0.25, start_from_percentage=0.0):
+def apply_percentage_startfrom(file_id_list, num_files, 
+                               shuffle=False,split_percentage=0.25, start_from_percentage=0.0):
     """
     """
 
-    if shuffle:
+    if shuffle: # Shuffling is actually not required during preprocessing. Once the split
+        # is loaded, then PyTorch will apply (or not) shuffling using its own class
         rng = np.random.default_rng()
         indeces = rng.choice(num_files, size=int(num_files*split_percentage), replace=False)
         file_id_list = np.take(file_id_list, indeces, axis=0)
@@ -229,6 +230,8 @@ def load_processed_files_from_npy(folder):
         preprocessed_data_dict[key] = value
 
     return preprocessed_data_dict
+
+# Physical information functions
 
 def load_images(num_seq, obs_seq_data, first_obs, city_id, ego_origin, dist_rasterized_map, 
                 object_class_id_list,data_imgs_folder,debug_images=False):

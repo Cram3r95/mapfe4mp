@@ -27,6 +27,7 @@ from torch.utils.data import Dataset
 import model.datasets.argoverse.dataset_utils as dataset_utils
 import model.datasets.argoverse.geometric_functions as geometric_functions
 import model.datasets.argoverse.data_augmentation_functions as data_augmentation_functions
+import model.datasets.argoverse.map_functions as map_functions
 
 #######################################
 
@@ -39,8 +40,11 @@ dropout_prob = [0.1,0.9] # Not applied/applied probability
 gaussian_noise_prob = [0.2,0.8]
 rotation_prob = [0.5,0.5]
 
-rotation_angles = [90,180,270]
-rotation_angles_prob = [0.33,0.33,0.34]
+#rotation_angles = [90,180,270]
+#rotation_angles_prob = [0.33,0.33,0.34]
+
+rotation_angles = [0,90,180,270]
+rotation_angles_prob = [0.25,0.25,0.25,0.25]
 
 # Auxiliar variables
 
@@ -53,17 +57,23 @@ dist_rasterized_map = [-dist_around, dist_around, -dist_around, dist_around]
 
 #######################################
 
+# Main dataset functions
+
 def seq_collate(data):
     """
+    This function takes the output of __getitem__ and returns a specific format
+    that will be used by the PyTorch class to output the data (used by the model)
+
+    N.B. Data augmentation must be always in the seq_collate function in order
+    to always generate different data, not in the main class where the preprocessed
+    data is computed.
     """
 
     start = time.time()
 
     (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel,
      non_linear_obj, loss_mask, seq_id_list, object_class_id_list, 
-     object_id_list, city_id, ego_vehicle_origin, num_seq_list, norm) = zip(*data)
-
-    batch_size = len(ego_vehicle_origin) # tuple of tensors
+     object_id_list, city_id, map_origin, num_seq_list, norm) = zip(*data)
 
     _len = [len(seq) for seq in obs_traj]
     cum_start_idx = [0] + np.cumsum(_len).tolist()
@@ -80,24 +90,48 @@ def seq_collate(data):
                                                     # that means that obs_traj = 20 x 10 x 2, with batch_size = 2, and
                                                     # there are 3 agents in the first element of the batch and 7 agents in 
                                                     # the second element of the batch
+    batch_size = seq_start_end.shape[0]
     id_frame = torch.cat(seq_id_list, dim=0).permute(2, 0, 1) # seq_len - objs_in_curr_seq - 3
+    first_obs = obs_traj[0,:,:]
 
-    ## Data augmentation
+    # Debug input data (plot)
+ 
+    DEBUG_INPUT = False
+
+    if DEBUG_INPUT: # Check this with batch_size = 1
+        ori = map_origin[0][0] # TODO: I do not know, but when batch_size = 1, the PyTorch
+        # dataloader returns the variables with len 2 but the second element is empty
+        # e.g. (tensor,)
+        obj_class_id_list = object_class_id_list[0]
+        seq_id = num_seq_list[0].item()
+
+        filename = f"data/datasets/argoverse/motion-forecasting/train/data_images/{seq_id}.png"
+        map_functions.plot_trajectories(filename,obs_traj_rel,first_obs,
+                                        ori,obj_class_id_list,dist_rasterized_map,
+                                        rot_angle=0.1,obs_len=obs_traj.shape[0],
+                                        smoothen=False, show=True)
+
+    # Data augmentation
 
     curr_split = data_imgs_folder.split('/')[-3]
 
+    APPLY_DATA_AUGMENTATION = False
+    
     if APPLY_DATA_AUGMENTATION and curr_split == "train":
         num_obstacles = obs_traj.shape[1]
         obs_len = obs_traj.shape[0]
-
+        
         apply_dropout = np.random.choice(decision,num_obstacles,p=dropout_prob)
         apply_gaussian_noise = np.random.choice(decision,num_obstacles,p=gaussian_noise_prob)
         apply_rotation = np.random.choice(decision,1,p=rotation_prob) # To the whole sequence
-        if apply_rotation:
-            angle = np.random.choice(rotation_angles,1,p=rotation_angles_prob)
 
-        obs_traj = data_augmentation_functions.erase_points_collate(obs_traj,apply_dropout,num_obs=obs_len,percentage=0.3)
-        obs_traj = data_augmentation_functions.add_gaussian_noise_collate(obs_traj,apply_gaussian_noise,num_obstacles,num_obs=obs_len,mu=0,sigma=0.5)
+        angle = 0
+        # if apply_rotation:
+        #     angle = np.random.choice(rotation_angles,1,p=rotation_angles_prob)
+
+        obs_traj = data_augmentation_functions.dropout_points(obs_traj,apply_dropout,num_obs=obs_len,percentage=0.3)
+        obs_traj = data_augmentation_functions.add_gaussian_noise(obs_traj,apply_gaussian_noise,num_obstacles,num_obs=obs_len,mu=0,sigma=0.5)
+        first_obs = obs_traj[0,:,:]
 
         # Get new relatives
 
@@ -110,7 +144,62 @@ def seq_collate(data):
 
             obs_traj_rel[:,i,:] = _obs_traj_rel
 
-    ## Get physical information (image or goal points. Otherwise, use dummies)
+        DEBUG_AUGS = True
+
+        if DEBUG_AUGS: # Only with batch_size = 1
+            assert batch_size == 1
+
+            filename = f"data/datasets/argoverse/motion-forecasting/train/data_images/{seq_id}.png"
+            rotation_angles = [0,90,180,270]
+
+            #pdb.set_trace()
+            agent_idx = torch.where(obj_class_id_list == 1)[0].item()
+            obj_class_id_list = torch.tensor([obj_class_id_list[agent_idx]])
+            init_obs_traj = obs_traj[:,agent_idx,:]
+
+
+
+
+
+
+
+
+
+            # TODO: CONTINUE HERE. CLEAN ROTS
+
+
+
+
+
+
+
+
+
+
+
+            for rot_angle in rotation_angles:
+                print("ROT ANGLE: ", rot_angle)
+
+                obs_traj = data_augmentation_functions.rotate_traj(init_obs_traj,rot_angle)
+
+                obs_traj = torch.unsqueeze(obs_traj,dim=1)
+                obs_traj_rel = torch.zeros((obs_traj.shape))
+                first_obs = obs_traj[0,:,:]
+
+                num_obstacles = 1
+                for i in range(num_obstacles): # TODO: Do this with a matricial operation
+                    _obs_traj = obs_traj[:,i,:]
+                    _obs_traj_rel = torch.zeros((_obs_traj.shape))
+                    _obs_traj_rel[1:,:] = _obs_traj[1:,:] - _obs_traj[:-1,:]
+
+                    obs_traj_rel[:,i,:] = _obs_traj_rel
+                pdb.set_trace()
+                map_functions.plot_trajectories(filename,obs_traj_rel,first_obs,
+                                                ori,obj_class_id_list,dist_rasterized_map,
+                                                rot_angle=rot_angle,obs_len=obs_traj.shape[0],
+                                                smoothen=False, show=True)
+
+    # Get physical information (image or goal points. Otherwise, use dummies)
 
     start = time.time()
 
@@ -119,13 +208,13 @@ def seq_collate(data):
     # TODO: Merge load_goal_points and load_images in a single function
     
     if PHYSICAL_CONTEXT == "visual": # batch_size x channels x height x width
-        frames = dataset_utils.load_images(num_seq_list, obs_traj_rel, first_obs, city_id, ego_vehicle_origin,
+        frames = dataset_utils.load_images(num_seq_list, obs_traj_rel, first_obs, city_id, map_origin,
                                            dist_rasterized_map, object_class_id_list, data_imgs_folder,
                                            debug_images=False)
         frames = torch.from_numpy(frames).type(torch.float32)
         frames = frames.permute(0, 3, 1, 2)
     elif PHYSICAL_CONTEXT == "goals": # batch_size x num_goal_points x 2 (x|y) (real-world coordinates (HDmap))
-        frames = dataset_utils.load_goal_points(num_seq_list, obs_traj_rel, first_obs, city_id, ego_vehicle_origin,
+        frames = dataset_utils.load_goal_points(num_seq_list, obs_traj_rel, first_obs, city_id, map_origin,
                                                 dist_rasterized_map, object_class_id_list, data_imgs_folder,
                                                 debug_images=False)
         frames = torch.from_numpy(frames).type(torch.float32)
@@ -138,12 +227,12 @@ def seq_collate(data):
 
     object_cls = torch.cat(object_class_id_list, dim=0)
     obj_id = torch.cat(object_id_list, dim=0)
-    ego_vehicle_origin = torch.stack(ego_vehicle_origin)
+    map_origin = torch.stack(map_origin)
     num_seq_list = torch.stack(num_seq_list)
     norm = torch.stack(norm)
 
     out = [obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel, non_linear_obj,
-           loss_mask, seq_start_end, frames, object_cls, obj_id, ego_vehicle_origin, num_seq_list, norm]
+           loss_mask, seq_start_end, frames, object_cls, obj_id, map_origin, num_seq_list, norm]
 
     end = time.time()
     # print(f"Time consumed by seq_collate function: {end-start}\n")
@@ -176,142 +265,69 @@ def process_window_sequence(idx, frame_data, frames, seq_len, pred_len,
     # Prepare current sequence and get unique obstacles
 
     curr_seq_data = np.concatenate(frame_data[idx:idx + seq_len], axis=0)
-    peds_in_curr_seq = np.unique(curr_seq_data[:, 1]) # Unique IDs in the sequence
-    agent_indeces = np.where(curr_seq_data[:, 1] == 1)[0]
-    obs_len = seq_len - pred_len
+    objs_in_curr_seq = np.unique(curr_seq_data[:, 1]) # Unique IDs in the sequence
 
     # Initialize variables
 
-    curr_seq_rel = np.zeros((len(peds_in_curr_seq), 2, seq_len)) # peds_in_curr_seq x 2 (x,y) x seq_len (ej: 50)                              
-    curr_seq = np.zeros((len(peds_in_curr_seq), 2, seq_len)) # peds_in_curr_seq x 2 (x,y) x seq_len (ej: 50)
-    curr_loss_mask = np.zeros((len(peds_in_curr_seq), seq_len)) # peds_in_curr_seq x seq_len (ej: 50)
-    object_class_list = np.zeros(len(peds_in_curr_seq)) 
-    id_frame_list  = np.zeros((len(peds_in_curr_seq), 3, seq_len))
+    curr_seq_rel = np.zeros((len(objs_in_curr_seq), 2, seq_len)) # objs_in_curr_seq x 2 (x,y) x seq_len (ej: 50)                              
+    curr_seq = np.zeros((len(objs_in_curr_seq), 2, seq_len)) # objs_in_curr_seq x 2 (x,y) x seq_len (ej: 50)
+    curr_loss_mask = np.zeros((len(objs_in_curr_seq), seq_len)) # objs_in_curr_seq x seq_len (ej: 50)
+    object_class_list = np.zeros(len(objs_in_curr_seq)) 
+    id_frame_list  = np.zeros((len(objs_in_curr_seq), 3, seq_len))
 
     num_objs_considered = 0
     _non_linear_obj = []
-    ego_origin = [] # NB: This origin may not be the "ego" origin (that is, the AV origin). At this moment it is the
-                    # obs_len-1 th absolute position of the AGENT (object of interest)
     city_id = curr_seq_data[0,5]
 
-    # Get origin of this sequence. We assume we are going to take the AGENT as reference (object of interest in 
-    # Argoverse 1.0). In the code it is written ego_vehicle but actually it is NOT the ego-vehicle (AV, which 
-    # captures the scene), but another object of interest to be predicted. TODO: Change ego_vehicle_origin 
-    # notation to just origin
+    # Get map origin of this sequence. We assume we are going to take the AGENT as reference (object of interest in 
+    # Argoverse 1.0). In this repository it is written ego_vehicle but actually it is NOT the ego-vehicle (AV, 
+    # the vehicle which captures the scene), but another object of interest to be predicted. 
+    # TODO: Change ego_vehicle_origin notation to just map_origin
 
-    aux_seq = curr_seq_data[curr_seq_data[:, 2] == 1, :] # 1 is the object class, the AGENT id may not be 1!
-    ego_vehicle = aux_seq[obs_origin-1, 3:5] # x,y
-    ego_origin.append(ego_vehicle)
+    aux_seq = curr_seq_data[curr_seq_data[:, 2] == 1, :] # curr_seq_data[:, 2] represents the type. 1 == AGENT
+    map_origin = aux_seq[obs_origin-1, 3:5] # x,y 
 
     # Iterate over all unique objects
 
-    ## Sequence rotation
+    for _, obj_id in enumerate(objs_in_curr_seq):
+        curr_obj_seq = curr_seq_data[curr_seq_data[:, 1] == obj_id, :]
 
-    rotate_seq = 0
+        # If the object has less than "seq_len" observations, discard
+                                                                                 
+        pad_front = frames.index(curr_obj_seq[0, 0]) - idx
+        pad_end = frames.index(curr_obj_seq[-1, 0]) - idx + 1
 
-    # print(">>>>>>>>>>>>>>>>>>>>>> file id: ", file_id)
-
-    # if split == "train":
-    #     if not rot_angle:
-    #         rotate_seq = 0
-    #     elif rot_angle in rotation_available_angles:
-    #         rotate_seq = 1
-    #         rotation_angle = rot_angle
-    #     elif rot_angle == -1:
-    #         rotate_seq = np.random.randint(2,size=1) # Rotate the sequence (so, the image) if 1
-    #         if rotate_seq:
-    #             availables_angles = [90,180,270]
-    #             rotation_angle = availables_angles[np.random.randint(3,size=1).item()]
-
-    #         rotate_seq = 1
-    #         rotation_angle = rot_angle
-    
-    # print("num objs: ", len(peds_in_curr_seq))
-
-    for index, ped_id in enumerate(peds_in_curr_seq):
-        curr_ped_seq = curr_seq_data[curr_seq_data[:, 1] == ped_id, :]
-
-        # curr_ped_seq = np.around(curr_ped_seq, decimals=4)
-        #################################################################################
-        ## test
-        pad_front = frames.index(curr_ped_seq[0, 0]) - idx
-        pad_end = frames.index(curr_ped_seq[-1, 0]) - idx + 1
-        #################################################################################
-        if (pad_end - pad_front != seq_len) or (curr_ped_seq.shape[0] != seq_len): # If the object has less than "seq_len" observations,
-                                                                                   # it is discarded
+        if (pad_end - pad_front != seq_len) or (curr_obj_seq.shape[0] != seq_len):
             continue
-        # Determine if data aug will be applied or not
 
-        # if split == "train":
-        #     data_aug_flag = np.random.randint(2)
-        # else:
-        #     data_aug_flag = 0
-
-        # Get object class id
-
-        object_class_list[num_objs_considered] = curr_ped_seq[0,2] # 0 == AV, 1 == AGENT, 2 == OTHER
+        object_class_list[num_objs_considered] = curr_obj_seq[0,2] # 0 == AV, 1 == AGENT, 2 == OTHER
 
         # Record seqname, frame and ID information
 
-        cache_tmp = np.transpose(curr_ped_seq[:,:2])
+        cache_tmp = np.transpose(curr_obj_seq[:,:2])
         id_frame_list[num_objs_considered, :2, :] = cache_tmp
         id_frame_list[num_objs_considered,  2, :] = file_id
 
-        # Get x-y data (w.r.t the sequence origin, so they are absolute 
+        # Get x-y data (w.r.t the map origin, so they are absolute 
         # coordinates but in the local frame, not map (global) frame)
         
-        curr_ped_seq = np.transpose(curr_ped_seq[:, 3:5])
-        curr_ped_seq = curr_ped_seq - ego_origin[0].reshape(-1,1)
-        first_obs = curr_ped_seq[:,0].reshape(-1,1)
-
-        # Rotation (If the image is rotated, all trajectories must be rotated)
-
-        # rotate_seq = 0
-
-        # if rotate_seq:
-        #     curr_ped_seq = dataset_utils.rotate_traj(curr_ped_seq,rotation_angle)
-
-        # data_aug_flag = 0
-
-        # if split == "train" and (data_aug_flag == 1 or augs):
-        #     # Add data augmentation
-
-        #     if not augs:
-        #         print("Get comb")
-        #         augs = dataset_utils.get_data_aug_combinations(3) # Available data augs: Swapping, Erasing, Gaussian noise
-
-        #     ## 1. Swapping
-
-        #     if augs[0]:
-        #         print("Swapping")
-        #         curr_ped_seq = dataset_utils.swap_points(curr_ped_seq,num_obs=obs_len)
-
-        #     ## 2. Erasing
-
-        #     if augs[1]:
-        #         print("Erasing")
-        #         curr_ped_seq = dataset_utils.erase_points(curr_ped_seq,num_obs=obs_len,percentage=0.3)
-
-        #     ## 3. Add Gaussian noise
-
-        #     if augs[2]:
-        #         print("Gaussian")
-        #         curr_ped_seq = dataset_utils.add_gaussian_noise(curr_ped_seq,num_obs=obs_len,mu=0,sigma=0.5)
+        curr_obj_seq = np.transpose(curr_obj_seq[:, 3:5])
+        curr_obj_seq = curr_obj_seq - map_origin.reshape(-1,1)
 
         # Make coordinates relative (relative here means displacements between consecutive steps)
 
-        rel_curr_ped_seq = np.zeros(curr_ped_seq.shape) 
-        rel_curr_ped_seq[:, 1:] = curr_ped_seq[:, 1:] - curr_ped_seq[:, :-1] # Get displacements between consecutive steps
+        rel_curr_obj_seq = np.zeros(curr_obj_seq.shape) 
+        rel_curr_obj_seq[:, 1:] = curr_obj_seq[:, 1:] - curr_obj_seq[:, :-1] # Get displacements between consecutive steps
         
         _idx = num_objs_considered
-        curr_seq[_idx, :, pad_front:pad_end] = curr_ped_seq
-        curr_seq_rel[_idx, :, pad_front:pad_end] = rel_curr_ped_seq
+        curr_seq[_idx, :, pad_front:pad_end] = curr_obj_seq
+        curr_seq_rel[_idx, :, pad_front:pad_end] = rel_curr_obj_seq
 
         # Linear vs Non-Linear Trajectory
+
         if split != 'test':
-            # non_linear = _non_linear_obj.append(poly_fit(curr_ped_seq, pred_len, threshold))
             try:
-                non_linear = geometric_functions.get_non_linear(file_id, curr_seq, idx=_idx, obj_kind=curr_ped_seq[0,2],
+                non_linear = geometric_functions.get_non_linear(file_id, curr_seq, idx=_idx, obj_kind=curr_obj_seq[0,2],
                                                                 threshold=2, debug_trajectory_classifier=False)
             except: # E.g. All max_trials iterations were skipped because each randomly chosen sub-sample 
                     # failed the passing criteria. Return non-linear because RANSAC could not fit a model
@@ -320,17 +336,18 @@ def process_window_sequence(idx, frame_data, frames, seq_len, pred_len,
         curr_loss_mask[_idx, pad_front:pad_end] = 1
 
         # Add num_objs_considered
+
         num_objs_considered += 1
 
     return num_objs_considered, _non_linear_obj, curr_loss_mask, curr_seq, curr_seq_rel, \
-           id_frame_list, object_class_list, city_id, ego_origin
+           id_frame_list, object_class_list, city_id, map_origin
            
 class ArgoverseMotionForecastingDataset(Dataset):
     """Dataloder for the Trajectory datasets"""
     def __init__(self, dataset_name, root_folder, obs_len=20, pred_len=30, distance_threshold=30,
-                 split='train', split_percentage=0.1, start_from_percentage=0.0, shuffle=False, 
-                 batch_size=16, class_balance=-1.0, obs_origin=1, preprocess_data=False, save_data=False, 
-                 data_augmentation=False, physical_context="dummy"):
+                 split='train', split_percentage=0.1, start_from_percentage=0.0, 
+                 batch_size=16, class_balance=-1.0, obs_origin=1, data_augmentation=False, 
+                 physical_context="dummy", preprocess_data=False, save_data=False):
         super(ArgoverseMotionForecastingDataset, self).__init__()
 
         # Initialize self variables
@@ -348,32 +365,27 @@ class ArgoverseMotionForecastingDataset(Dataset):
         self.obs_origin = obs_origin
         self.min_objs = 2 # Minimum number of objects to include the scene (AV and AGENT)
         self.cont_seqs = 0
+        self.data_augmentation = data_augmentation
+        self.physical_context = physical_context
 
         variable_name_list = ['seq_list','seq_list_rel','loss_mask_list','non_linear_obj',
                               'num_objs_in_seq','seq_id_list','object_class_id_list',
                               'object_id_list','ego_vehicle_origin','num_seq_list',
                               'straight_trajectories_list','curved_trajectories_list','city_id','norm'] 
-
-        PREPROCESS_DATA = preprocess_data
-        SAVE_DATA = save_data
-        global APPLY_DATA_AUGMENTATION, PHYSICAL_CONTEXT
-        APPLY_DATA_AUGMENTATION = data_augmentation
-        PHYSICAL_CONTEXT = physical_context
-
+        
         # Preprocess data (from raw .csvs to torch Tensors, at least including the 
         # AGENT (most important vehicle) and AV
 
-        if PREPROCESS_DATA and not os.path.isdir(data_processed_folder):
+        if preprocess_data and not os.path.isdir(data_processed_folder):
             folder = root_folder + split + "/data/"
             files, num_files = dataset_utils.load_list_from_folder(folder)
 
-            # Sort list and apply shuffling/analyze a specific percentage/from a specific position
+            # Sort list and analize a specific percentage/from a specific position
 
             file_id_list, root_file_name = dataset_utils.get_sorted_file_id_list(files)     
-            file_id_list = dataset_utils.apply_shuffling_percentage_startfrom(file_id_list, num_files,
-                                                                              shuffle=shuffle, 
-                                                                              split_percentage=split_percentage, 
-                                                                              start_from_percentage=start_from_percentage)
+            file_id_list = dataset_utils.apply_percentage_startfrom(file_id_list, num_files, 
+                                                                    split_percentage=split_percentage, 
+                                                                    start_from_percentage=start_from_percentage)
 
             seq_list = [] # Absolute coordinates (obs+pred) around 0.0 (center of the local map)
             seq_list_rel = [] # Relative displacements (obs+pred)
@@ -479,7 +491,7 @@ class ArgoverseMotionForecastingDataset(Dataset):
             preprocess_data_dict = dataset_utils.create_dictionary_from_variable_list(variable_list, 
                                                                                       variable_name_list)
 
-            if SAVE_DATA:
+            if save_data:
                 # Save numpy objects as npy 
 
                 print("Saving np data structures as .npy files ...")
@@ -525,8 +537,10 @@ class ArgoverseMotionForecastingDataset(Dataset):
         return self.num_seq
 
     def __getitem__(self, index):
-        global data_imgs_folder
+        global data_imgs_folder, APPLY_DATA_AUGMENTATION, PHYSICAL_CONTEXT
         data_imgs_folder = self.root_folder + self.split + "/data_images/"
+        APPLY_DATA_AUGMENTATION = self.data_augmentation
+        PHYSICAL_CONTEXT = self.physical_context
 
         if self.class_balance >= 0.0: # Only during training
             if self.cont_seqs % self.batch_size == 0: # Get a new batch

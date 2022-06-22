@@ -167,9 +167,10 @@ def model_trainer(config, logger):
     logger.info('Configuration: ')
     logger.info(config)
 
-    # Initialize train dataloader
+    # Initialize train dataloader (N.B. If applied, data augmentation is only used during training!)
 
     logger.info("Initializing train dataset") 
+
     data_train = ArgoverseMotionForecastingDataset(dataset_name=config.dataset_name,
                                                    root_folder=config.dataset.path,
                                                    obs_len=config.hyperparameters.obs_len,
@@ -177,10 +178,10 @@ def model_trainer(config, logger):
                                                    distance_threshold=config.hyperparameters.distance_threshold,
                                                    split="train",
                                                    split_percentage=config.dataset.split_percentage,
-                                                   shuffle=config.dataset.shuffle,
                                                    batch_size=config.dataset.batch_size,
                                                    class_balance=config.dataset.class_balance,
                                                    obs_origin=config.hyperparameters.obs_origin,
+                                                   data_augmentation=config.dataset.data_augmentation,
                                                    preprocess_data=config.dataset.preprocess_data,
                                                    save_data=config.dataset.save_data)
 
@@ -200,14 +201,13 @@ def model_trainer(config, logger):
                                                  distance_threshold=config.hyperparameters.distance_threshold,
                                                  split="val",
                                                  split_percentage=config.dataset.split_percentage,
-                                                 shuffle=config.dataset.shuffle,
                                                  class_balance=-1,
                                                  obs_origin=config.hyperparameters.obs_origin,
                                                  preprocess_data=config.dataset.preprocess_data,
                                                  save_data=config.dataset.save_data)
     val_loader = DataLoader(data_val,
                             batch_size=config.dataset.batch_size,
-                            shuffle=config.dataset.shuffle,
+                            shuffle=False,
                             num_workers=config.dataset.num_workers,
                             collate_fn=seq_collate)
 
@@ -370,7 +370,7 @@ def model_trainer(config, logger):
                 flag_check_every = True
 
             # Print losses info
-
+            
             if current_iteration % hyperparameters.print_every == 0:
                 logger.info('Iteration = {} / {}'.format(t + 1, hyperparameters.num_iterations + previous_t))
                 logger.info('Time per iteration: {}'.format(time_per_iteration))
@@ -381,7 +381,6 @@ def model_trainer(config, logger):
                         writer.add_scalar(k, v, t+1)
                     if k not in checkpoint.config_cp["G_losses"].keys():
                         checkpoint.config_cp["G_losses"][k] = [] 
-                        
                     checkpoint.config_cp["G_losses"][k].append(v)
                 checkpoint.config_cp["losses_ts"].append(t)
 
