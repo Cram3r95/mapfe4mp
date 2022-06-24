@@ -15,6 +15,7 @@ import os
 import time
 import operator
 import pdb
+import copy
 
 # DL & Math imports
 
@@ -27,29 +28,28 @@ from torch.utils.data import Dataset
 import model.datasets.argoverse.dataset_utils as dataset_utils
 import model.datasets.argoverse.geometric_functions as geometric_functions
 import model.datasets.argoverse.data_augmentation_functions as data_augmentation_functions
-import model.datasets.argoverse.map_functions as map_functions
+import model.datasets.argoverse.plot_functions as plot_functions
+
 
 #######################################
 
 # Data augmentation variables
 
 APPLY_DATA_AUGMENTATION = False
+DEBUG_DATA_AUGMENTATION = False
 
 decision = [0,1] # Not apply/apply
-dropout_prob = [0.1,0.9] # Not applied/applied probability
+dropout_prob = [0.2,0.8] # Not applied/applied probability
 gaussian_noise_prob = [0.2,0.8]
-rotation_prob = [0.5,0.5]
+rotation_prob = [0.2,0.8]
 
-#rotation_angles = [90,180,270]
-#rotation_angles_prob = [0.33,0.33,0.34]
-
-rotation_angles = [0,90,180,270]
-rotation_angles_prob = [0.25,0.25,0.25,0.25]
+rotation_angles = [90,180,270]
+rotation_angles_prob = [0.33,0.33,0.34]
 
 # Auxiliar variables
 
 data_imgs_folder = None
-PHYSICAL_CONTEXT = "Dummy"
+PHYSICAL_CONTEXT = "Dummies"
 
 frames_path = None
 dist_around = 40
@@ -91,113 +91,67 @@ def seq_collate(data):
                                                     # there are 3 agents in the first element of the batch and 7 agents in 
                                                     # the second element of the batch
     batch_size = seq_start_end.shape[0]
+    obs_len = obs_traj.shape[0]
+    pred_len = pred_traj_gt.shape[0]
     id_frame = torch.cat(seq_id_list, dim=0).permute(2, 0, 1) # seq_len - objs_in_curr_seq - 3
-    first_obs = obs_traj[0,:,:]
-
-    # Debug input data (plot)
- 
-    DEBUG_INPUT = False
-
-    if DEBUG_INPUT: # Check this with batch_size = 1
-        ori = map_origin[0][0] # TODO: I do not know, but when batch_size = 1, the PyTorch
-        # dataloader returns the variables with len 2 but the second element is empty
-        # e.g. (tensor,)
-        obj_class_id_list = object_class_id_list[0]
-        seq_id = num_seq_list[0].item()
-
-        filename = f"data/datasets/argoverse/motion-forecasting/train/data_images/{seq_id}.png"
-        map_functions.plot_trajectories(filename,obs_traj_rel,first_obs,
-                                        ori,obj_class_id_list,dist_rasterized_map,
-                                        rot_angle=0.1,obs_len=obs_traj.shape[0],
-                                        smoothen=False, show=True)
 
     # Data augmentation
 
     curr_split = data_imgs_folder.split('/')[-3]
 
-    APPLY_DATA_AUGMENTATION = False
-    
     if APPLY_DATA_AUGMENTATION and curr_split == "train":
-        num_obstacles = obs_traj.shape[1]
-        obs_len = obs_traj.shape[0]
+        i = 0
+        for start,end in seq_start_end.data:
+            num_obstacles = (end-start).item() # int
+            curr_object_class_id_list = object_class_id_list[i]
+            curr_origin = map_origin[i][0] # TODO: Save again the .npy data with 1D tensor [], not 2D tensor [[]] for each element
+            seq_id = num_seq_list[i].item()
+
+            # Original trajectories (to debug)
+
+            curr_obs_traj = obs_traj[:,start:end,:] 
+            curr_first_obs = curr_obs_traj[0,:,:]
+            curr_obs_traj_rel = obs_traj_rel[:,start:end,:]
         
-        apply_dropout = np.random.choice(decision,num_obstacles,p=dropout_prob)
-        apply_gaussian_noise = np.random.choice(decision,num_obstacles,p=gaussian_noise_prob)
-        apply_rotation = np.random.choice(decision,1,p=rotation_prob) # To the whole sequence
+            # Apply data augmentation for every sequence (scenario) of the batch
 
-        angle = 0
-        # if apply_rotation:
-        #     angle = np.random.choice(rotation_angles,1,p=rotation_angles_prob)
+            aug_curr_obs_traj = copy.deepcopy(curr_obs_traj)
+            apply_dropout = np.random.choice(decision,num_obstacles,p=dropout_prob) # For each obstacle of the sequence
+            apply_gaussian_noise = np.random.choice(decision,num_obstacles,p=gaussian_noise_prob) # For each obstacle of the sequence
+            apply_rotation = np.random.choice(decision,1,p=rotation_prob) # To the whole sequence
 
-        obs_traj = data_augmentation_functions.dropout_points(obs_traj,apply_dropout,num_obs=obs_len,percentage=0.3)
-        obs_traj = data_augmentation_functions.add_gaussian_noise(obs_traj,apply_gaussian_noise,num_obstacles,num_obs=obs_len,mu=0,sigma=0.5)
-        first_obs = obs_traj[0,:,:]
+            aug_curr_obs_traj = data_augmentation_functions.dropout_points(curr_obs_traj,apply_dropout,num_obs=obs_len,percentage=0.3)
+            aug_curr_obs_traj = data_augmentation_functions.add_gaussian_noise(aug_curr_obs_traj,apply_gaussian_noise,num_obstacles,num_obs=obs_len,mu=0,sigma=0.5)
 
-        # Get new relatives
+            rot_angle = 0
+            if apply_rotation:
+                rot_angle = np.random.choice(rotation_angles,1,p=rotation_angles_prob).item()
+                aug_curr_obs_traj = data_augmentation_functions.rotate_traj(aug_curr_obs_traj,rot_angle)
 
-        obs_traj_rel = torch.zeros((obs_traj.shape))
+            ## Get first obs and new relatives after data augmentation for this sequence
 
-        for i in range(num_obstacles): # TODO: Do this with a matricial operation
-            _obs_traj = obs_traj[:,i,:]
-            _obs_traj_rel = torch.zeros((_obs_traj.shape))
-            _obs_traj_rel[1:,:] = _obs_traj[1:,:] - _obs_traj[:-1,:]
+            aug_first_obs = aug_curr_obs_traj[0,:,:] 
 
-            obs_traj_rel[:,i,:] = _obs_traj_rel
+            aug_curr_obs_traj_rel = torch.zeros((aug_curr_obs_traj.shape))
+            aug_curr_obs_traj_rel[1:,:,:] = torch.sub(aug_curr_obs_traj[1:,:,:],aug_curr_obs_traj[:-1,:,:])
 
-        DEBUG_AUGS = True
+            if DEBUG_DATA_AUGMENTATION:
+                filename = f"data/datasets/argoverse/motion-forecasting/train/data_images/{seq_id}.png"
 
-        if DEBUG_AUGS: # Only with batch_size = 1
-            assert batch_size == 1
+                # Original observations (No data augmentation)
 
-            filename = f"data/datasets/argoverse/motion-forecasting/train/data_images/{seq_id}.png"
-            rotation_angles = [0,90,180,270]
+                plot_functions.plot_trajectories(filename,curr_obs_traj_rel,curr_first_obs,
+                                                curr_origin,curr_object_class_id_list,dist_rasterized_map,
+                                                rot_angle=-1,obs_len=obs_traj.shape[0],
+                                                smoothen=False, save=True)
 
-            #pdb.set_trace()
-            agent_idx = torch.where(obj_class_id_list == 1)[0].item()
-            obj_class_id_list = torch.tensor([obj_class_id_list[agent_idx]])
-            init_obs_traj = obs_traj[:,agent_idx,:]
+                # New observations (after data augmentation)
 
-
-
-
-
-
-
-
-
-            # TODO: CONTINUE HERE. CLEAN ROTS
-
-
-
-
-
-
-
-
-
-
-
-            for rot_angle in rotation_angles:
-                print("ROT ANGLE: ", rot_angle)
-
-                obs_traj = data_augmentation_functions.rotate_traj(init_obs_traj,rot_angle)
-
-                obs_traj = torch.unsqueeze(obs_traj,dim=1)
-                obs_traj_rel = torch.zeros((obs_traj.shape))
-                first_obs = obs_traj[0,:,:]
-
-                num_obstacles = 1
-                for i in range(num_obstacles): # TODO: Do this with a matricial operation
-                    _obs_traj = obs_traj[:,i,:]
-                    _obs_traj_rel = torch.zeros((_obs_traj.shape))
-                    _obs_traj_rel[1:,:] = _obs_traj[1:,:] - _obs_traj[:-1,:]
-
-                    obs_traj_rel[:,i,:] = _obs_traj_rel
-                pdb.set_trace()
-                map_functions.plot_trajectories(filename,obs_traj_rel,first_obs,
-                                                ori,obj_class_id_list,dist_rasterized_map,
+                plot_functions.plot_trajectories(filename,aug_curr_obs_traj_rel,aug_first_obs,
+                                                curr_origin,curr_object_class_id_list,dist_rasterized_map,
                                                 rot_angle=rot_angle,obs_len=obs_traj.shape[0],
-                                                smoothen=False, show=True)
+                                                smoothen=False, save=True, data_aug=True)
+            i += 1
 
     # Get physical information (image or goal points. Otherwise, use dummies)
 
@@ -205,19 +159,13 @@ def seq_collate(data):
 
     first_obs = obs_traj[0,:,:] # 1 x agents · batch_size x 2
 
-    # TODO: Merge load_goal_points and load_images in a single function
-    
-    if PHYSICAL_CONTEXT == "visual": # batch_size x channels x height x width
-        frames = dataset_utils.load_images(num_seq_list, obs_traj_rel, first_obs, city_id, map_origin,
-                                           dist_rasterized_map, object_class_id_list, data_imgs_folder,
-                                           debug_images=False)
+    if (PHYSICAL_CONTEXT == "visual"  # batch_size x channels x height x width 
+     or PHYSICAL_CONTEXT == "goals"): # batch_size x num_goal_points x 2 (x|y) (real-world coordinates (HDmap))
+        frames = dataset_utils.load_physical_information(num_seq_list, obs_traj_rel, first_obs, map_origin,
+                                                         dist_rasterized_map, object_class_id_list, data_imgs_folder,
+                                                         physical_context=PHYSICAL_CONTEXT,debug_images=False)
         frames = torch.from_numpy(frames).type(torch.float32)
-        frames = frames.permute(0, 3, 1, 2)
-    elif PHYSICAL_CONTEXT == "goals": # batch_size x num_goal_points x 2 (x|y) (real-world coordinates (HDmap))
-        frames = dataset_utils.load_goal_points(num_seq_list, obs_traj_rel, first_obs, city_id, map_origin,
-                                                dist_rasterized_map, object_class_id_list, data_imgs_folder,
-                                                debug_images=False)
-        frames = torch.from_numpy(frames).type(torch.float32)
+        if PHYSICAL_CONTEXT == "visual": frames = frames.permute(0, 3, 1, 2)
     else: # dummy frames
         frames = np.random.randn(1,1,1,1)
         frames = torch.from_numpy(frames).type(torch.float32)

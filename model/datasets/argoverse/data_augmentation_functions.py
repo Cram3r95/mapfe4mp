@@ -150,52 +150,16 @@ def add_gaussian_noise(traj,apply_gaussian_noise,num_agents,num_obs=20,multi_poi
 
     return noised_traj
 
-def NEW_rotate_traj(traj,angle,output_shape=(20,2)):
-    """
-    """
-
-    angle_rad = torch.deg2rad(torch.tensor(angle))
-    print("RAD: ", angle_rad)
-    c, s = torch.cos(angle_rad), torch.sin(angle_rad)
-    R = torch.tensor([[c,-s],  # Rot around the map z-axis
-                      [s, c]])
-
-    # if traj.shape[1] != 2: # 2 x N -> N x 2
-    #     trajectory = traj.transpose()
-    # else:
-    #     trajectory = traj
-    # pdb.set_trace()
-    rotated_traj = torch.matmul(traj,R) # (N x 2) x (2 x 2)
-
-    # # pdb.set_trace()
-    # if rotated_traj.shape[0] != output_shape[0]:
-    #     try: # Numpy
-    #         rotated_traj = rotated_traj.transpose()
-    #     except: # Torch
-
-    return rotated_traj
-
 def rotate_traj(traj,angle,output_shape=(20,2)):
     """
     """
 
-    angle_rad = np.deg2rad(angle)
+    angle_rad = torch.deg2rad(torch.tensor(angle))
 
-    c, s = np.cos(angle_rad), np.sin(angle_rad)
-    R = np.array([[c,-s], [s, c]])
-    print("R: ", R)
-    # if traj.shape[1] != 2: # 2 x N -> N x 2
-    #     trajectory = traj.transpose()
-    # else:
-    #     trajectory = traj
+    c, s = torch.cos(angle_rad), torch.sin(angle_rad)
+    R = torch.tensor([[c,-s],  # Rot around the map z-axis
+                      [s, c]])
 
-    rotated_traj = np.matmul(traj,R) # (N x 2) x (2 x 2)
-    pdb.set_trace()
-    # pdb.set_trace()
-    if rotated_traj.shape[0] != output_shape[0]:
-        try: # Numpy
-            rotated_traj = rotated_traj.transpose()
-        except: # Torch
-            rotated_traj = torch.transpose(rotated_traj,0,1)
+    rotated_traj = torch.matmul(traj,R) # (N x 2) x (2 x 2)
 
     return rotated_traj
