@@ -22,11 +22,16 @@ import argparse
 import importlib
 import pdb
 
+#######################################
+
 BASE_DIR = "/home/denso/carlos_vsr_workspace/mapfe4mp"
 sys.path.append(BASE_DIR)
 
-TRAINER_LIST = ["social_lstm_mhsa",
-                "social_set_transformer_goals_mm", "social_set_transformer_mm"]
+TRAINER_LIST = [
+                "social_lstm_mhsa",
+                "social_set_transformer_mm",
+                "social_set_transformer_goals_mm"
+               ]
 
 def create_logger(file_path):
     """

@@ -11,13 +11,19 @@ Created on Fri Feb 25 12:19:38 2022
 # General purpose imports
 
 import pdb
+import os
 
 # DL & Math imports
 
 import torch
 import random
 import numpy as np
+import cv2
 from torch import Tensor
+
+#######################################
+
+# Adversarial losses
 
 def bce_loss(input, target):
     neg_abs = -input.abs()
@@ -39,7 +45,6 @@ def gan_g_loss_bce(scores_fake, bce):
     y_fake = torch.ones_like(scores_fake) * random.uniform(0.8, 1)
     return bce(scores_fake, y_fake)
 
-
 def gan_d_loss_bce(scores_real, scores_fake, bce):
     y_real = torch.ones_like(scores_real) * random.uniform(0.8, 1)
     y_fake = torch.zeros_like(scores_fake) * random.uniform(0, 0.2)
@@ -47,6 +52,7 @@ def gan_d_loss_bce(scores_real, scores_fake, bce):
     loss_fake = bce(scores_fake, y_fake)
     return loss_real + loss_fake
 
+# Distance losses
 
 def l2_loss(pred_traj, pred_traj_gt, loss_mask, random=0, mode='average'):
     seq_len, batch, _ = pred_traj.size()
@@ -71,7 +77,6 @@ def l2_loss_multimodal(pred_traj, pred_traj_gt, random=0, mode='average'):
         return torch.sum(loss)
     elif mode == 'raw':
         return loss.sum(dim=2).sum(dim=1)
-
 
 def mse_weighted(gt, pred, weights):
     """
@@ -133,10 +138,8 @@ def pytorch_neg_multi_log_likelihood_batch(
     Args:
         gt (Tensor): array of shape (bs)x(time)x(2D coords)
         pred (Tensor): array of shape (bs)x(modes)x(time)x(2D coords)
-        confidences (Tensor): array of shape (bs)x(modes) with a confidence for each
-                                mode in each sample
-        avails (Tensor): array of shape (bs)x(time) with the availability
-                        for each gt timestep
+        confidences (Tensor): array of shape (bs)x(modes) with a confidence for each mode in each sample
+        avails (Tensor): array of shape (bs)x(time) with the availability for each gt timestep
     Returns:
         Tensor: negative log-likelihood for this example, a single float number
     """
@@ -206,8 +209,7 @@ def pytorch_neg_multi_log_likelihood_single(
     Args:
         gt (Tensor): array of shape (bs)x(time)x(2D coords)
         pred (Tensor): array of shape (bs)x(time)x(2D coords)
-        avails (Tensor): array of shape (bs)x(time) with the availability
-                        for each gt timestep
+        avails (Tensor): array of shape (bs)x(time) with the availability for each gt timestep
     Returns:
         Tensor: negative log-likelihood for this example, a single float number
     """
@@ -296,7 +298,6 @@ def l2_error(pred: torch.Tensor, gt: torch.Tensor) -> torch.Tensor:
     """
     return torch.norm(pred - gt, p=2, dim=-1)
 
-
 def _assert_shapes(ground_truth: np.ndarray, pred: np.ndarray, confidences: np.ndarray, avails: np.ndarray) -> None:
     """
     Check the shapes of args required by metrics
@@ -323,49 +324,79 @@ def _assert_shapes(ground_truth: np.ndarray, pred: np.ndarray, confidences: np.n
     assert np.isfinite(confidences).all(), "invalid value found in confidences"
     assert np.isfinite(avails).all(), "invalid value found in avails"
 
-
-def evaluate_feasible_area_prediction(pred_traj_fake_abs, distance_threshold, origin_pos, filename):
+def evaluate_feasible_area_prediction(pred_traj_fake_abs, pred_traj_gt_abs, map_origin, num_seq, 
+                                      absolute_root_folder, split, dist_rasterized_map=[-40,40,-40,40]):
     """
     Get feasible_area_loss. If a prediction point (in pixel coordinates) is in the drivable (feasible)
-    area, is weighted with 1. Otherwise, it is weighted with 0. Theoretically, all points must be
-    in the prediction area for the AGENT in Argoverse
+    area, is weighted with 1. Otherwise, it is weighted with 0. Theoretically, most AGENT points (observation
+    and prediction) must be in the Feasible Area in Argoverse 1.1.
 
     Input:
-        pred_traj_fake_abs: Torch.tensor -> pred_len x 2 (x|y) in global (map) coordinates
+        pred_traj_fake_abs: Torch.tensor -> pred_len x 2 (x|y) in absolute coordinates (around 0,0)
+        map_origin: Tor
         filename: Image filename to read
     Output:
         feasible_area_loss: min = 0 (num_points · 1), max = pred_len (num_points · 1)
     """
 
-    img_map = cv2.imread(filename)
-    img_map = cv2.resize(img_map, dsize=(600,600))
-    img_map_gray = cv2.cvtColor(img_map,cv2.COLOR_BGR2GRAY)
-    height, width = img_map.shape
-    img_size = height
+    feasible_area_loss = torch.zeros((pred_traj_fake_abs.shape[1]))
+    feasible_area_loss_v2 = torch.zeros((pred_traj_fake_abs.shape[1]))
 
-    xcenter, ycenter = origin_pos[0][0], origin_pos[0][1]
-    x_min = xcenter + offset[0]
-    x_max = xcenter + offset[1]
-    y_min = ycenter + offset[2]
-    y_max = ycenter + offset[3]
+    pred_len = pred_traj_fake_abs.shape[0]
+    img_resize = 600
+    real_world_offset = abs(dist_rasterized_map[0])
 
-    # Transform global point to pixel
+    # Iterate over the different sequences and predictions
 
-    m_x = float(img_size / (2 * real_world_offset)) # slope
-    m_y = float(-img_size / (2 * real_world_offset))
+    for t,seq in enumerate(num_seq):
+        _seq = seq.item()
+        filename = os.path.join(absolute_root_folder,split,"data_images",f"{_seq}.png")
 
-    i_x = float(-(img_size / (2 * real_world_offset)) * x_min) # intercept
-    i_y = float((img_size / (2 * real_world_offset)) * y_max)
+        img_map = cv2.imread(filename)
+        img_map = cv2.resize(img_map, dsize=(img_resize,img_resize))
+        img_map_gray = cv2.cvtColor(img_map,cv2.COLOR_BGR2GRAY)
 
-    feasible_area_loss = []
+        xcenter, ycenter = map_origin[t][0][0], map_origin[t][0][1]
+        x_min = xcenter + dist_rasterized_map[0]
+        x_max = xcenter + dist_rasterized_map[1]
+        y_min = ycenter + dist_rasterized_map[2]
+        y_max = ycenter + dist_rasterized_map[3]
 
-    for i in range(pred_traj_fake_abs.shape[0]): # pred_len
-        pix_x = pt[i,0] * m_x + i_x
-        pix_y = pt[i,1] * m_y + i_y
+        ## Compute slope and intercept to transform global point to pixel
 
-        if img_map[pix_y,pix_x] == 255.0:
-            feasible_area_loss.append(1)
-        else:
-            feasible_area_loss.append(0)
+        m_x = float(img_resize / (2 * real_world_offset)) # slope
+        m_y = float(-img_resize / (2 * real_world_offset))
 
+        i_x = float(-(img_resize / (2 * real_world_offset)) * x_min) # intercept
+        i_y = float((img_resize / (2 * real_world_offset)) * y_max)
+
+        _feasible_area_loss = []
+        _feasible_area_loss_v2 = []
+
+        for i in range(pred_len):
+            # TODO: Check map tensors in new .npy save
+            pix_x = int((pred_traj_fake_abs[i,t,0]+map_origin[t][0][0]) * m_x + i_x)
+            pix_y = int((pred_traj_fake_abs[i,t,1]+map_origin[t][0][1]) * m_y + i_y)
+
+            gt_pix_x = int((pred_traj_gt_abs[i,t,0]+map_origin[t][0][0]) * m_x + i_x)
+            gt_pix_y = int((pred_traj_gt_abs[i,t,1]+map_origin[t][0][1]) * m_y + i_y)
+
+            # Out of the image (we assume the physical context is big enough to capture the whole prediction)
+
+            if pix_y > img_resize-1 or pix_y < 0 or pix_x > img_resize-1 or pix_x < 0: 
+                _feasible_area_loss.append(0)
+                _feasible_area_loss_v2.append(0)
+            else:    
+                if img_map_gray[pix_y,pix_x] == 255.0: _feasible_area_loss.append(1)
+                else: _feasible_area_loss.append(0)
+                if img_map_gray[pix_y,pix_x] == img_map_gray[gt_pix_y,gt_pix_x]: 
+                    _feasible_area_loss_v2.append(1)
+                else:
+                    _feasible_area_loss_v2.append(0)
+
+        feasible_area_loss[t] = sum(_feasible_area_loss)
+        feasible_area_loss_v2[t] = sum(_feasible_area_loss_v2)
+
+    feasible_area_loss_v2 = feasible_area_loss_v2.mean()
+    #pdb.set_trace()
     return feasible_area_loss

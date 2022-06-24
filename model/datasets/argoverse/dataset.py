@@ -30,7 +30,6 @@ import model.datasets.argoverse.geometric_functions as geometric_functions
 import model.datasets.argoverse.data_augmentation_functions as data_augmentation_functions
 import model.datasets.argoverse.plot_functions as plot_functions
 
-
 #######################################
 
 # Data augmentation variables

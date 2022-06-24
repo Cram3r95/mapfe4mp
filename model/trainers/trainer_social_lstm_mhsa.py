@@ -31,17 +31,20 @@ from torch.utils.tensorboard import SummaryWriter
 
 from model.datasets.argoverse.dataset import ArgoverseMotionForecastingDataset, seq_collate
 from model.models.social_lstm_mhsa import TrajectoryGenerator
-from model.modules.losses import l2_loss, pytorch_neg_multi_log_likelihood_batch, mse_custom
+from model.modules.losses import l2_loss, pytorch_neg_multi_log_likelihood_batch, mse_custom, evaluate_feasible_area_prediction
 from model.modules.evaluation_metrics import displacement_error, final_displacement_error
 from model.datasets.argoverse.dataset_utils import relative_to_abs_sgan
 from model.utils.checkpoint_data import Checkpoint, get_total_norm
 from model.utils.utils import create_weights
+
+#######################################
 
 # Global variables
 
 torch.backends.cudnn.benchmark = True
 scaler = GradScaler()
 current_cuda = None
+absolute_root_folder = None
 
 MAX_TIME_TO_CHECK_TRAIN = 45 # minutes
 MAX_TIME_TO_CHECK_VAL = 30 # minutes
@@ -73,13 +76,17 @@ def get_dtypes(use_gpu):
     return long_dtype, float_dtype
 
 def handle_batch(batch, is_single_agent_out):
-    # load batch in cuda
+    """
+    """
+    # Load batch in cuda
+
     batch = [tensor.cuda(current_cuda) for tensor in batch]
 
     (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel, non_linear_obj,
      loss_mask, seq_start_end, frames, object_cls, obj_id, ego_origin, num_seq_list) = batch
     
-    # handle single agent 
+    # Handle single agent
+ 
     agent_idx = None
     if is_single_agent_out: # search agent idx
         agent_idx = torch.where(object_cls==1)[0].cpu().numpy()
@@ -90,6 +97,14 @@ def handle_batch(batch, is_single_agent_out):
      loss_mask, seq_start_end, frames, object_cls, obj_id, ego_origin, num_seq_list)
 
 # Aux functions losses
+
+def calculate_mse_loss(gt, pred, loss_f):
+    """
+    MSE = Mean Square Error (it is used by both ADE and FDE)
+    """
+    loss_ade = loss_f(pred, gt)
+    loss_fde = loss_f(pred[-1].unsqueeze(0), gt[-1].unsqueeze(0))
+    return loss_ade, loss_fde
 
 def calculate_nll_loss(gt, pred, loss_f):
     """
@@ -107,42 +122,30 @@ def calculate_nll_loss(gt, pred, loss_f):
     )
     return loss
 
-def calculate_mse_loss(gt, pred, loss_f, l_type):
+def cal_l2_losses(pred_traj_gt, pred_traj_gt_rel, pred_traj_fake, pred_traj_fake_rel,loss_mask):
     """
-    MSE = Mean Square Error (it is used by both ADE and FDE)
     """
-    loss_ade = loss_f(pred, gt)
-    loss_fde = loss_f(pred[-1].unsqueeze(0), gt[-1].unsqueeze(0))
-    return loss_ade, loss_fde
+    g_l2_loss_abs = l2_loss(pred_traj_fake, pred_traj_gt, loss_mask, mode='sum')
+    g_l2_loss_rel = l2_loss(pred_traj_fake_rel, pred_traj_gt_rel, loss_mask, mode='sum')
 
-def cal_l2_losses(
-    pred_traj_gt, pred_traj_gt_rel, pred_traj_fake, pred_traj_fake_rel,
-    loss_mask
-):
-    g_l2_loss_abs = l2_loss(
-        pred_traj_fake, pred_traj_gt, loss_mask, mode='sum'
-    )
-    g_l2_loss_rel = l2_loss(
-        pred_traj_fake_rel, pred_traj_gt_rel, loss_mask, mode='sum'
-    )
     return g_l2_loss_abs, g_l2_loss_rel
 
 def cal_ade(pred_traj_gt, pred_traj_fake, linear_obj, non_linear_obj, consider_ped):
+    """
+    """
     ade = displacement_error(pred_traj_fake, pred_traj_gt, consider_ped)
     ade_l = displacement_error(pred_traj_fake, pred_traj_gt, linear_obj)
     ade_nl = displacement_error(pred_traj_fake, pred_traj_gt, non_linear_obj)
+
     return ade, ade_l, ade_nl
 
-def cal_fde(
-    pred_traj_gt, pred_traj_fake, linear_obj, non_linear_obj, consider_ped
-):
+def cal_fde(pred_traj_gt, pred_traj_fake, linear_obj, non_linear_obj, consider_ped):
+    """
+    """
     fde = final_displacement_error(pred_traj_fake[-1], pred_traj_gt[-1], consider_ped)
-    fde_l = final_displacement_error(
-        pred_traj_fake[-1], pred_traj_gt[-1], linear_obj
-    )
-    fde_nl = final_displacement_error(
-        pred_traj_fake[-1], pred_traj_gt[-1], non_linear_obj
-    )
+    fde_l = final_displacement_error(pred_traj_fake[-1], pred_traj_gt[-1], linear_obj)
+    fde_nl = final_displacement_error(pred_traj_fake[-1], pred_traj_gt[-1], non_linear_obj)
+
     return fde, fde_l, fde_nl
 
 # Main function
@@ -166,6 +169,9 @@ def model_trainer(config, logger):
 
     logger.info('Configuration: ')
     logger.info(config)
+
+    global absolute_root_folder
+    absolute_root_folder = os.path.join(config.base_dir,config.dataset.path)
 
     # Initialize train dataloader (N.B. If applied, data augmentation is only used during training!)
 
@@ -279,6 +285,11 @@ def model_trainer(config, logger):
         loss_f = mse_custom
     elif hyperparameters.loss_type_g == "nll":
         loss_f = pytorch_neg_multi_log_likelihood_batch
+    elif hyperparameters.loss_type_g == "mse+fa" or hyperparameters.loss_type_g == "mse_w+fa":
+        loss_f = {
+            "mse": mse_custom,
+            "fa": evaluate_feasible_area_prediction
+        }
     elif hyperparameters.loss_type_g == "mse+nll" or hyperparameters.loss_type_g == "mse_w+nll":
         loss_f = {
             "mse": mse_custom,
@@ -319,9 +330,7 @@ def model_trainer(config, logger):
             start = time.time()
             losses_g = generator_step(hyperparameters, batch, generator, optimizer_g, loss_f, w_loss)
             end = time.time()
-            checkpoint.config_cp["norm_g"].append(
-                get_total_norm(generator.parameters())
-            )
+            checkpoint.config_cp["norm_g"].append(get_total_norm(generator.parameters()))
             
             time_iterations += end-start
             time_per_iteration = time_iterations / (current_iteration+1)
@@ -580,7 +589,7 @@ def generator_step(hyperparameters, batch, generator, optimizer_g,
     batch = [tensor.cuda(current_cuda) for tensor in batch]
 
     (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel, non_linear_obj,
-     loss_mask, seq_start_end, frames, object_cls, obj_id, ego_origin, _, _) = batch
+     loss_mask, seq_start_end, frames, object_cls, obj_id, map_origin, num_seq, norm) = batch
 
     # Take (if specified) data of only the AGENT of interest
 
@@ -625,7 +634,7 @@ def generator_step(hyperparameters, batch, generator, optimizer_g,
             w_loss = w_loss[:b, :]
             # loss_ade, loss_fde = calculate_mse_loss(pred_traj_gt_rel, pred_traj_fake_rel, 
             loss_ade, loss_fde = calculate_mse_loss(pred_traj_gt, pred_traj_fake,
-                                                    loss_f, hyperparameters.loss_type_g)
+                                                    loss_f)
 
             loss = hyperparameters.loss_ade_weight*loss_ade + \
                    hyperparameters.loss_fde_weight*loss_fde
@@ -635,8 +644,20 @@ def generator_step(hyperparameters, batch, generator, optimizer_g,
         elif hyperparameters.loss_type_g == "nll":
             # loss = calculate_nll_loss(pred_traj_gt_rel, pred_traj_fake_rel,loss_f)
             loss = calculate_nll_loss(pred_traj_gt, pred_traj_fake,loss_f)
-
             losses["G_nll_loss"] = loss.item()
+
+        elif hyperparameters.loss_type_g == "mse+fa" or hyperparameters.loss_type_g == "mse_w+fa":
+            loss_ade, loss_fde = calculate_mse_loss(pred_traj_gt, pred_traj_fake, loss_f["mse"])
+            loss_fa = evaluate_feasible_area_prediction(pred_traj_fake, pred_traj_gt, map_origin, num_seq, 
+                                                        absolute_root_folder, split)
+            pdb.set_trace()
+            loss = hyperparameters.loss_ade_weight*loss_ade + \
+                   hyperparameters.loss_fde_weight*loss_fde + \
+                   hyperparameters.loss_fa_weight*loss_fa 
+            pdb.set_trace()
+            losses["G_mse_ade_loss"] = loss_ade.item()
+            losses["G_mse_fde_loss"] = loss_fde.item()
+            losses["G_fa_loss"] = loss_fa.item()
 
         elif hyperparameters.loss_type_g == "mse+nll" or hyperparameters.loss_type_g == "mse_w+nll":
             _,b,_ = pred_traj_gt_rel.shape
