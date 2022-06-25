@@ -8,14 +8,14 @@ dataset_name: argoverse_motion_forecasting_dataset
 dataset:
     path: data/datasets/argoverse/motion-forecasting/
     split: "train"
-    batch_size: 8
-    num_workers: 4
+    batch_size: 1024
+    num_workers: 0
     start_from_percentage: 0.0 # By default, 0. If you want to analize a particular bunch of files (e.g. from 25 % to 50 %)
                                # then write here 0.25 and in split_percentage 0.25
-    split_percentage: 0.01 # % of the dataset (0-1)
-    shuffle: False # False to check the input data, always set to True (Only for training!)
-    data_augmentation: False # Rotation, Swapping, Dropout, Gaussian noise
-    class_balance: -1.0 # % of straight trajectories (considering the AGENT). Remaining % are curved trajectories
+    split_percentage: 1.0 # % of the dataset (0-1)
+    shuffle: True # False to check the input data, always set to True (Only for training!)
+    data_augmentation: True # Rotation, Swapping, Dropout, Gaussian noise
+    class_balance: 0.7 # % of straight trajectories (considering the AGENT). Remaining % are curved trajectories
                         # (again, considering the AGENT). -1.0 if no class balance is used (get_item takes the corresponding
                         # sequence regardless if it is straight or curved)
     preprocess_data: False
@@ -43,7 +43,7 @@ hyperparameters:
     checkpoint_train_percentage: 0.2 # (0 - 1)
     num_samples_check: 5000 # Check a maximum of num_samples_check in the check_accuracy function
 
-    loss_type_g: "mse_w+fa" # (mse|mse_w), nll, (mse|mse_w)+nll
+    loss_type_g: "mse_w" # (mse|mse_w), nll, (mse|mse_w)+nll, (mse|mse_w)+fa 
     loss_ade_weight: 1 
     loss_fde_weight: 1.5
     loss_nll_weight: 1.25
@@ -56,10 +56,11 @@ hyperparameters:
     g_steps: 1
     clipping_threshold_g: 1.1
 
-    output_dir: "save/argoverse/social_lstm_mhsa/exp4"
+    output_dir: "save/argoverse/social_lstm_mhsa/exp2"
     checkpoint_start_from: #"save/argoverse/social_lstm_mhsa/exp6/argoverse_motion_forecasting_dataset_0_with_model.pt"
-    exp_description: "1 % dataset (both train and val).
-                      Test Feasible Area Loss Function.
+    exp_description: "100 % dataset (both train and val).
+                      Include data augmentation.
+                      Ensure all curved trajectories are analyzed.
                       Encoder/Decoder h_dim 32 -> 256.
                       MSE (ADE&FDE) + NLL as loss function.
                       Loss with absolute and only single AGENT.

@@ -326,6 +326,7 @@ def model_trainer(config, logger):
         gc.collect()
         epoch += 1
         logger.info('Starting epoch {}'.format(epoch))
+        #pdb.set_trace()
         for batch in train_loader:
             start = time.time()
             losses_g = generator_step(hyperparameters, batch, generator, optimizer_g, loss_f, w_loss)

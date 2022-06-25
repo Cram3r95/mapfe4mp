@@ -36,9 +36,16 @@ import model.datasets.argoverse.goal_points_functions as goal_points_functions
 
 # Aux functions
 
-_ZORDER = {"AGENT": 3, "AV": 3, "OTHER": 3}
 COLORS = "darkviolet"
 COLORS_MM = ["orange", "chartreuse", "khaki"]
+
+                        # Observation / Prediction                   
+                        # (color, linewidth, type, size, transparency)
+MARKER_DICT = {"AGENT":  (("b",6,"*",15,1.0),("c",6,"",15,1.0)),
+               "OTHER":  (("g",4,"o",10,1.0),("g",4,"",10,0.5)),
+               "AV":     (("r",4,"o",10,1.0),("m",4,"",10,1.0))} 
+
+ZORDER = {"AGENT": 3, "AV": 3, "OTHER": 3}
 
 def interpolate_polyline(polyline: np.ndarray, num_points: int) -> np.ndarray:
     duplicates = []
@@ -109,11 +116,9 @@ def generate_img(img_map, img_lanes, qualitative_results_folder, seq_id, t_img):
 
 # Main plot functions
 
-def plot_trajectories(filename,obs_traj_rel,first_obs,map_origin,object_class_id_list,offset,\
+def plot_trajectories(filename,traj_rel,first_obs,map_origin,object_class_id_list,offset,\
                       rot_angle=-1,obs_len=None,smoothen=False,save=False,data_aug=False):
     """
-    Check only with batch_size = 1!
-
     N.B. All inputs must be torch tensors!
 
     Plot until obs_len points per trajectory. If obs_len != None, we
@@ -137,104 +142,76 @@ def plot_trajectories(filename,obs_traj_rel,first_obs,map_origin,object_class_id
 
     t0 = time.time()
 
-    color_dict = {"AGENT": (0.0,0.0,1.0,1.0), # BGR
-                  "AV": (1.0,0.0,0.0,1.0), 
-                  "OTHER": (0.0,1.0,0.0,1.0)} 
     object_type_tracker: Dict[int, int] = defaultdict(int)
 
-    obs_seq_list = []
-    
-    # Filter objects if you are debugging (not running the whole dataloader)
-    # Probably you will have 0s in obj class list, in addition to the first 0 (which represents
-    # the AV)
-    try:
-        if len(np.where(object_class_id_list == 0)[0]) > 1:
-            start_dummy = np.where(object_class_id_list == 0)[0][1]
-            object_class_id_list = object_class_id_list[:start_dummy]
-    except Exception as e:
-        pdb.set_trace()
+    seq_list = []
 
     for i in range(len(object_class_id_list)):
-        obs_ = obs_traj_rel[:obs_len,i,:].view(-1,2) # 20 x 2 (rel-rel)
+        traj_ = traj_rel[:,i,:].view(-1,2) # 50 x 2 (rel-rel)
         curr_first_obs = first_obs[i,:].view(-1)
 
-        abs_obs_ = dataset_utils.relative_to_abs(obs_, curr_first_obs) # "abs" (around 0)
+        abs_traj_ = dataset_utils.relative_to_abs(traj_, curr_first_obs) # "abs" (around 0)
         obj_id = object_class_id_list[i]
-        obs_seq_list.append([abs_obs_,obj_id])
-
+        seq_list.append([abs_traj_,obj_id])
+        
     # Plot all the tracks up till current frame
 
-    for seq_id in obs_seq_list:
-        object_type = int(seq_id[1])
-        seq_rel = seq_id[0]
+    for seq_id in seq_list:
+        object_type = translate_object_type(int(seq_id[1]))
+        seq_abs = seq_id[0]
 
-        object_type = translate_object_type(object_type)
-
-        if object_type == "AGENT":
-            marker_type = "*"
-            marker_size = 15
-            linewidth = 6
-            c = "b" # blue in rgb (final image)
-        elif object_type == "OTHER":
-            marker_type = "o"
-            marker_size = 10
-            linewidth = 4
-            c = "g"
-        elif object_type == "AV":
-            marker_type = "o"
-            marker_size = 10
-            linewidth = 4
-            c = "r" # blue in rgb (final image)
-
-        cor_x = seq_rel[:,0] + xcenter #+ width/2
-        cor_y = seq_rel[:,1] + ycenter #+ height/2
-
-        if smoothen:
-            polyline = np.column_stack((cor_x, cor_y))
-
-            num_points = cor_x.shape[0] * 3
-            smooth_polyline = interpolate_polyline(polyline, num_points)
-
-            cor_x = smooth_polyline[:, 0]
-            cor_y = smooth_polyline[:, 1]
+        obs_x, obs_y = seq_abs[:obs_len,0] + xcenter, seq_abs[:obs_len,1] + ycenter
+        pred_gt_x, pred_gt_y = seq_abs[obs_len:,0] + xcenter, seq_abs[obs_len:,1] + ycenter
 
         if plot_object_trajectories:
-            if smoothen:
-                plt.plot(
-                    cor_x,
-                    cor_y,
-                    "-",
-                    # color=color_dict[object_type],
-                    color=c,
-                    label=object_type if not object_type_tracker[object_type] else "",
-                    alpha=1,
-                    linewidth=linewidth,
-                    zorder=_ZORDER[object_type],
-                )
-            else:
-                plt.scatter(cor_x, cor_y, c=c, s=10)
+            for i in range(2):
+                if i == 0: # obs
+                    cor_x, cor_y = obs_x, obs_y 
+                else: # pred
+                    cor_x, cor_y = pred_gt_x, pred_gt_y
 
-        final_x = cor_x[-1]
-        final_y = cor_y[-1]
+                colour,linewidth,marker_type,marker_size,transparency = MARKER_DICT[object_type][i]
 
-        if plot_object_heads:
-            plt.plot(
-                final_x,
-                final_y,
-                marker_type,
-                # color=color_dict[object_type],
-                color=c,
-                label=object_type if not object_type_tracker[object_type] else "",
-                alpha=1,
-                markersize=marker_size,
-                zorder=_ZORDER[object_type],
-            )
+                if smoothen:
+                    polyline = np.column_stack((cor_x, cor_y))
+                    num_points = cor_x.shape[0] * 3
+                    smooth_polyline = interpolate_polyline(polyline, num_points)
 
-        object_type_tracker[object_type] += 1
+                    cor_x, cor_y = smooth_polyline[:,0], smooth_polyline[:,1]
+
+                    plt.plot(
+                        cor_x,
+                        cor_y,
+                        "-",
+                        color=colour,
+                        label=object_type if not object_type_tracker[object_type] else "",
+                        alpha=transparency,
+                        linewidth=linewidth,
+                        zorder=ZORDER[object_type],
+                    )
+                else:
+                    plt.scatter(cor_x, cor_y, c=colour, s=10, alpha=transparency)
+
+                if plot_object_heads:
+                    final_pos_x, final_pos_y = cor_x[-1], cor_y[-1]
+                    
+                    plt.plot(
+                        final_pos_x,
+                        final_pos_y,
+                        marker_type,
+                        color=colour,
+                        label=object_type if not object_type_tracker[object_type] else "",
+                        alpha=transparency,
+                        markersize=marker_size,
+                        zorder=ZORDER[object_type],
+                    )
+
+                object_type_tracker[object_type] += 1
+
     # print("Time consumed by objects rendering: ", time.time()-t0)
 
     # Merge local driveable information and trajectories information
-
+    
     ## Read map
 
     img_map = cv2.imread(filename)
@@ -253,7 +230,7 @@ def plot_trajectories(filename,obs_traj_rel,first_obs,map_origin,object_class_id
 
     img_lanes = renderize_image(fig,new_shape=(width,height),normalize=False)
     img2gray = cv2.cvtColor(img_lanes,cv2.COLOR_BGR2GRAY)
-    ret,mask = cv2.threshold(img2gray,127,255,cv2.THRESH_BINARY_INV)
+    ret,mask = cv2.threshold(img2gray,253,255,cv2.THRESH_BINARY_INV)
     img2_fg = cv2.bitwise_and(img_lanes,img_lanes,mask=mask)
 
     ## Background
@@ -283,7 +260,7 @@ def plot_trajectories(filename,obs_traj_rel,first_obs,map_origin,object_class_id
 
     resized_full_img_cv = cv2.resize(full_img_cv,(224,224))
     norm_resized_full_img_cv = resized_full_img_cv / 255.0
-
+    
     return norm_resized_full_img_cv
 
 # TODO: REFACTORIZE FROM HERE (MERGE plot_trajectories, plot_qualitative_results and plot_qualitative_results_mm

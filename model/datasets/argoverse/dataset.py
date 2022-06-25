@@ -99,6 +99,11 @@ def seq_collate(data):
     curr_split = data_imgs_folder.split('/')[-3]
 
     if APPLY_DATA_AUGMENTATION and curr_split == "train":
+        aug_obs_traj = torch.zeros((obs_traj.shape))
+        aug_obs_traj_rel = torch.zeros((obs_traj_rel.shape))
+        aug_pred_traj_gt = torch.zeros((pred_traj_gt.shape))
+        aug_pred_traj_gt_rel = torch.zeros((pred_traj_gt_rel.shape))
+
         i = 0
         for start,end in seq_start_end.data:
             num_obstacles = (end-start).item() # int
@@ -106,55 +111,90 @@ def seq_collate(data):
             curr_origin = map_origin[i][0] # TODO: Save again the .npy data with 1D tensor [], not 2D tensor [[]] for each element
             seq_id = num_seq_list[i].item()
 
-            # Original trajectories (to debug)
+            # Original trajectories (observations and predictions)
 
             curr_obs_traj = obs_traj[:,start:end,:] 
             curr_first_obs = curr_obs_traj[0,:,:]
             curr_obs_traj_rel = obs_traj_rel[:,start:end,:]
-        
+            curr_pred_traj_gt = pred_traj_gt[:,start:end,:]
+            curr_pred_traj_gt_rel = pred_traj_gt_rel[:,start:end,:]
+
             # Apply data augmentation for every sequence (scenario) of the batch
 
             aug_curr_obs_traj = copy.deepcopy(curr_obs_traj)
+            aug_curr_pred_traj_gt = copy.deepcopy(curr_pred_traj_gt)
+
             apply_dropout = np.random.choice(decision,num_obstacles,p=dropout_prob) # For each obstacle of the sequence
             apply_gaussian_noise = np.random.choice(decision,num_obstacles,p=gaussian_noise_prob) # For each obstacle of the sequence
             apply_rotation = np.random.choice(decision,1,p=rotation_prob) # To the whole sequence
 
-            aug_curr_obs_traj = data_augmentation_functions.dropout_points(curr_obs_traj,apply_dropout,num_obs=obs_len,percentage=0.3)
+            aug_curr_obs_traj = data_augmentation_functions.dropout_points(aug_curr_obs_traj,apply_dropout,num_obs=obs_len,percentage=0.3)
             aug_curr_obs_traj = data_augmentation_functions.add_gaussian_noise(aug_curr_obs_traj,apply_gaussian_noise,num_obstacles,num_obs=obs_len,mu=0,sigma=0.5)
 
+            ## N.B. If you apply rotation as data augmentation, the groundtruth must be rotated too!
+            
             rot_angle = 0
-            if apply_rotation:
+            if apply_rotation: 
                 rot_angle = np.random.choice(rotation_angles,1,p=rotation_angles_prob).item()
+
                 aug_curr_obs_traj = data_augmentation_functions.rotate_traj(aug_curr_obs_traj,rot_angle)
+                aug_curr_pred_traj_gt = data_augmentation_functions.rotate_traj(aug_curr_pred_traj_gt,rot_angle)
 
             ## Get first obs and new relatives after data augmentation for this sequence
 
-            aug_first_obs = aug_curr_obs_traj[0,:,:] 
+            aug_curr_first_obs = aug_curr_obs_traj[0,:,:] 
 
             aug_curr_obs_traj_rel = torch.zeros((aug_curr_obs_traj.shape))
-            aug_curr_obs_traj_rel[1:,:,:] = torch.sub(aug_curr_obs_traj[1:,:,:],aug_curr_obs_traj[:-1,:,:])
+            aug_curr_obs_traj_rel[1:,:,:] = torch.sub(aug_curr_obs_traj[1:,:,:],
+                                                      aug_curr_obs_traj[:-1,:,:])
+
+            aug_curr_pred_traj_gt_rel = torch.zeros((aug_curr_pred_traj_gt.shape))
+            aug_curr_pred_traj_gt_rel[1:,:,:] = torch.sub(aug_curr_pred_traj_gt[1:,:,:],
+                                                          aug_curr_pred_traj_gt[:-1,:,:])
+
+            ## Fill torch tensor (whole batch)
+
+            aug_obs_traj[:,i,:] = aug_curr_obs_traj
+            aug_obs_traj_rel[:,i,:] = aug_curr_obs_traj_rel
+            aug_pred_traj_gt[:,i,:] = aug_curr_pred_traj_gt
+            aug_pred_traj_gt_rel[:,i,:] = aug_curr_pred_traj_gt_rel
 
             if DEBUG_DATA_AUGMENTATION:
                 filename = f"data/datasets/argoverse/motion-forecasting/train/data_images/{seq_id}.png"
 
                 # Original observations (No data augmentation)
 
-                plot_functions.plot_trajectories(filename,curr_obs_traj_rel,curr_first_obs,
-                                                curr_origin,curr_object_class_id_list,dist_rasterized_map,
-                                                rot_angle=-1,obs_len=obs_traj.shape[0],
-                                                smoothen=False, save=True)
+                curr_traj_rel = torch.cat((curr_obs_traj_rel,
+                                           curr_pred_traj_gt_rel),dim=0)
+
+                plot_functions.plot_trajectories(filename,curr_traj_rel,curr_first_obs,
+                                                 curr_origin,curr_object_class_id_list,dist_rasterized_map,
+                                                 rot_angle=-1,obs_len=obs_traj.shape[0],
+                                                 smoothen=False, save=True)
 
                 # New observations (after data augmentation)
 
-                plot_functions.plot_trajectories(filename,aug_curr_obs_traj_rel,aug_first_obs,
-                                                curr_origin,curr_object_class_id_list,dist_rasterized_map,
-                                                rot_angle=rot_angle,obs_len=obs_traj.shape[0],
-                                                smoothen=False, save=True, data_aug=True)
+                aug_curr_traj_rel = torch.cat((aug_curr_obs_traj_rel,
+                                               aug_curr_pred_traj_gt_rel),dim=0)
+
+                plot_functions.plot_trajectories(filename,aug_curr_traj_rel,aug_curr_first_obs,
+                                                 curr_origin,curr_object_class_id_list,dist_rasterized_map,
+                                                 rot_angle=rot_angle,obs_len=obs_traj.shape[0],
+                                                 smoothen=False, save=True, data_aug=True)
             i += 1
+
+            # Replace tensors
+
+            obs_traj = aug_obs_traj
+            obs_traj_rel = aug_obs_traj_rel
+            pred_traj_gt = aug_pred_traj_gt
+            pred_traj_gt_rel = aug_pred_traj_gt_rel
 
     # Get physical information (image or goal points. Otherwise, use dummies)
 
     start = time.time()
+
+    pdb.set_trace()
 
     first_obs = obs_traj[0,:,:] # 1 x agents · batch_size x 2
 
@@ -252,7 +292,7 @@ def process_window_sequence(idx, frame_data, frames, seq_len, pred_len,
         # Record seqname, frame and ID information
 
         cache_tmp = np.transpose(curr_obj_seq[:,:2])
-        id_frame_list[num_objs_considered, :2, :] = cache_tmp
+        id_frame_list[num_objs_considered, :2, :] = cache_tmp # whole trajectory (obs + pred)
         id_frame_list[num_objs_considered,  2, :] = file_id
 
         # Get x-y data (w.r.t the map origin, so they are absolute 
@@ -312,6 +352,7 @@ class ArgoverseMotionForecastingDataset(Dataset):
         self.obs_origin = obs_origin
         self.min_objs = 2 # Minimum number of objects to include the scene (AV and AGENT)
         self.cont_seqs = 0
+        self.cont_curved_trajs = 0
         self.data_augmentation = data_augmentation
         self.physical_context = physical_context
 
@@ -478,12 +519,19 @@ class ArgoverseMotionForecastingDataset(Dataset):
 
         self.straight_trajectories_list = torch.from_numpy(straight_trajectories_list).type(torch.int)
         self.curved_trajectories_list = torch.from_numpy(curved_trajectories_list).type(torch.int)
+        self.curved_aux_list = copy.deepcopy(self.curved_trajectories_list)
         self.norm = torch.from_numpy(np.array(norm))
         
     def __len__(self):
         return self.num_seq
 
     def __getitem__(self, index):
+        """
+        N.B. index represents the index of the dataloader (from 0 to N elements of the corresponding
+        split). On the other hand, trajectory_index represents the number of the trajectory (csv)
+        regarding the Argoverse 1.1. dataset (e.g. the scene 35.csv may be identified with the index
+        32 because maybe there are not 34 csvs before this one)
+        """
         global data_imgs_folder, APPLY_DATA_AUGMENTATION, PHYSICAL_CONTEXT
         data_imgs_folder = self.root_folder + self.split + "/data_images/"
         APPLY_DATA_AUGMENTATION = self.data_augmentation
@@ -507,9 +555,24 @@ class ArgoverseMotionForecastingDataset(Dataset):
                 if len(self.cont_straight_traj) >= int(self.class_balance*self.batch_size):
                     # Take a random curved trajectory from the dataset
 
-                    aux_index = random.choice(self.curved_trajectories_list)
+                    aux_index = random.choice(self.curved_trajectories_list_aux)
+                    
+                    # Update index to be included in the batch
+
                     index = int(np.where(self.num_seq_list == aux_index)[0])
                     self.cont_curved_traj.append(index)
+
+                    # Remove that index from auxiliar list
+
+                    self.curved_aux_list = \
+                        self.curved_aux_list[torch.where(self.curved_aux_list != aux_index)]
+                    
+                    ## We run out all curves. Delete variable and re-initialize the list. Doing this
+                    ## we ensure that the training runs over all possible curved trajectories
+
+                    if len(self.curved_aux_list) == 0: 
+                        del self.curved_aux_list
+                        self.curved_aux_list = copy.deepcopy(self.curved_trajectories_list)
                 else:
                     self.cont_straight_traj.append(index)
             else:
