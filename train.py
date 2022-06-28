@@ -52,7 +52,7 @@ if __name__ == "__main__":
     """
     parser = argparse.ArgumentParser()
     parser.add_argument("--trainer", required=True, type=str, choices=TRAINER_LIST)
-    parser.add_argument("--device_gpu", required=True, type=int)
+    parser.add_argument("--device_gpu", required=True, default=0, type=int)
     parser.add_argument("--from_ckpt", type=str, default=None)
     parser.add_argument("--num_ckpt", type=str, default="0")
     args = parser.parse_args()
@@ -87,8 +87,7 @@ if __name__ == "__main__":
         if args.from_ckpt and os.path.isdir(args.from_ckpt): # Overwrite checkpoint_start_from
             model = config_file["dataset_name"] + "_" + args.num_ckpt + "_with_model.pt"
 
-            config_file["hyperparameters"]["checkpoint_start_from"] = os.path.join(args.from_ckpt,
-                                                                             model)
+            config_file["hyperparameters"]["checkpoint_start_from"] = os.path.join(args.from_ckpt,model)
 
         if not os.path.exists(exp_path):
             print("Create experiment path: ", exp_path)

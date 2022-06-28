@@ -1,9 +1,29 @@
+#!/usr/bin/env python3.8
+# -*- coding: utf-8 -*-
+
+## Load checkpoint and generator
+
+"""
+Created on Fri Feb 25 12:19:38 2022
+@author: Carlos Gómez-Huélamo and Miguel Eduardo Ortiz Huamaní
+"""
+
+# General purpose imports
+
+import pdb
 from collections import defaultdict
+import importlib
+
+# DL & Math imports
+
+import torch
+
+#######################################
 
 class Checkpoint():
-
+    """
+    """
     def __init__(self):
-        #self.args = args.__dict__
         self.config_cp = {
             "G_losses" : defaultdict(list),
             "D_losses" : defaultdict(list),
@@ -52,6 +72,30 @@ class Checkpoint():
         self.config_cp["g_best_nl_state"] = config.g_best_nl_state
         self.config_cp["d_best_state_nl"] = config.d_best_state_nl
         self.config_cp["best_t_nl"] = config.best_t_nl
+
+def get_generator(model_path,config):
+    """
+    """
+
+    current_cuda = torch.device(f"cuda:{config.device_gpu}")
+    device = torch.device(current_cuda if torch.cuda.is_available() else "cpu")
+
+    curr_model = model_path.split('/')[2]
+    curr_model = f"model.models.{curr_model}"
+    curr_model_module = importlib.import_module(curr_model)
+    TrajectoryGenerator = getattr(curr_model_module,"TrajectoryGenerator")
+
+    generator = TrajectoryGenerator(config_encoder_lstm=config.model.generator.encoder_lstm,
+                                    config_decoder_lstm=config.model.generator.decoder_lstm,
+                                    config_mhsa=config.model.generator.mhsa,
+                                    current_cuda=current_cuda)
+
+    checkpoint = torch.load(model_path, map_location=current_cuda)
+    generator.load_state_dict(checkpoint.config_cp['g_best_state'], strict=False)
+    generator.to(device)
+    generator.eval() # We do not want to train during inference
+
+    return generator 
 
 def get_total_norm(parameters, norm_type=2):
     """

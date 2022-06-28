@@ -294,7 +294,7 @@ def load_physical_information(num_seq_list, obs_traj_rel, first_obs, map_origin,
 
 # Relative - Absolute coordinates
 
-def relative_to_abs_sgan(rel_traj, start_pos):
+def relative_to_abs(rel_traj, start_pos):
     """
     Inputs:
     - rel_traj: pytorch tensor of shape (seq_len, batch, 2)
@@ -309,7 +309,7 @@ def relative_to_abs_sgan(rel_traj, start_pos):
     abs_traj = displacement + start_pos
     return abs_traj.permute(1, 0, 2)
 
-def relative_to_abs_sgan_multimodal(rel_traj, start_pos):
+def relative_to_abs_multimodal(rel_traj, start_pos):
     """
     Inputs:
     - rel_traj: pytorch tensor of shape (b, m, t, 2)
@@ -321,19 +321,4 @@ def relative_to_abs_sgan_multimodal(rel_traj, start_pos):
     displacement = torch.cumsum(rel_traj, dim=2)
     start_pos = torch.unsqueeze(torch.unsqueeze(start_pos, dim=1), dim=1)
     abs_traj = displacement + start_pos
-    return abs_traj
-
-def relative_to_abs(rel_traj, start_pos):
-    # TODO: Not used in the training stage. Nevertheless, rewrite using torch, not numpy
-    """
-    Inputs:
-    - rel_traj: numpy array of shape (len, 2)
-    - start_pos: numpy array of shape (1, 2)
-    Outputs:
-    - abs_traj: numpy array of shape (len, 2) in absolute coordinates
-    """
-
-    displacement = np.cumsum(rel_traj, axis=0)
-    abs_traj = displacement + start_pos
-
     return abs_traj

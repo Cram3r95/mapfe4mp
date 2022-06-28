@@ -33,7 +33,7 @@ from model.datasets.argoverse.dataset import ArgoverseMotionForecastingDataset, 
 from model.models.social_lstm_mhsa import TrajectoryGenerator
 from model.modules.losses import l2_loss, pytorch_neg_multi_log_likelihood_batch, mse_custom, evaluate_feasible_area_prediction
 from model.modules.evaluation_metrics import displacement_error, final_displacement_error
-from model.datasets.argoverse.dataset_utils import relative_to_abs_sgan
+from model.datasets.argoverse.dataset_utils import relative_to_abs
 from model.utils.checkpoint_data import Checkpoint, get_total_norm
 from model.utils.utils import create_weights
 
@@ -609,14 +609,13 @@ def generator_step(hyperparameters, batch, generator, optimizer_g,
     optimizer_g.zero_grad()
 
     with autocast():
-        generator_out = generator(obs_traj, obs_traj_rel, 
+        pred_traj_fake_rel = generator(obs_traj, obs_traj_rel, 
                                   seq_start_end, agent_idx)
-        pred_traj_fake_rel = generator_out
 
         if hyperparameters.output_single_agent:
-            pred_traj_fake = relative_to_abs_sgan(pred_traj_fake_rel, obs_traj[-1,agent_idx, :])
+            pred_traj_fake = relative_to_abs(pred_traj_fake_rel, obs_traj[-1,agent_idx, :])
         else:
-            pred_traj_fake = relative_to_abs_sgan(pred_traj_fake_rel, obs_traj[-1])
+            pred_traj_fake = relative_to_abs(pred_traj_fake_rel, obs_traj[-1])
 
         # Take (if specified) data of only the AGENT of interest
 
@@ -627,6 +626,22 @@ def generator_step(hyperparameters, batch, generator, optimizer_g,
 
         # TODO: Check if in other configurations the losses are computed using relative or absolute
         # coordinates
+
+
+
+
+        # TODO: Get vector of 1s or 0s (from GT and Prediction)
+
+        # cargo imagen
+
+        # comparo GT con FA de la imagen -> [0,1]
+
+        # Con la predicción del generador (que está en absolutas, o relativas) -> hago lo mismo -> [0,1]
+
+
+        # meter función de pérdida (e.g. Hinge Loss Function )
+
+
 
         losses = {}
 
@@ -732,10 +747,9 @@ def check_accuracy(hyperparameters, loader, generator,
 
             # Forward
 
-            generator_out = generator(
+            pred_traj_fake_rel = generator(
                 obs_traj, obs_traj_rel, seq_start_end, agent_idx
             )
-            pred_traj_fake_rel = generator_out
 
             # single agent trajectories
             if hyperparameters.output_single_agent:
@@ -747,7 +761,7 @@ def check_accuracy(hyperparameters, loader, generator,
             # Relative displacements to absolute (around center) coordinates. 
             # NOT global (map) coordinates
 
-            pred_traj_fake = relative_to_abs_sgan(pred_traj_fake_rel, obs_traj[-1])
+            pred_traj_fake = relative_to_abs(pred_traj_fake_rel, obs_traj[-1])
 
             # L2 loss
 

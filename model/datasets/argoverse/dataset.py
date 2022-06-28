@@ -128,13 +128,30 @@ def seq_collate(data):
             apply_gaussian_noise = np.random.choice(decision,num_obstacles,p=gaussian_noise_prob) # For each obstacle of the sequence
             apply_rotation = np.random.choice(decision,1,p=rotation_prob) # To the whole sequence
 
-            aug_curr_obs_traj = data_augmentation_functions.dropout_points(aug_curr_obs_traj,apply_dropout,num_obs=obs_len,percentage=0.3)
-            aug_curr_obs_traj = data_augmentation_functions.add_gaussian_noise(aug_curr_obs_traj,apply_gaussian_noise,num_obstacles,num_obs=obs_len,mu=0,sigma=0.5)
+            apply_dropout = np.zeros((1))
+            apply_gaussian_noise = np.zeros((1))
+            apply_rotation = np.zeros((1))
+            
+
+            if np.any(apply_dropout): # Not apply if all elements are 0
+                print("drop")
+                aug_curr_obs_traj = data_augmentation_functions.dropout_points(aug_curr_obs_traj,
+                                                                               apply_dropout,
+                                                                               num_obs=obs_len,
+                                                                               percentage=0.3)
+            if np.any(apply_gaussian_noise): # Not apply if all elements are 0
+                print("gauss")
+                aug_curr_obs_traj = data_augmentation_functions.add_gaussian_noise(aug_curr_obs_traj,
+                                                                                   apply_gaussian_noise,
+                                                                                   num_obstacles,
+                                                                                   num_obs=obs_len,
+                                                                                   mu=0,sigma=0.5)
 
             ## N.B. If you apply rotation as data augmentation, the groundtruth must be rotated too!
             
             rot_angle = 0
-            if apply_rotation: 
+            if np.any(apply_rotation): 
+                print("rot")
                 rot_angle = np.random.choice(rotation_angles,1,p=rotation_angles_prob).item()
 
                 aug_curr_obs_traj = data_augmentation_functions.rotate_traj(aug_curr_obs_traj,rot_angle)
@@ -154,10 +171,10 @@ def seq_collate(data):
 
             ## Fill torch tensor (whole batch)
 
-            aug_obs_traj[:,i,:] = aug_curr_obs_traj
-            aug_obs_traj_rel[:,i,:] = aug_curr_obs_traj_rel
-            aug_pred_traj_gt[:,i,:] = aug_curr_pred_traj_gt
-            aug_pred_traj_gt_rel[:,i,:] = aug_curr_pred_traj_gt_rel
+            aug_obs_traj[:,start:end,:] = aug_curr_obs_traj
+            aug_obs_traj_rel[:,start:end,:] = aug_curr_obs_traj_rel
+            aug_pred_traj_gt[:,start:end,:] = aug_curr_pred_traj_gt
+            aug_pred_traj_gt_rel[:,start:end,:] = aug_curr_pred_traj_gt_rel
 
             if DEBUG_DATA_AUGMENTATION:
                 filename = f"data/datasets/argoverse/motion-forecasting/train/data_images/{seq_id}.png"
@@ -194,8 +211,6 @@ def seq_collate(data):
 
     start = time.time()
 
-    pdb.set_trace()
-
     first_obs = obs_traj[0,:,:] # 1 x agents · batch_size x 2
 
     if (PHYSICAL_CONTEXT == "visual"  # batch_size x channels x height x width 
@@ -226,7 +241,7 @@ def seq_collate(data):
 
     return tuple(out)
 
-def process_window_sequence(idx, frame_data, frames, seq_len, pred_len, 
+def process_window_sequence(idx, frame_data, frames, obs_len, pred_len, 
                             file_id, split, obs_origin, 
                             rot_angle=None, augs=None):
     """
@@ -239,7 +254,7 @@ def process_window_sequence(idx, frame_data, frames, seq_len, pred_len,
             - x (float) -> x position (global, hdmap)
             - y (float) -> y position (global, hdmap)
             - city_name (int)
-        seq_len (int)
+        obs_len (int)
         pred_len (int)
         threshold (float)
         file_id (int)
@@ -249,6 +264,8 @@ def process_window_sequence(idx, frame_data, frames, seq_len, pred_len,
         id_frame_list, object_class_list, city_id, ego_origin
     """
 
+    seq_len = obs_len + pred_len
+
     # Prepare current sequence and get unique obstacles
 
     curr_seq_data = np.concatenate(frame_data[idx:idx + seq_len], axis=0)
@@ -256,11 +273,14 @@ def process_window_sequence(idx, frame_data, frames, seq_len, pred_len,
 
     # Initialize variables
 
-    curr_seq_rel = np.zeros((len(objs_in_curr_seq), 2, seq_len)) # objs_in_curr_seq x 2 (x,y) x seq_len (ej: 50)                              
-    curr_seq = np.zeros((len(objs_in_curr_seq), 2, seq_len)) # objs_in_curr_seq x 2 (x,y) x seq_len (ej: 50)
-    curr_loss_mask = np.zeros((len(objs_in_curr_seq), seq_len)) # objs_in_curr_seq x seq_len (ej: 50)
+    if split == "train" or split == "val": tensors_len = seq_len
+    elif split == "test": tensors_len = obs_len
+
+    curr_seq_rel = np.zeros((len(objs_in_curr_seq), 2, tensors_len)) # objs_in_curr_seq x 2 (x,y) x tensors_len (ej: 50)                              
+    curr_seq = np.zeros((len(objs_in_curr_seq), 2, tensors_len)) # objs_in_curr_seq x 2 (x,y) x tensors_len (ej: 50)
+    curr_loss_mask = np.zeros((len(objs_in_curr_seq), tensors_len)) # objs_in_curr_seq x tensors_len (ej: 50)
     object_class_list = np.zeros(len(objs_in_curr_seq)) 
-    id_frame_list  = np.zeros((len(objs_in_curr_seq), 3, seq_len))
+    id_frame_list  = np.zeros((len(objs_in_curr_seq), 3, tensors_len))
 
     num_objs_considered = 0
     _non_linear_obj = []
@@ -279,12 +299,13 @@ def process_window_sequence(idx, frame_data, frames, seq_len, pred_len,
     for _, obj_id in enumerate(objs_in_curr_seq):
         curr_obj_seq = curr_seq_data[curr_seq_data[:, 1] == obj_id, :]
 
-        # If the object has less than "seq_len" observations, discard
+        # If the object has less than "seq_len" observations, discard.
+        # If we are processing the "test" set, we only have the observations, not the predictions
                                                                                  
         pad_front = frames.index(curr_obj_seq[0, 0]) - idx
         pad_end = frames.index(curr_obj_seq[-1, 0]) - idx + 1
 
-        if (pad_end - pad_front != seq_len) or (curr_obj_seq.shape[0] != seq_len):
+        if ((pad_end - pad_front != tensors_len) or (curr_obj_seq.shape[0] != tensors_len)):
             continue
 
         object_class_list[num_objs_considered] = curr_obj_seq[0,2] # 0 == AV, 1 == AGENT, 2 == OTHER
@@ -364,7 +385,10 @@ class ArgoverseMotionForecastingDataset(Dataset):
         # Preprocess data (from raw .csvs to torch Tensors, at least including the 
         # AGENT (most important vehicle) and AV
 
-        if preprocess_data and not os.path.isdir(data_processed_folder):
+        assert os.path.isdir(os.path.join(root_folder,split)), "\n\nHey, the folder you want to analyze does not exist!"
+             
+        if (preprocess_data and not os.path.isdir(data_processed_folder)): # This split percentage has not been processed yet
+                                                                           # (in order to avoid unwanted overwriting, just in case ...)
             folder = root_folder + split + "/data/"
             files, num_files = dataset_utils.load_list_from_folder(folder)
 
@@ -392,10 +416,16 @@ class ArgoverseMotionForecastingDataset(Dataset):
             print("Start Dataset")
             # TODO: Speed-up dataloading, avoiding objects further than X distance
 
+            time_per_iteration = float(0)
+            aux_time = float(0)
+
             t0 = time.time()
             for i, file_id in enumerate(file_id_list):
-                t1 = time.time()
-                print(f"File {file_id} -> {i}/{len(file_id_list)}")
+                start = time.time()
+
+                print(f"File {file_id} -> {i+1}/{len(file_id_list)}")
+                files_remaining = len(file_id_list) - (i+1)
+
                 num_seq_list.append(file_id)
                 path = os.path.join(root_file_name,str(file_id)+".csv")
                 data = dataset_utils.read_file(path) 
@@ -410,13 +440,13 @@ class ArgoverseMotionForecastingDataset(Dataset):
                 num_objs_considered, _non_linear_obj, curr_loss_mask, curr_seq, \
                 curr_seq_rel, id_frame_list, object_class_list, city_id, ego_origin = \
                     process_window_sequence(idx, frame_data, frames,
-                                            self.seq_len, self.pred_len, 
+                                            self.obs_len, self.pred_len, 
                                             file_id, self.split, self.obs_origin)
 
                 # Check if the current AGENT trajectory can be considered as a curve or straight trajectory
                 # (so for further training we can focus on the most difficult samples -> sequences in which
                 # the AGENT is performing a curved trajectory)
-
+ 
                 if self.class_balance >= 0.0:
                     agent_idx = int(np.where(object_class_list==1)[0])
 
@@ -446,7 +476,14 @@ class ArgoverseMotionForecastingDataset(Dataset):
                             curved_trajectories_list.append(file_id)
                         else:
                             straight_trajectories_list.append(file_id)
-                # print("File {} consumed {} s".format(i, (time.time() - t1))) 
+
+                end = time.time()
+                aux_time += (end-start)
+                time_per_iteration = aux_time/(i+1)
+
+
+                print(f"Time per iteration: {time_per_iteration} s. \n \
+                        Estimated time to finish ({files_remaining} files): {round(time_per_iteration*files_remaining/60)} min")
 
             print("Dataset time: ", time.time() - t0)
             self.num_seq = len(seq_list)
@@ -463,7 +500,7 @@ class ArgoverseMotionForecastingDataset(Dataset):
             ego_vehicle_origin = np.asarray(ego_vehicle_origin)
             city_ids = np.asarray(city_ids)
 
-            ## normalize abs and relative data # TODO: Is this used now?
+            ## normalize abs and relative data
             abs_norm = (seq_list.min(), seq_list.max())
             # seq_list = (seq_list - seq_list.min()) / (seq_list.max() - seq_list.min())
 
@@ -486,8 +523,7 @@ class ArgoverseMotionForecastingDataset(Dataset):
                 dataset_utils.save_processed_data_as_npy(data_processed_folder, 
                                                          preprocess_data_dict,
                                                          split_percentage)
-                #assert 1 == 0 # Uncomment this if you want to preprocess -> save -> 
-                              # -> continue with the dataset (for example in training)
+                assert 1 == 0 # Uncomment this if you want to stop after preprocessing and save
         else:
             print("Loading .npy files as np data structures ...")
 
@@ -555,7 +591,7 @@ class ArgoverseMotionForecastingDataset(Dataset):
                 if len(self.cont_straight_traj) >= int(self.class_balance*self.batch_size):
                     # Take a random curved trajectory from the dataset
 
-                    aux_index = random.choice(self.curved_trajectories_list_aux)
+                    aux_index = random.choice(self.curved_aux_list)
                     
                     # Update index to be included in the batch
 
@@ -580,14 +616,25 @@ class ArgoverseMotionForecastingDataset(Dataset):
 
         start, end = self.seq_start_end[index]
 
-        out = [
-                self.obs_traj[start:end, :, :], self.pred_traj_gt[start:end, :, :],
-                self.obs_traj_rel[start:end, :, :], self.pred_traj_gt_rel[start:end, :, :],
-                self.non_linear_obj[start:end], self.loss_mask[start:end, :],
-                self.seq_id_list[start:end, :, :], self.object_class_id_list[start:end], 
-                self.object_id_list[start:end], self.city_ids[index], self.ego_vehicle_origin[index,:,:],
-                self.num_seq_list[index], self.norm
-              ] 
+        # TODO: Generate again the data of train and validation!!!!!!!!!!!! Now the map origin is checked as N x 2, not N x 1 x 2
+        try:
+            out = [
+                    self.obs_traj[start:end, :, :], self.pred_traj_gt[start:end, :, :],
+                    self.obs_traj_rel[start:end, :, :], self.pred_traj_gt_rel[start:end, :, :],
+                    self.non_linear_obj[start:end], self.loss_mask[start:end, :],
+                    self.seq_id_list[start:end, :, :], self.object_class_id_list[start:end], 
+                    self.object_id_list[start:end], self.city_ids[index], self.ego_vehicle_origin[index,:,:],
+                    self.num_seq_list[index], self.norm
+                ] 
+        except:
+            out = [
+                    self.obs_traj[start:end, :, :], self.pred_traj_gt[start:end, :, :],
+                    self.obs_traj_rel[start:end, :, :], self.pred_traj_gt_rel[start:end, :, :],
+                    self.non_linear_obj[start:end], self.loss_mask[start:end, :],
+                    self.seq_id_list[start:end, :, :], self.object_class_id_list[start:end], 
+                    self.object_id_list[start:end], self.city_ids[index], self.ego_vehicle_origin[index,:], # HERE THE DIFFERENCE
+                    self.num_seq_list[index], self.norm
+                ]
 
         # Increase file count
         

@@ -82,13 +82,14 @@ with open(config_path) as config:
 
 past_observations = config.hyperparameters.obs_len
 
-config.dataset.split = "train"
+config.dataset.split = "val"
 config.dataset.split_percentage = 1.0 #To generate the final results, must be 1 (whole split test)
 config.dataset.start_from_percentage = 0.0
 config.dataset.batch_size = 1 # Better to build the h5 results file
 config.dataset.num_workers = 0
 config.dataset.class_balance = -1.0 # Do not consider class balance in the split val
 config.dataset.shuffle = False
+config.dataset.data_augmentation = False
 
 config.hyperparameters.pred_len = 30 # In test, we do not have the gt (prediction points)
 
@@ -129,7 +130,8 @@ if MAP_GENERATION:
     aux_time = float(0)
 
     for i, file_id in enumerate(file_id_list):
-        print(f"File {file_id} -> {i}/{len(file_id_list)}")
+        print(f"File {file_id} -> {i+1}/{len(file_id_list)}")
+        files_remaining = len(file_id_list) - (i+1)
         path = os.path.join(root_file_name,str(file_id)+".csv")
         data = read_file(path) 
 
@@ -149,6 +151,6 @@ if MAP_GENERATION:
         time_per_iteration = aux_time/(i+1)
 
         print(f"Time per iteration: {time_per_iteration} s. \n \
-                Estimated time to generate {len(file_id_list)} files: {round(time_per_iteration*len(file_id_list)/60)} min")
+                Estimated time to finish ({files_remaining} files): {round(time_per_iteration*files_remaining/60)} min")
 
         plt.close("all")
