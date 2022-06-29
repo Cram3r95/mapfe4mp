@@ -285,7 +285,7 @@ def load_physical_information(num_seq_list, obs_traj_rel, first_obs, map_origin,
             agent_obs_seq_abs = relative_to_abs(agent_obs_seq, agent_first_obs) # "abs" (around 0)
             agent_obs_seq_global = agent_obs_seq_abs + curr_map_origin # abs (hdmap coordinates)
 
-            goal_points = goal_points_functions.get_goal_points(filename, agent_obs_seq_global, origin_pos, dist_around)
+            goal_points = goal_points_functions.get_goal_points(filename, agent_obs_seq_global, curr_map_origin, dist_around)
             physical_context_list.append(goal_points)
         t0_idx = t1_idx
 
@@ -317,7 +317,7 @@ def relative_to_abs_multimodal(rel_traj, start_pos):
     Outputs:
     - abs_traj: pytorch tensor of shape (seq_len, batch, 2)
     """
-    # batch, seq_len, 2
+
     displacement = torch.cumsum(rel_traj, dim=2)
     start_pos = torch.unsqueeze(torch.unsqueeze(start_pos, dim=1), dim=1)
     abs_traj = displacement + start_pos

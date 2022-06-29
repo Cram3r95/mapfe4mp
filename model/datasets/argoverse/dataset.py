@@ -35,13 +35,14 @@ import model.datasets.argoverse.plot_functions as plot_functions
 # Data augmentation variables
 
 APPLY_DATA_AUGMENTATION = False
-DEBUG_DATA_AUGMENTATION = False
+DEBUG_DATA_AUGMENTATION = True
 
 decision = [0,1] # Not apply/apply
 dropout_prob = [0.2,0.8] # Not applied/applied probability
 gaussian_noise_prob = [0.2,0.8]
 rotation_prob = [0.2,0.8]
 
+mu,std = 0,0.5
 rotation_angles = [90,180,270]
 rotation_angles_prob = [0.33,0.33,0.34]
 
@@ -50,7 +51,6 @@ rotation_angles_prob = [0.33,0.33,0.34]
 data_imgs_folder = None
 PHYSICAL_CONTEXT = "Dummies"
 
-frames_path = None
 dist_around = 40
 dist_rasterized_map = [-dist_around, dist_around, -dist_around, dist_around]
 
@@ -98,6 +98,8 @@ def seq_collate(data):
 
     curr_split = data_imgs_folder.split('/')[-3]
 
+    APPLY_DATA_AUGMENTATION = True
+
     if APPLY_DATA_AUGMENTATION and curr_split == "train":
         aug_obs_traj = torch.zeros((obs_traj.shape))
         aug_obs_traj_rel = torch.zeros((obs_traj_rel.shape))
@@ -127,20 +129,13 @@ def seq_collate(data):
             apply_dropout = np.random.choice(decision,num_obstacles,p=dropout_prob) # For each obstacle of the sequence
             apply_gaussian_noise = np.random.choice(decision,num_obstacles,p=gaussian_noise_prob) # For each obstacle of the sequence
             apply_rotation = np.random.choice(decision,1,p=rotation_prob) # To the whole sequence
-
-            apply_dropout = np.zeros((1))
-            apply_gaussian_noise = np.zeros((1))
-            apply_rotation = np.zeros((1))
-            
-
+     
             if np.any(apply_dropout): # Not apply if all elements are 0
-                print("drop")
                 aug_curr_obs_traj = data_augmentation_functions.dropout_points(aug_curr_obs_traj,
                                                                                apply_dropout,
                                                                                num_obs=obs_len,
                                                                                percentage=0.3)
             if np.any(apply_gaussian_noise): # Not apply if all elements are 0
-                print("gauss")
                 aug_curr_obs_traj = data_augmentation_functions.add_gaussian_noise(aug_curr_obs_traj,
                                                                                    apply_gaussian_noise,
                                                                                    num_obstacles,
@@ -151,7 +146,6 @@ def seq_collate(data):
             
             rot_angle = 0
             if np.any(apply_rotation): 
-                print("rot")
                 rot_angle = np.random.choice(rotation_angles,1,p=rotation_angles_prob).item()
 
                 aug_curr_obs_traj = data_augmentation_functions.rotate_traj(aug_curr_obs_traj,rot_angle)
@@ -160,10 +154,11 @@ def seq_collate(data):
             ## Get first obs and new relatives after data augmentation for this sequence
 
             aug_curr_first_obs = aug_curr_obs_traj[0,:,:] 
-
             aug_curr_obs_traj_rel = torch.zeros((aug_curr_obs_traj.shape))
             aug_curr_obs_traj_rel[1:,:,:] = torch.sub(aug_curr_obs_traj[1:,:,:],
                                                       aug_curr_obs_traj[:-1,:,:])
+
+            #rel_curr_obj_seq[:, 1:] = curr_obj_seq[:, 1:] - curr_obj_seq[:, :-1] # Get displacements between consecutive steps
 
             aug_curr_pred_traj_gt_rel = torch.zeros((aug_curr_pred_traj_gt.shape))
             aug_curr_pred_traj_gt_rel[1:,:,:] = torch.sub(aug_curr_pred_traj_gt[1:,:,:],
@@ -186,7 +181,7 @@ def seq_collate(data):
 
                 plot_functions.plot_trajectories(filename,curr_traj_rel,curr_first_obs,
                                                  curr_origin,curr_object_class_id_list,dist_rasterized_map,
-                                                 rot_angle=-1,obs_len=obs_traj.shape[0],
+                                                 rot_angle=-1,obs_len=obs_len,
                                                  smoothen=False, save=True)
 
                 # New observations (after data augmentation)
@@ -196,18 +191,20 @@ def seq_collate(data):
 
                 plot_functions.plot_trajectories(filename,aug_curr_traj_rel,aug_curr_first_obs,
                                                  curr_origin,curr_object_class_id_list,dist_rasterized_map,
-                                                 rot_angle=rot_angle,obs_len=obs_traj.shape[0],
+                                                 rot_angle=rot_angle,obs_len=obs_len,
                                                  smoothen=False, save=True, data_aug=True)
             i += 1
 
             # Replace tensors
 
-            obs_traj = aug_obs_traj
-            obs_traj_rel = aug_obs_traj_rel
-            pred_traj_gt = aug_pred_traj_gt
-            pred_traj_gt_rel = aug_pred_traj_gt_rel
+        obs_traj = aug_obs_traj
+        obs_traj_rel = aug_obs_traj_rel
+        pred_traj_gt = aug_pred_traj_gt
+        pred_traj_gt_rel = aug_pred_traj_gt_rel
 
     # Get physical information (image or goal points. Otherwise, use dummies)
+
+    # pdb.set_trace()
 
     start = time.time()
 

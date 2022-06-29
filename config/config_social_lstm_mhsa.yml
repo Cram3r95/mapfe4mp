@@ -8,12 +8,12 @@ dataset_name: argoverse_motion_forecasting_dataset
 dataset:
     path: data/datasets/argoverse/motion-forecasting/
     split: "train"
-    batch_size: 64
+    batch_size: 8
     num_workers: 0
     start_from_percentage: 0.0 # By default, 0. If you want to analize a particular bunch of files (e.g. from 25 % to 50 %)
                                # then write here 0.25 and in split_percentage 0.25
-    split_percentage: 0.1 # % of the dataset (0-1)
-    shuffle: True # False to check the input data, always set to True (Only for training!)
+    split_percentage: 1.0 # % of the dataset (0-1)
+    shuffle: False # False to check the input data, always set to True (Only for training!)
     data_augmentation: True # Rotation, Swapping, Dropout, Gaussian noise
     class_balance: 0.7 # % of straight trajectories (considering the AGENT). Remaining % are curved trajectories
                         # (again, considering the AGENT). -1.0 if no class balance is used (get_item takes the corresponding
@@ -38,7 +38,7 @@ hyperparameters:
 
     num_epochs: 100
     print_every: 50
-    checkpoint_name: "0"
+    checkpoint_name: "0"                      
     checkpoint_val_percentage: 0.1 # (0 - 1) Check accuracy in validation split every
                                     # checkpoint_val_percentage * total_num_iterations
     checkpoint_train_percentage: 0.2 # (0 - 1)
@@ -51,16 +51,16 @@ hyperparameters:
     loss_fa_weight: 1
 
     lr_scheduler: True
-    lr_decay_factor: 0.5
+    lr_decay_factor: 0.8
     lr_epoch_percentage_patience: 0.1 # (0-N) E.g. If 0.05 -> the patience will be the 5 % of the total epochs
     
     g_steps: 1
     clipping_threshold_g: 1.1
 
-    output_dir: "save/argoverse/social_lstm_mhsa/exp5"
+    output_dir: "save/argoverse/social_lstm_mhsa/data_augs"
     checkpoint_start_from:
-    exp_description: "10 % dataset (both train and val).
-                      Include data augmentation (without rotation).
+    exp_description: "100 % dataset (both train and val).
+                      Include data augmentation (with rotation).
                       Ensure all curved trajectories are analyzed.
                       Encoder/Decoder h_dim 32 -> 256.
                       MSE (ADE&FDE) + NLL as loss function.

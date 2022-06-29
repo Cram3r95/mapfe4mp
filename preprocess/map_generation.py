@@ -82,7 +82,7 @@ with open(config_path) as config:
 
 past_observations = config.hyperparameters.obs_len
 
-config.dataset.split = "val"
+config.dataset.split = "test"
 config.dataset.split_percentage = 1.0 #To generate the final results, must be 1 (whole split test)
 config.dataset.start_from_percentage = 0.0
 config.dataset.batch_size = 1 # Better to build the h5 results file

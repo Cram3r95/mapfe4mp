@@ -39,15 +39,17 @@ import model.datasets.argoverse.goal_points_functions as goal_points_functions
 COLORS = "darkviolet"
 COLORS_MM = ["orange", "chartreuse", "khaki"]
 
-                        # Observation / Prediction                   
+                        # Observation / Prediction (GT) / Prediction (Model)                   
                         # (color, linewidth, type, size, transparency)
-MARKER_DICT = {"AGENT":  (("b",6,"*",15,1.0),("c",6,"",15,1.0)),
-               "OTHER":  (("g",4,"o",10,1.0),("g",4,"",10,0.5)),
-               "AV":     (("r",4,"o",10,1.0),("m",4,"",10,1.0))} 
+MARKER_DICT = {"AGENT":  (("b",6,"o",15,1.0),("c",6,"*",15,0.5),("c",6,"*",15,1.0)),
+               "OTHER":  (("g",4,"o",10,1.0),("g",4,"*",10,0.5)),
+               "AV":     (("r",4,"o",10,1.0),("m",4,"*",10,1.0))} 
 
-ZORDER = {"AGENT": 3, "AV": 3, "OTHER": 3}
+ZORDER = {"AGENT": 3, "OTHER": 3, "AV": 3}
 
 def interpolate_polyline(polyline: np.ndarray, num_points: int) -> np.ndarray:
+    """
+    """
     duplicates = []
     for i in range(1, len(polyline)):
         if np.allclose(polyline[i], polyline[i - 1]):
@@ -61,6 +63,8 @@ def interpolate_polyline(polyline: np.ndarray, num_points: int) -> np.ndarray:
     return np.column_stack(interp.splev(u, tck))
 
 def translate_object_type(int_id):
+    """
+    """
     if int_id == 0:
         return "AV"
     elif int_id == 1:
@@ -69,6 +73,8 @@ def translate_object_type(int_id):
         return "OTHER"
 
 def renderize_image(fig_plot, new_shape=(600,600),normalize=True):
+    """
+    """
     fig_plot.canvas.draw()
 
     img_cv = cv2.cvtColor(np.asarray(fig_plot.canvas.buffer_rgba()), cv2.COLOR_RGBA2BGR)
@@ -79,6 +85,8 @@ def renderize_image(fig_plot, new_shape=(600,600),normalize=True):
     return img_rsz
 
 def change_bg_color(img):
+    """
+    """
     img[np.all(img == (0, 0, 0), axis=-1)] = (255,255,255)
 
     return img
@@ -116,14 +124,25 @@ def generate_img(img_map, img_lanes, qualitative_results_folder, seq_id, t_img):
 
 # Main plot functions
 
-def plot_trajectories(filename,traj_rel,first_obs,map_origin,object_class_id_list,offset,\
-                      rot_angle=-1,obs_len=None,smoothen=False,save=False,data_aug=False):
+def plot_trajectories(filename,traj_rel,first_obs,map_origin,object_class_id_list,offset,
+                      rot_angle=-1,obs_len=20,smoothen=False,save=False,data_aug=False,
+                      qualitative_results=False,pred_trajectories_rel=torch.zeros((0))):
     """
-    N.B. All inputs must be torch tensors!
+    N.B. All inputs must be torch tensors in CPU, not GPU (in order to plot the trajectories)!
 
     Plot until obs_len points per trajectory. If obs_len != None, we
     must distinguish between observation (color with a marker) and prediction (same color with another marker)
     """
+
+    seq_len = traj_rel.shape[0]
+    if seq_len == obs_len:
+        plot_len = 1
+    elif seq_len > obs_len:
+        plot_len = 2
+
+    if len(pred_trajectories_rel.shape) == 3: # Output from our model (pred_len x 1 x 2 -> Unimodal)
+                                              #                       (pred_len x num_modes x 2 -> Multimodal)
+        plot_len = 3
 
     xcenter, ycenter = map_origin[0].item(), map_origin[1].item()
 
@@ -138,7 +157,7 @@ def plot_trajectories(filename,traj_rel,first_obs,map_origin,object_class_id_lis
     fig, ax = plt.subplots(figsize=(6,6), facecolor="white")
     plt.xlim(x_min, x_max)
     plt.ylim(y_min, y_max)
-    plt.axis("off") # Uncomment if you want to generate images with
+    plt.axis("off") # Comment if you want to generate images with axis
 
     t0 = time.time()
 
@@ -147,28 +166,43 @@ def plot_trajectories(filename,traj_rel,first_obs,map_origin,object_class_id_lis
     seq_list = []
 
     for i in range(len(object_class_id_list)):
-        traj_ = traj_rel[:,i,:].view(-1,2) # 50 x 2 (rel-rel)
-        curr_first_obs = first_obs[i,:].view(-1)
+        traj_rel_ = traj_rel[:,i,:].view(-1,2).unsqueeze(dim=1) # obs_len/seq_len x 1 (emulating batch) x 2 (rel-rel)
+        curr_first_obs = first_obs[i,:].unsqueeze(dim=0) # 1 x 2
 
-        abs_traj_ = dataset_utils.relative_to_abs(traj_, curr_first_obs) # "abs" (around 0)
+        abs_traj_ = dataset_utils.relative_to_abs(traj_rel_, curr_first_obs).view(-1,2) # "abs" (around 0)
         obj_id = object_class_id_list[i]
-        seq_list.append([abs_traj_,obj_id])
-        
+        seq_list.append([obj_id,abs_traj_])
+
+        # if obj_id == 1: # Agent
+        #     if seq_len == obs_len:
+        #         obs_rel_ = traj_rel_
+        #     elif seq_len > obs_len:
+        #         obs_rel_ = traj_rel_[:obs_len,:]
+        #     pdb.set_trace()
+            #traj_with_pred_rel = 
+   
     # Plot all the tracks up till current frame
 
     for seq_id in seq_list:
-        object_type = translate_object_type(int(seq_id[1]))
-        seq_abs = seq_id[0]
+        object_type = translate_object_type(int(seq_id[0]))
+        seq_abs = seq_id[1]
 
-        obs_x, obs_y = seq_abs[:obs_len,0] + xcenter, seq_abs[:obs_len,1] + ycenter
-        pred_gt_x, pred_gt_y = seq_abs[obs_len:,0] + xcenter, seq_abs[obs_len:,1] + ycenter
+        if seq_len > obs_len:
+            obs_x, obs_y = seq_abs[:obs_len,0] + xcenter, seq_abs[:obs_len,1] + ycenter
+            pred_gt_x, pred_gt_y = seq_abs[obs_len:,0] + xcenter, seq_abs[obs_len:,1] + ycenter
+        elif seq_len == obs_len:
+            obs_x, obs_y = seq_abs[:,0] + xcenter, seq_abs[:,1] + ycenter
 
         if plot_object_trajectories:
-            for i in range(2):
+            for i in range(plot_len):
                 if i == 0: # obs
                     cor_x, cor_y = obs_x, obs_y 
-                else: # pred
+                elif i == 1: # pred (gt)
                     cor_x, cor_y = pred_gt_x, pred_gt_y
+                elif i == 2 and object_type == "AGENT": # pred (model) At this moment, only target AGENT
+                    cor_x, cor_y = pred_gt_x, pred_gt_y 
+                else:
+                    continue
 
                 colour,linewidth,marker_type,marker_size,transparency = MARKER_DICT[object_type][i]
 
@@ -178,6 +212,9 @@ def plot_trajectories(filename,traj_rel,first_obs,map_origin,object_class_id_lis
                     smooth_polyline = interpolate_polyline(polyline, num_points)
 
                     cor_x, cor_y = smooth_polyline[:,0], smooth_polyline[:,1]
+
+                    if cor_x.device.type != "cpu": cor_x = cor_x.to("cpu")
+                    if cor_y.device.type != "cpu": cor_y = cor_y.to("cpu")
 
                     plt.plot(
                         cor_x,
@@ -190,6 +227,8 @@ def plot_trajectories(filename,traj_rel,first_obs,map_origin,object_class_id_lis
                         zorder=ZORDER[object_type],
                     )
                 else:
+                    if cor_x.device.type != "cpu": cor_x = cor_x.to("cpu")
+                    if cor_y.device.type != "cpu": cor_y = cor_y.to("cpu")
                     plt.scatter(cor_x, cor_y, c=colour, s=10, alpha=transparency)
 
                 if plot_object_heads:
@@ -243,18 +282,19 @@ def plot_trajectories(filename,traj_rel,first_obs,map_origin,object_class_id_lis
     full_img_cv = cv2.add(img1_bg,img2_fg)
 
     if save:
-        # cv2.imshow("full_img",full_img_cv)
         curr_seq = filename.split('/')[-1].split('.')[0]
 
+        trajs_folder = os.path.join(*filename.split('/')[:-2],"data_images_trajs/")
+        if not os.path.exists(trajs_folder):
+            print("Create trajs folder: ", trajs_folder)
+            os.makedirs(trajs_folder) # makedirs creates intermediate folders
+
         if data_aug:
-            data_augs_folder = os.path.join(*filename.split('/')[:-2],"data_images_augs/")
-            if not os.path.exists(data_augs_folder):
-                print("Create data_augs folder: ", data_augs_folder)
-                os.makedirs(data_augs_folder) # makedirs creates intermediate folders
-            filename2 = data_augs_folder + curr_seq + "_" + str(rot_angle) + "_aug" + ".png"
-        # elif qualitative_results: # this would include also the prediction
+            filename2 = trajs_folder + curr_seq + "_" + str(rot_angle) + "_aug" + ".png"
+        elif qualitative_results: # this would include also the prediction
+            filename2 = trajs_folder + curr_seq + "_qualitative" + ".png"
         else:
-            filename2 = os.path.join(*filename.split('/')[:-2]) + "/data_images_augs/" + curr_seq + "_original" + ".png"
+            filename2 = trajs_folder + curr_seq + "_original" + ".png"
 
         cv2.imwrite(filename2,full_img_cv)
 

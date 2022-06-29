@@ -32,12 +32,12 @@ from torch.utils.data import DataLoader
 BASE_DIR = "/home/denso/carlos_vsr_workspace/mapfe4mp"
 sys.path.append(BASE_DIR)
 
-from argoverse.evaluation.competition_util import generate_forecasting_h5
-
+import model.datasets.argoverse.plot_functions as plot_functions
 from model.datasets.argoverse.dataset import ArgoverseMotionForecastingDataset, seq_collate
-from model.datasets.argoverse.dataset_utils import relative_to_abs_multimodal, load_list_from_folder
+from model.datasets.argoverse.dataset_utils import relative_to_abs_multimodal
 from model.utils.checkpoint_data import get_generator
-from model.modules.evaluation_metrics import displacement_error, final_displacement_error
+
+from argoverse.evaluation.competition_util import generate_forecasting_h5
 
 #######################################
 
@@ -46,15 +46,17 @@ parser.add_argument('--model_path', required=True, type=str)
 parser.add_argument('--num_modes', required=True, default=6, type=int)
 parser.add_argument("--device_gpu", required=True, default=0, type=int)
 
-# Evaluate model functions
+dist_around = 40
+dist_rasterized_map = [-dist_around, dist_around, -dist_around, dist_around]
+DEBUG_TEST_RESULTS = True
 
 def evaluate(loader, generator, num_modes, split, current_cuda):
     """
     """
 
-    output_all = {}
+    assert split == "test" and loader.batch_size == 1
 
-    assert split == "test"
+    output_all = {}
     test_folder = BASE_DIR+f"/data/datasets/argoverse/motion-forecasting/{split}/data/"
     file_list = glob.glob(os.path.join(test_folder, "*.csv"))
     file_list = [int(name.split("/")[-1].split(".")[0]) for name in file_list]
@@ -77,12 +79,28 @@ def evaluate(loader, generator, num_modes, split, current_cuda):
 
             # Get predictions (relative displacements)
 
-            pred_traj_fake_rel = generator(obs_traj, obs_traj_rel, 
-                                  seq_start_end, agent_idx)
-            # TODO: Avoid repeating the prediction -> Use a multimodal generator!
+            pred_traj_fake_rel = generator(obs_traj, obs_traj_rel, seq_start_end, agent_idx)
 
+            ## (Optional) Plot results
+
+            if DEBUG_TEST_RESULTS:
+                seq_id = num_seq.item()
+                curr_map_origin = map_origin[0]
+                curr_first_obs = obs_traj[0,:,:]
+                curr_traj_rel = obs_traj_rel
+                curr_object_class_id_list = object_cls
+
+                filename = f"data/datasets/argoverse/motion-forecasting/{split}/data_images/{seq_id}.png"
+
+                plot_functions.plot_trajectories(filename,curr_traj_rel,curr_first_obs,
+                                                     curr_map_origin,curr_object_class_id_list,dist_rasterized_map,
+                                                     rot_angle=-1,obs_len=obs_traj.shape[0],
+                                                     smoothen=False, save=True)#,pred_trajectories_rel=pred_traj_fake_rel)
+
+            ## TODO: Avoid repeating the prediction -> Use a multimodal generator!
+            pdb.set_trace()
             pred_traj_fake_rel = torch.repeat_interleave(pred_traj_fake_rel,num_modes,dim=1) # 30,1,2 -> 30,6,2
- 
+
             # Get predictions in absolute coordinates 
             # (relative displacements -> absolute coordinates (around 0,0) -> map coordinates)
 
@@ -92,7 +110,7 @@ def evaluate(loader, generator, num_modes, split, current_cuda):
 
             # Store predictions in absolute (map) coordinates
 
-            batch_size, modes, pred_len, xy = pred_traj_fake.shape
+            batch_size, pred_len, modes, xy = pred_traj_fake.shape
             pred_traj_fake = pred_traj_fake.view(-1, pred_len, xy) # num_modes x pred_len x 2 (x,y)
 
             key = num_seq[0].cpu().item()
@@ -182,6 +200,7 @@ def main(args):
         print("Create results path folder: ", results_path)
         os.makedirs(results_path) # os.makedirs create intermediate directories. os.mkdir only the last one
 
+    print("Evaluate test split")
     output_all = evaluate(test_loader, generator, args.num_modes, 
                           config.dataset.split, current_cuda)
 
@@ -192,3 +211,7 @@ def main(args):
 if __name__ == '__main__':
     args = parser.parse_args()
     main(args)
+
+# python evaluate/argoverse/generate_test_results.py --model_path 
+# "save/argoverse/social_lstm_mhsa/best_unimodal_100_percent/argoverse_motion_forecasting_dataset_0_with_model.pt" 
+# --num_modes 6 --device_gpu 0

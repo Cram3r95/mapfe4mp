@@ -396,6 +396,10 @@ def model_trainer(config, logger):
 
             # Check training metrics
 
+            metrics_val = check_accuracy(
+                    hyperparameters, val_loader, generator, split="val"
+                )
+
             if current_iteration > 0 and current_iteration % hyperparameters.checkpoint_train_every == 0:
                 logger.info('Checking stats on train ...')
                 split = "train"
@@ -609,11 +613,12 @@ def generator_step(hyperparameters, batch, generator, optimizer_g,
     optimizer_g.zero_grad()
 
     with autocast():
-        pred_traj_fake_rel = generator(obs_traj, obs_traj_rel, 
-                                  seq_start_end, agent_idx)
+        # Forward (If agent_idx != None, model prediction refers only to target agent)
+        
+        pred_traj_fake_rel = generator(obs_traj, obs_traj_rel, seq_start_end, agent_idx)
 
         if hyperparameters.output_single_agent:
-            pred_traj_fake = relative_to_abs(pred_traj_fake_rel, obs_traj[-1,agent_idx, :])
+            pred_traj_fake = relative_to_abs(pred_traj_fake_rel, obs_traj[-1,agent_idx,:])
         else:
             pred_traj_fake = relative_to_abs(pred_traj_fake_rel, obs_traj[-1])
 
@@ -745,11 +750,9 @@ def check_accuracy(hyperparameters, loader, generator,
                 loss_mask = loss_mask[:, hyperparameters.obs_len:]
                 linear_obj = 1 - non_linear_obj
 
-            # Forward
+            # Forward (If agent_idx != None, model prediction refers only to target agent)
 
-            pred_traj_fake_rel = generator(
-                obs_traj, obs_traj_rel, seq_start_end, agent_idx
-            )
+            pred_traj_fake_rel = generator(obs_traj, obs_traj_rel, seq_start_end, agent_idx) 
 
             # single agent trajectories
             if hyperparameters.output_single_agent:
@@ -762,7 +765,7 @@ def check_accuracy(hyperparameters, loader, generator,
             # NOT global (map) coordinates
 
             pred_traj_fake = relative_to_abs(pred_traj_fake_rel, obs_traj[-1])
-
+ 
             # L2 loss
 
             g_l2_loss_abs, g_l2_loss_rel = cal_l2_losses(
