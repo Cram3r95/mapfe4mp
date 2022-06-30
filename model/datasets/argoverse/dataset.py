@@ -35,7 +35,7 @@ import model.datasets.argoverse.plot_functions as plot_functions
 # Data augmentation variables
 
 APPLY_DATA_AUGMENTATION = False
-DEBUG_DATA_AUGMENTATION = True
+DEBUG_DATA_AUGMENTATION = False
 
 decision = [0,1] # Not apply/apply
 dropout_prob = [0.2,0.8] # Not applied/applied probability

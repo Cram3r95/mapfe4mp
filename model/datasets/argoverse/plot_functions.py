@@ -173,13 +173,15 @@ def plot_trajectories(filename,traj_rel,first_obs,map_origin,object_class_id_lis
         obj_id = object_class_id_list[i]
         seq_list.append([obj_id,abs_traj_])
 
-        # if obj_id == 1: # Agent
-        #     if seq_len == obs_len:
-        #         obs_rel_ = traj_rel_
-        #     elif seq_len > obs_len:
-        #         obs_rel_ = traj_rel_[:obs_len,:]
-        #     pdb.set_trace()
-            #traj_with_pred_rel = 
+        if obj_id == 1: # Agent
+            if seq_len == obs_len:
+                obs_rel_ = traj_rel_
+            elif seq_len > obs_len:
+                obs_rel_ = traj_rel_[:obs_len,:,:]
+
+            agent_traj_with_pred_rel = torch.cat((obs_rel_,pred_trajectories_rel),dim=0)
+            agent_traj_with_pred_abs = dataset_utils.relative_to_abs(agent_traj_with_pred_rel, curr_first_obs).view(-1,2)
+            agent_pred_abs = agent_traj_with_pred_abs[obs_len:,:]
    
     # Plot all the tracks up till current frame
 
@@ -197,10 +199,10 @@ def plot_trajectories(filename,traj_rel,first_obs,map_origin,object_class_id_lis
             for i in range(plot_len):
                 if i == 0: # obs
                     cor_x, cor_y = obs_x, obs_y 
-                elif i == 1: # pred (gt)
+                elif i == 1 and (seq_len > obs_len): # pred (gt)
                     cor_x, cor_y = pred_gt_x, pred_gt_y
                 elif i == 2 and object_type == "AGENT": # pred (model) At this moment, only target AGENT
-                    cor_x, cor_y = pred_gt_x, pred_gt_y 
+                    cor_x, cor_y = agent_pred_abs[:,0] + xcenter, agent_pred_abs[:,1] + ycenter
                 else:
                     continue
 
@@ -301,6 +303,9 @@ def plot_trajectories(filename,traj_rel,first_obs,map_origin,object_class_id_lis
     resized_full_img_cv = cv2.resize(full_img_cv,(224,224))
     norm_resized_full_img_cv = resized_full_img_cv / 255.0
     
+    plt.cla()
+    plt.close('all')
+
     return norm_resized_full_img_cv
 
 # TODO: REFACTORIZE FROM HERE (MERGE plot_trajectories, plot_qualitative_results and plot_qualitative_results_mm

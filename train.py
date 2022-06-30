@@ -52,9 +52,11 @@ if __name__ == "__main__":
     """
     parser = argparse.ArgumentParser()
     parser.add_argument("--trainer", required=True, type=str, choices=TRAINER_LIST)
-    parser.add_argument("--device_gpu", required=True, default=0, type=int)
-    parser.add_argument("--from_ckpt", type=str, default=None)
+    parser.add_argument("--device_gpu", required=True, type=int, default=0)
+    parser.add_argument("--from_exp", type=str, default=None)
     parser.add_argument("--num_ckpt", type=str, default="0")
+    parser.add_argument("--batch_size", type=int, default=0)
+    parser.add_argument("--output_dir", type=str, default="save")
     args = parser.parse_args()
     print(args.trainer)
     
@@ -66,42 +68,52 @@ if __name__ == "__main__":
 
     # Get configuration for the current architecture
 
-    if not args.from_ckpt: # Initialize new experiment from your current config file in configs folder
+    if not args.from_exp: # Initialize new experiment from your current config file in configs folder
         config_path = "./config/config_%s.yml" % args.trainer
-    elif os.path.isdir(args.from_ckpt): # Continue training from previous checkpoint with the 
+    elif os.path.isdir(args.from_exp): # Continue training from previous checkpoint with the 
                                         # corresponding config file
-        config_path = os.path.join(args.from_ckpt,"config_file.yml")
+        config_path = os.path.join(args.from_exp,"config_file.yml")
     else:
         assert 1 == 0, "Checkpoint not found!" 
         
     print("BASE_DIR: ", BASE_DIR)
 
     with open(config_path) as config_file:
-        config_file = yaml.safe_load(config_file)
-        config_file["device_gpu"] = args.device_gpu
+        config = yaml.safe_load(config_file)
+        config["device_gpu"] = args.device_gpu
 
-        config_file["base_dir"] = BASE_DIR
-        exp_path = os.path.join(config_file["base_dir"], config_file["hyperparameters"]["output_dir"])   
+        config["base_dir"] = BASE_DIR
+        exp_path = os.path.join(config["base_dir"], config["hyperparameters"]["output_dir"])   
         route_path = exp_path + "/config_file.yml"
 
-        if args.from_ckpt and os.path.isdir(args.from_ckpt): # Overwrite checkpoint_start_from
-            model = config_file["dataset_name"] + "_" + args.num_ckpt + "_with_model.pt"
+        if args.from_exp and os.path.isdir(args.from_exp): # Overwrite checkpoint_start_from
+            model = config["dataset_name"] + "_" + args.num_ckpt + "_with_model.pt"
 
-            config_file["hyperparameters"]["checkpoint_start_from"] = os.path.join(args.from_ckpt,model)
+            config["hyperparameters"]["checkpoint_start_from"] = os.path.join(args.from_exp,model)
 
         if not os.path.exists(exp_path):
             print("Create experiment path: ", exp_path)
             os.makedirs(exp_path) # makedirs creates intermediate folders
 
         with open(route_path,'w') as yaml_file:
-            yaml.dump(config_file, yaml_file, default_flow_style=False)
+            yaml.dump(config, yaml_file, default_flow_style=False)
 
-        config_file = Prodict.from_dict(config_file)
+        config = Prodict.from_dict(config)
 
     now = datetime.now()
     time = now.strftime("%H:%M:%S")
 
-    logger = create_logger(os.path.join(exp_path, f"{config_file.dataset_name}_{time}.log"))
+    logger = create_logger(os.path.join(exp_path, f"{config.dataset_name}_{time}.log"))
     logger.info("Config file: {}".format(config_path))
 
-    model_trainer(config_file, logger)
+    # Modify some variables of the configuration given input arguments
+    # E.g. The original config has batch_size = 1024 but now your GPU is
+    # almost full -> You keep 1024 in the file (as a reference) but here
+    # you specify a smaller batch_size (e.g. 512), that is, we do not want
+    # to incorporate these temporal changes to the original config file
+
+    if args.batch_size: config.dataset.batch_size = args.batch_size
+    if args.output_dir != "save": 
+        config.hyperparameters.output_dir = args.output_dir
+
+    model_trainer(config, logger)

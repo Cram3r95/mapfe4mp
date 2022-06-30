@@ -299,12 +299,15 @@ def relative_to_abs(rel_traj, start_pos):
     Inputs:
     - rel_traj: pytorch tensor of shape (seq_len, batch, 2)
     - start_pos: pytorch tensor of shape (batch, 2)
+      N.B. If you only have the predictions, this must be the last observation.
+           If you have the whole trajectory (obs+pred), this must be the first observation,
+           since you must reconstruct the relative displacements from this position 
     Outputs:
-    - abs_traj: pytorch tensor of shape (seq_len, batch, 2)
+    - abs_traj: pytorch tensor of shape (seq_len, batch, 2) (around 0,0, not map coordinates)
     """
-    # batch, seq_len, 2
+
     rel_traj = rel_traj.permute(1, 0, 2)
-    displacement = torch.cumsum(rel_traj, dim=1)
+    displacement = torch.cumsum(rel_traj, dim=1) # Sum along the seq_len dimension!
     start_pos = torch.unsqueeze(start_pos, dim=1)
     abs_traj = displacement + start_pos
     return abs_traj.permute(1, 0, 2)
@@ -312,13 +315,17 @@ def relative_to_abs(rel_traj, start_pos):
 def relative_to_abs_multimodal(rel_traj, start_pos):
     """
     Inputs:
-    - rel_traj: pytorch tensor of shape (b, m, t, 2)
+    - rel_traj: pytorch tensor of shape (b, num_modes, seq_len, 2)
     - start_pos: pytorch tensor of shape (batch, 2)
+      N.B. If you only have the predictions, this must be the last observation.
+           If you have the whole trajectory (obs+pred), this must be the first observation,
+           since you must reconstruct the relative displacements from this position 
     Outputs:
-    - abs_traj: pytorch tensor of shape (seq_len, batch, 2)
+    - abs_traj: pytorch tensor of shape (seq_len, batch, 2) (around 0,0, not map coordinates)
     """
 
-    displacement = torch.cumsum(rel_traj, dim=2)
-    start_pos = torch.unsqueeze(torch.unsqueeze(start_pos, dim=1), dim=1)
+    displacement = torch.cumsum(rel_traj, dim=1) # Sum along the seq_len dimension!
+    start_pos = torch.unsqueeze(torch.unsqueeze(start_pos, dim=1), dim=1) # batch, 1 (only one position) x 1 (same for all modes) x 2
     abs_traj = displacement + start_pos
+
     return abs_traj

@@ -11,11 +11,11 @@ Created on Fri Feb 25 12:19:38 2022
 # General purpose imports
 
 import argparse
-import json
 import os
 import sys
 import yaml
 import pdb
+import time
 import glob
 
 from pathlib import Path
@@ -62,9 +62,14 @@ def evaluate(loader, generator, num_modes, split, current_cuda):
     file_list = [int(name.split("/")[-1].split(".")[0]) for name in file_list]
     print("file_list ", len(file_list))
 
+    time_per_iteration = float(0)
+    aux_time = float(0)
+
     with torch.no_grad(): # When testing, gradient calculation is not required
         for batch_index, batch in enumerate(loader):
             print(f"Evaluating batch {batch_index+1}/{len(loader)}")
+            files_remaining = len(file_list.keys()) - batch_index
+            start = time.time()
 
             # Load batch in device
 
@@ -79,12 +84,13 @@ def evaluate(loader, generator, num_modes, split, current_cuda):
 
             # Get predictions (relative displacements)
 
-            pred_traj_fake_rel = generator(obs_traj, obs_traj_rel, seq_start_end, agent_idx)
+            pred_traj_fake_rel = generator(obs_traj, obs_traj_rel, seq_start_end, agent_idx) # pred_len x batch_size x 2
 
             ## (Optional) Plot results
 
-            if DEBUG_TEST_RESULTS:
-                seq_id = num_seq.item()
+            seq_id = num_seq.item()
+
+            if DEBUG_TEST_RESULTS and seq_id < 100:
                 curr_map_origin = map_origin[0]
                 curr_first_obs = obs_traj[0,:,:]
                 curr_traj_rel = obs_traj_rel
@@ -95,28 +101,35 @@ def evaluate(loader, generator, num_modes, split, current_cuda):
                 plot_functions.plot_trajectories(filename,curr_traj_rel,curr_first_obs,
                                                      curr_map_origin,curr_object_class_id_list,dist_rasterized_map,
                                                      rot_angle=-1,obs_len=obs_traj.shape[0],
-                                                     smoothen=False, save=True)#,pred_trajectories_rel=pred_traj_fake_rel)
+                                                     smoothen=False, save=True, pred_trajectories_rel=pred_traj_fake_rel)
 
             ## TODO: Avoid repeating the prediction -> Use a multimodal generator!
-            pdb.set_trace()
-            pred_traj_fake_rel = torch.repeat_interleave(pred_traj_fake_rel,num_modes,dim=1) # 30,1,2 -> 30,6,2
+
+            pred_traj_fake_rel = pred_traj_fake_rel.unsqueeze(dim=0) # pred_len x batch_size x 2 -> batch_size x pred_len x num_modes x 2
+            pred_traj_fake_rel = torch.repeat_interleave(pred_traj_fake_rel,num_modes,dim=2) # 1,30,1,2 -> 1,30,6,2
 
             # Get predictions in absolute coordinates 
             # (relative displacements -> absolute coordinates (around 0,0) -> map coordinates)
 
-            first_obs = obs_traj[-1,agent_idx,:]
-            pred_traj_fake = relative_to_abs_multimodal(pred_traj_fake_rel,first_obs) + \
-                             map_origin
-
+            last_obs = obs_traj[-1,agent_idx,:]
+            pred_traj_fake = relative_to_abs_multimodal(pred_traj_fake_rel,last_obs) + map_origin
+  
             # Store predictions in absolute (map) coordinates
 
-            batch_size, pred_len, modes, xy = pred_traj_fake.shape
-            pred_traj_fake = pred_traj_fake.view(-1, pred_len, xy) # num_modes x pred_len x 2 (x,y)
+            batch_size, pred_len, num_modes, xy = pred_traj_fake.shape
+            pred_traj_fake = pred_traj_fake.view(-1, pred_len, xy) #  (assuming batch_size = 1) num_modes x pred_len x 2 (x,y)
 
             key = num_seq[0].cpu().item()
 
             output_all[key] = pred_traj_fake.cpu().numpy()
             file_list.remove(key)
+
+            end = time.time()
+            aux_time += (end-start)
+            time_per_iteration = aux_time/(batch_index+1)
+
+            print(f"Time per iteration: {time_per_iteration} s. \n \
+                    Estimated time to finish ({files_remaining} files): {round(time_per_iteration*files_remaining/60)} min")
 
         # Add sequences not loaded in dataset
 
@@ -212,6 +225,8 @@ if __name__ == '__main__':
     args = parser.parse_args()
     main(args)
 
-# python evaluate/argoverse/generate_test_results.py --model_path 
-# "save/argoverse/social_lstm_mhsa/best_unimodal_100_percent/argoverse_motion_forecasting_dataset_0_with_model.pt" 
-# --num_modes 6 --device_gpu 0
+"""
+python evaluate/argoverse/generate_test_results.py \
+--model_path "save/argoverse/social_lstm_mhsa/best_unimodal_100_percent/argoverse_motion_forecasting_dataset_0_with_model.pt" \
+--num_modes 6 --device_gpu 0
+"""

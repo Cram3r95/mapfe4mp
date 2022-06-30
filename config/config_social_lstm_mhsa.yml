@@ -8,7 +8,7 @@ dataset_name: argoverse_motion_forecasting_dataset
 dataset:
     path: data/datasets/argoverse/motion-forecasting/
     split: "train"
-    batch_size: 8
+    batch_size: 512
     num_workers: 0
     start_from_percentage: 0.0 # By default, 0. If you want to analize a particular bunch of files (e.g. from 25 % to 50 %)
                                # then write here 0.25 and in split_percentage 0.25
@@ -57,7 +57,7 @@ hyperparameters:
     g_steps: 1
     clipping_threshold_g: 1.1
 
-    output_dir: "save/argoverse/social_lstm_mhsa/data_augs"
+    output_dir: "save/argoverse/social_lstm_mhsa/exp7"
     checkpoint_start_from:
     exp_description: "100 % dataset (both train and val).
                       Include data augmentation (with rotation).

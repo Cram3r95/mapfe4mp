@@ -326,7 +326,7 @@ def model_trainer(config, logger):
         gc.collect()
         epoch += 1
         logger.info('Starting epoch {}'.format(epoch))
-        #pdb.set_trace()
+
         for batch in train_loader:
             start = time.time()
             losses_g = generator_step(hyperparameters, batch, generator, optimizer_g, loss_f, w_loss)
@@ -351,8 +351,8 @@ def model_trainer(config, logger):
                     lr_scheduler_patience = round((MAX_TIME_PATIENCE_LR_SCHEDULER*60) / time_per_iteration)
 
                     scheduler_g = lrs.ReduceLROnPlateau(optimizer_g, "min", min_lr=1e-5, 
-                                                verbose=True, factor=hyperparameters.lr_decay_factor, 
-                                                patience=lr_scheduler_patience)
+                                                        verbose=True, factor=hyperparameters.lr_decay_factor, 
+                                                        patience=lr_scheduler_patience)
                                                 
                 mins_to_check_train = round((time_per_iteration*hyperparameters.checkpoint_train_every)/60)
                 mins_to_check_val = round((time_per_iteration*hyperparameters.checkpoint_val_every)/60)
@@ -395,10 +395,6 @@ def model_trainer(config, logger):
                 checkpoint.config_cp["losses_ts"].append(t)
 
             # Check training metrics
-
-            metrics_val = check_accuracy(
-                    hyperparameters, val_loader, generator, split="val"
-                )
 
             if current_iteration > 0 and current_iteration % hyperparameters.checkpoint_train_every == 0:
                 logger.info('Checking stats on train ...')
