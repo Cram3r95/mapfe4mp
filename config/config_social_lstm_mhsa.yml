@@ -39,9 +39,9 @@ hyperparameters:
     num_epochs: 100
     print_every: 50
     checkpoint_name: "0"                      
-    checkpoint_val_percentage: 0.1 # (0 - 1) Check accuracy in validation split every
+    checkpoint_val_percentage: 0.1 # 0.1 # (0 - 1) Check accuracy in validation split every
                                     # checkpoint_val_percentage * total_num_iterations
-    checkpoint_train_percentage: 0.2 # (0 - 1)
+    checkpoint_train_percentage: 0.2 # 0.2 # (0 - 1)
     num_samples_check: 5000 # Check a maximum of num_samples_check in the check_accuracy function
 
     loss_type_g: "mse_w" # (mse|mse_w), nll, (mse|mse_w)+nll, (mse|mse_w)+fa 

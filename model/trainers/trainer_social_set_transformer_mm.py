@@ -14,6 +14,8 @@ import gc
 import os
 import numpy as np
 import pdb
+import time
+import copy
 
 # DL & Math imports
 
@@ -29,17 +31,24 @@ from torch.utils.tensorboard import SummaryWriter
 
 from model.datasets.argoverse.dataset import ArgoverseMotionForecastingDataset, seq_collate
 from model.models.social_set_transformer_mm import TrajectoryGenerator
-from model.modules.losses import pytorch_neg_multi_log_likelihood_batch, mse_custom, l2_loss, l2_loss_multimodal
+from model.modules.losses import l2_loss_multimodal, mse_custom, pytorch_neg_multi_log_likelihood_batch, evaluate_feasible_area_prediction
 from model.modules.evaluation_metrics import displacement_error, final_displacement_error
 from model.utils.checkpoint_data import Checkpoint, get_total_norm
-from model.datasets.argoverse.dataset_utils import relative_to_abs_sgan_multimodal
+from model.datasets.argoverse.dataset_utils import relative_to_abs_multimodal
 from model.utils.utils import create_weights
+
+#######################################
 
 # Global variables
 
 torch.backends.cudnn.benchmark = True
 scaler = GradScaler()
 current_cuda = None
+absolute_root_folder = None
+
+MAX_TIME_TO_CHECK_TRAIN = 45 # minutes
+MAX_TIME_TO_CHECK_VAL = 30 # minutes
+MAX_TIME_PATIENCE_LR_SCHEDULER = 60 # minutes
 
 # Aux functions
 
@@ -67,13 +76,17 @@ def get_dtypes(use_gpu):
     return long_dtype, float_dtype
 
 def handle_batch(batch, is_single_agent_out):
-    # load batch in cuda
+    """
+    """
+    # Load batch in cuda
+
     batch = [tensor.cuda(current_cuda) for tensor in batch]
 
     (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel, non_linear_obj,
      loss_mask, seq_start_end, frames, object_cls, obj_id, ego_origin, num_seq_list) = batch
     
-    # handle single agent 
+    # Handle single agent 
+
     agent_idx = None
     if is_single_agent_out: # search agent idx
         agent_idx = torch.where(object_cls==1)[0].cpu().numpy()
@@ -84,9 +97,26 @@ def handle_batch(batch, is_single_agent_out):
      loss_mask, seq_start_end, frames, object_cls, obj_id, ego_origin, num_seq_list)
 
 # Aux functions losses
+
+def calculate_mse_loss(gt, pred, loss_f):
+    """
+    MSE = Mean Square Error (it is used by both ADE and FDE)
+    gt,pred: (batch_size,num_modes,pred_len,2)
+    """
+
+    b,m,t,_ = pred.shape
+    pred = pred.permute(1,2,0,3) # (num_modes,pred_len,batch_size,data_dim=2)
+    loss_ade = torch.zeros(1).to(pred)
+    loss_fde = torch.zeros(1).to(pred)
+
+    for i in range(m):
+        loss_ade += loss_f(pred[i,:,:,:], gt)
+        loss_fde += loss_f(pred[i][-1].unsqueeze(0), gt[-1].unsqueeze(0))
+    return loss_ade/m, loss_fde/m
  
 def calculate_nll_loss(gt, pred, loss_f, confidences):
     """
+    NLL = Negative Log-Likelihood
     """
     time, bs, _ = pred.shape
     gt = gt.permute(1,0,2)
@@ -99,32 +129,19 @@ def calculate_nll_loss(gt, pred, loss_f, confidences):
     )
     return loss
 
-def calculate_mse_loss(gt, pred, loss_f):
-    """
-    pred: (b,m,t,2)
-    m = Multimodality
-    """
-    b,m,t,_ = pred.shape
-    pred = pred.permute(1,2,0,3) # (m,t,b,2)
-    loss_ade = torch.zeros(1).to(pred)
-    loss_fde = torch.zeros(1).to(pred)
-    for i in range(m):
-        loss_ade += loss_f(pred[i,:,:,:], gt)
-        loss_fde += loss_f(pred[i][-1].unsqueeze(0), gt[-1].unsqueeze(0))
-    return loss_ade/m, loss_fde/m
 
-def cal_l2_losses(
-    pred_traj_gt, pred_traj_gt_rel, pred_traj_fake, pred_traj_fake_rel
-):
-    g_l2_loss_abs = l2_loss_multimodal(
-        pred_traj_fake, pred_traj_gt, mode='sum'
-    )
-    g_l2_loss_rel = l2_loss_multimodal(
-        pred_traj_fake_rel, pred_traj_gt_rel, mode='sum'
-    )
+
+def cal_l2_losses(pred_traj_gt, pred_traj_gt_rel, pred_traj_fake, pred_traj_fake_rel):
+    """
+    """
+    g_l2_loss_abs = l2_loss_multimodal(pred_traj_fake, pred_traj_gt, mode='sum')
+    g_l2_loss_rel = l2_loss_multimodal(pred_traj_fake_rel, pred_traj_gt_rel, mode='sum')
+    
     return g_l2_loss_abs, g_l2_loss_rel
 
 def cal_ade(pred_traj_gt, pred_traj_fake, linear_obj, non_linear_obj, consider_ped):
+    """
+    """
     b,m,t,_ = pred_traj_fake.shape
     ade = []
     for i in range(b):
@@ -137,11 +154,12 @@ def cal_ade(pred_traj_gt, pred_traj_fake, linear_obj, non_linear_obj, consider_p
         ade.append(_ade)
     ade = np.array(ade)
     min_ade = np.min(ade, 1)
+
     return ade, min_ade
 
-def cal_fde(
-    pred_traj_gt, pred_traj_fake, linear_obj, non_linear_obj, consider_ped
-):
+def cal_fde(pred_traj_gt, pred_traj_fake, linear_obj, non_linear_obj, consider_ped):
+    """
+    """
     b,m,t,_ = pred_traj_fake.shape
     fde = []
     for i in range(b):
@@ -164,6 +182,9 @@ def model_trainer(config, logger):
 
     # Aux variables
 
+    hyperparameters = config.hyperparameters
+    optim_parameters = config.optim_parameters
+
     ## Set specific device for both data and model
 
     global current_cuda
@@ -175,9 +196,13 @@ def model_trainer(config, logger):
     logger.info('Configuration: ')
     logger.info(config)
 
-    # Initialize train dataloader
+    global absolute_root_folder
+    absolute_root_folder = os.path.join(config.base_dir,config.dataset.path)
+
+    # Initialize train dataloader (N.B. If applied, data augmentation is only used during training!)
 
     logger.info("Initializing train dataset") 
+
     data_train = ArgoverseMotionForecastingDataset(dataset_name=config.dataset_name,
                                                    root_folder=config.dataset.path,
                                                    obs_len=config.hyperparameters.obs_len,
@@ -185,10 +210,10 @@ def model_trainer(config, logger):
                                                    distance_threshold=config.hyperparameters.distance_threshold,
                                                    split="train",
                                                    split_percentage=config.dataset.split_percentage,
-                                                   shuffle=config.dataset.shuffle,
                                                    batch_size=config.dataset.batch_size,
                                                    class_balance=config.dataset.class_balance,
                                                    obs_origin=config.hyperparameters.obs_origin,
+                                                   data_augmentation=config.dataset.data_augmentation,
                                                    preprocess_data=config.dataset.preprocess_data,
                                                    save_data=config.dataset.save_data)
 
@@ -208,21 +233,18 @@ def model_trainer(config, logger):
                                                  distance_threshold=config.hyperparameters.distance_threshold,
                                                  split="val",
                                                  split_percentage=config.dataset.split_percentage,
-                                                 shuffle=config.dataset.shuffle,
                                                  class_balance=-1,
                                                  obs_origin=config.hyperparameters.obs_origin,
                                                  preprocess_data=config.dataset.preprocess_data,
                                                  save_data=config.dataset.save_data)
+
     val_loader = DataLoader(data_val,
                             batch_size=config.dataset.batch_size,
-                            shuffle=config.dataset.shuffle,
+                            shuffle=False,
                             num_workers=config.dataset.num_workers,
                             collate_fn=seq_collate)
 
-    # Model and optimizer hyperparameters
-
-    hyperparameters = config.hyperparameters
-    optim_parameters = config.optim_parameters
+    # Initialize motion prediction generator and optimizer
 
     ## Compute total number of iterations (iterations_per_epoch * num_epochs)
 

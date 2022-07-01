@@ -31,7 +31,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 from model.datasets.argoverse.dataset import ArgoverseMotionForecastingDataset, seq_collate
 from model.models.social_lstm_mhsa import TrajectoryGenerator
-from model.modules.losses import l2_loss, pytorch_neg_multi_log_likelihood_batch, mse_custom, evaluate_feasible_area_prediction
+from model.modules.losses import l2_loss, mse_custom, pytorch_neg_multi_log_likelihood_batch, evaluate_feasible_area_prediction
 from model.modules.evaluation_metrics import displacement_error, final_displacement_error
 from model.datasets.argoverse.dataset_utils import relative_to_abs
 from model.utils.checkpoint_data import Checkpoint, get_total_norm
@@ -46,9 +46,9 @@ scaler = GradScaler()
 current_cuda = None
 absolute_root_folder = None
 
-MAX_TIME_TO_CHECK_TRAIN = 45 # minutes
-MAX_TIME_TO_CHECK_VAL = 30 # minutes
-MAX_TIME_PATIENCE_LR_SCHEDULER = 60 # minutes
+MAX_TIME_TO_CHECK_TRAIN = 120 # minutes
+MAX_TIME_TO_CHECK_VAL = 120 # minutes
+MAX_TIME_PATIENCE_LR_SCHEDULER = 120 # 60 # minutes
 
 # Aux functions
 
@@ -101,13 +101,16 @@ def handle_batch(batch, is_single_agent_out):
 def calculate_mse_loss(gt, pred, loss_f):
     """
     MSE = Mean Square Error (it is used by both ADE and FDE)
+    gt,pred: (batch_size,pred_len,2)
     """
+
     loss_ade = loss_f(pred, gt)
     loss_fde = loss_f(pred[-1].unsqueeze(0), gt[-1].unsqueeze(0))
     return loss_ade, loss_fde
 
-def calculate_nll_loss(gt, pred, loss_f):
+def calculate_nll_loss(gt, pred, loss_f):    
     """
+    NLL = Negative Log-Likelihood
     """
     time, bs, _ = pred.shape
     gt = gt.permute(1,0,2)
@@ -133,6 +136,7 @@ def cal_l2_losses(pred_traj_gt, pred_traj_gt_rel, pred_traj_fake, pred_traj_fake
 def cal_ade(pred_traj_gt, pred_traj_fake, linear_obj, non_linear_obj, consider_ped):
     """
     """
+    
     ade = displacement_error(pred_traj_fake, pred_traj_gt, consider_ped)
     ade_l = displacement_error(pred_traj_fake, pred_traj_gt, linear_obj)
     ade_nl = displacement_error(pred_traj_fake, pred_traj_gt, non_linear_obj)
@@ -211,6 +215,7 @@ def model_trainer(config, logger):
                                                  obs_origin=config.hyperparameters.obs_origin,
                                                  preprocess_data=config.dataset.preprocess_data,
                                                  save_data=config.dataset.save_data)
+                                                 
     val_loader = DataLoader(data_val,
                             batch_size=config.dataset.batch_size,
                             shuffle=False,
@@ -628,22 +633,6 @@ def generator_step(hyperparameters, batch, generator, optimizer_g,
         # TODO: Check if in other configurations the losses are computed using relative or absolute
         # coordinates
 
-
-
-
-        # TODO: Get vector of 1s or 0s (from GT and Prediction)
-
-        # cargo imagen
-
-        # comparo GT con FA de la imagen -> [0,1]
-
-        # Con la predicción del generador (que está en absolutas, o relativas) -> hago lo mismo -> [0,1]
-
-
-        # meter función de pérdida (e.g. Hinge Loss Function )
-
-
-
         losses = {}
 
         if hyperparameters.loss_type_g == "mse" or hyperparameters.loss_type_g == "mse_w":
@@ -735,9 +724,12 @@ def check_accuracy(hyperparameters, loader, generator,
 
             # Mask and linear
 
-            if not hyperparameters.output_single_agent: # TODO corregir con el nuevo dataset
+            # TODO corregir con el nuevo dataset
+
+            if not hyperparameters.output_single_agent: 
                 mask = np.where(obj_id.cpu() == -1, 0, 1)
                 mask = torch.tensor(mask, device=obj_id.device).reshape(-1)
+
             if hyperparameters.output_single_agent:
                 non_linear_obj = non_linear_obj[agent_idx]
                 loss_mask = loss_mask[agent_idx, hyperparameters.obs_len:]
@@ -764,19 +756,14 @@ def check_accuracy(hyperparameters, loader, generator,
  
             # L2 loss
 
-            g_l2_loss_abs, g_l2_loss_rel = cal_l2_losses(
-                pred_traj_gt, pred_traj_gt_rel, pred_traj_fake,
-                pred_traj_fake_rel, loss_mask
-            )
-            ade, ade_l, ade_nl = cal_ade(
-                pred_traj_gt, pred_traj_fake, linear_obj, non_linear_obj,
-                mask if not hyperparameters.output_single_agent else None
-            )
+            g_l2_loss_abs, g_l2_loss_rel = cal_l2_losses(pred_traj_gt, pred_traj_gt_rel, pred_traj_fake,
+                                                         pred_traj_fake_rel, loss_mask)
 
-            fde, fde_l, fde_nl = cal_fde(
-                pred_traj_gt, pred_traj_fake, linear_obj, non_linear_obj,
-                mask if not hyperparameters.output_single_agent else None
-            )
+            ade, ade_l, ade_nl = cal_ade(pred_traj_gt, pred_traj_fake, linear_obj, non_linear_obj,
+                                         mask if not hyperparameters.output_single_agent else None)
+
+            fde, fde_l, fde_nl = cal_fde(pred_traj_gt, pred_traj_fake, linear_obj, non_linear_obj,
+                                         mask if not hyperparameters.output_single_agent else None)
 
             g_l2_losses_abs.append(g_l2_loss_abs.item())
             g_l2_losses_rel.append(g_l2_loss_rel.item())
