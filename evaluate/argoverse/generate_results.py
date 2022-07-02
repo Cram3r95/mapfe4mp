@@ -50,16 +50,62 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--model_path', required=True, type=str)
 parser.add_argument('--num_modes', required=True, default=6, type=int)
 parser.add_argument("--device_gpu", required=True, default=0, type=int)
+parser.add_argument("--split", required=True, default="val", type=str)
 
-dist_around = 40
+# N.B. If you cannot appreciate the difference between groundtruth and our prediction, probably
+# is because the map does not cover the whole groundtruth because the AGENT is driving at high 
+# speed. In this case, increase the dist_around value (e.g. 60, 80, etc.) and in plot_functions
+# represent only the predictions, not map+predictions: 
+# 
+# full_img_cv = cv2.add(img1_bg,img2_fg) -> full_img_cv = img_lanes
+
+dist_around = 80
 dist_rasterized_map = [-dist_around, dist_around, -dist_around, dist_around]
 GENERATE_QUALITATIVE_RESULTS = True
-COMPUTE_METRICS = True
+COMPUTE_METRICS = False
+
+def generate_csv(results_path,ade_list,fde_list,num_seq_list,traj_kind_list,sort=False):
+    """
+    If sort = True, sort by ADE
+    """
+
+    if sort:
+        results_path = os.path.join(results_path,"metrics_sorted_ade.csv")  
+    else:
+        results_path = os.path.join(results_path,"metrics.csv")  
+
+    mean_ade = round(sum(ade_list) / (len(ade_list)),3)
+    mean_fde = round(sum(fde_list) / (len(fde_list)),3)
+
+    with open(results_path, 'w', newline='') as csvfile:
+        csv_writer = csv.writer(csvfile, delimiter=' ', quotechar='|', quoting=csv.QUOTE_MINIMAL)
+
+        header = ['Index','Sequence.csv','Agent_Traj_Kind','ADE','FDE']
+        csv_writer.writerow(header)
+
+        if sort:
+            indeces = np.argsort(ade_list)
+        else:
+            indeces = np.arange(len(ade_list))
+
+        for _,index in enumerate(indeces):
+            traj_kind = traj_kind_list[index]
+            seq_id = num_seq_list[index] 
+            curr_ade = round(ade_list[index],3)
+            curr_fde = round(fde_list[index],3)
+
+            data = [str(index),str(seq_id),traj_kind,curr_ade,curr_fde]
+
+            csv_writer.writerow(data)
+
+        # Write mean ADE and FDE 
+
+        csv_writer.writerow(['-','-','-'])
+        csv_writer.writerow(['Mean',mean_ade,mean_fde])
 
 def evaluate(loader, generator, num_modes, split, current_cuda, pred_len):
     """
     """
-
     assert loader.batch_size == 1
 
     output_all = {}
@@ -68,31 +114,45 @@ def evaluate(loader, generator, num_modes, split, current_cuda, pred_len):
     traj_kind_list = []
     num_seq_list = []
 
+    ade_, fde_ = None, None
+
     data_folder = BASE_DIR+f"/data/datasets/argoverse/motion-forecasting/{split}/data/"
     file_list = glob.glob(os.path.join(data_folder, "*.csv"))
     file_list = [int(name.split("/")[-1].split(".")[0]) for name in file_list]
     print("Data folder: ", data_folder)
-    print("Num files ", len(file_list))
+    num_files = len(file_list)
+    print("Num files ", num_files)
+
+    my_seqs = [2587,4504,6437] # batch_index (corresponds to 2723, 4723, 6735 .csv respectively)
 
     time_per_iteration = float(0)
     aux_time = float(0)
+    limit = -1 # -1 by default to analyze all files of the specified split percentage
 
     with torch.no_grad(): # During inference (regardless the split), gradient calculation is not required
         for batch_index, batch in enumerate(loader):
+            if limit != -1 and (batch_index+1 > limit):
+                break
             print(f"Evaluating batch {batch_index+1}/{len(loader)}")
 
-            if batch_index > 150:
-                break
+            if limit != -1: files_remaining = limit - (batch_index+1)
+            else: files_remaining = num_files - (batch_index+1)
 
-            files_remaining = len(file_list) - batch_index
             start = time.time()
 
+            if batch_index > max(my_seqs):
+                break
+            elif my_seqs and batch_index not in my_seqs:
+                continue
+        
             # Load batch in device
 
             batch = [tensor.cuda(current_cuda) for tensor in batch]
             
             (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel, non_linear_obj,
              loss_mask, seq_start_end, frames, object_cls, obj_id, map_origin, num_seq, norm) = batch
+
+            seq_id = num_seq.cpu().item()
 
             ## Get AGENT (most interesting obstacle) id
 
@@ -108,11 +168,38 @@ def evaluate(loader, generator, num_modes, split, current_cuda, pred_len):
             # pred_traj_fake_rel = torch.repeat_interleave(pred_traj_fake_rel,num_modes,dim=2) # 1,30,1,2 -> 1,30,6,2
             pred_traj_fake_rel = torch.repeat_interleave(pred_traj_fake_rel,num_modes,dim=1) # 30,1,2 -> 30,6,2
 
+            if COMPUTE_METRICS: # Metrics must be in absolute coordinates (either around 0,0 or around map origin)
+                agent_pred_gt = pred_traj_gt[:,agent_idx,:]
+                agent_pred_fake_rel = pred_traj_fake_rel[:,0,:].unsqueeze(dim=1) # TODO: At this moment all modes are the same. Compute Multimodal
+                                                                # ADE/FDE evaluation when we have real multimodality
+                agent_last_obs = obs_traj[-1,agent_idx,:]
+                agent_pred_fake = dataset_utils.relative_to_abs(agent_pred_fake_rel, agent_last_obs) 
+                agent_non_linear_obj = non_linear_obj[agent_idx]
+                agent_linear_obj = 1 - agent_non_linear_obj
+
+                agent_obj_id = obj_id[agent_idx]
+                agent_mask = np.where(agent_obj_id.cpu() == -1, 0, 1)
+                agent_mask = torch.tensor(agent_mask, device=agent_obj_id.device).reshape(-1)
+                
+                ade_, ade_l_, ade_nl_ = cal_ade(agent_pred_gt, agent_pred_fake, agent_linear_obj, agent_non_linear_obj, agent_mask)
+
+                fde_, fde_l_, fde_nl_ = cal_fde(agent_pred_gt, agent_pred_fake, agent_linear_obj, agent_non_linear_obj, agent_mask)
+
+                ade_ = ade_.item() / pred_len
+                fde_ = fde_.item()
+
+                ade_list.append(ade_)
+                fde_list.append(fde_)
+                num_seq_list.append(seq_id)
+                print("ADE, FDE: ", ade_, fde_)
+
+                # If the agent conducts a curve (these trajectories are suppossed to be harder -> Higher ADE and FDE)
+                if agent_non_linear_obj.item(): traj_kind_list.append(1) # Curved trajectory
+                else: traj_kind_list.append(0) # The agent conducts a curve
+
             ## (Optional) Plot results
 
-            seq_id = num_seq.cpu().item()
-
-            if GENERATE_QUALITATIVE_RESULTS and seq_id < 100:
+            if GENERATE_QUALITATIVE_RESULTS:
                 if split == "test":
                     curr_map_origin = map_origin[0]
                     curr_traj_rel = obs_traj_rel
@@ -128,35 +215,8 @@ def evaluate(loader, generator, num_modes, split, current_cuda, pred_len):
                 plot_functions.plot_trajectories(filename,curr_traj_rel,curr_first_obs,
                                                  curr_map_origin,curr_object_class_id_list,dist_rasterized_map,
                                                  rot_angle=-1,obs_len=obs_traj.shape[0],
-                                                 smoothen=False, save=True, pred_trajectories_rel=pred_traj_fake_rel)
-
-            if COMPUTE_METRICS: # Metrics must be in absolute coordinates (either around 0,0 or around map origin)
-                agent_pred_gt = pred_traj_gt[:,agent_idx,:]
-                agent_pred_fake_rel = pred_traj_fake_rel[:,0,:].unsqueeze(dim=1) # TODO: At this moment all modes are the same. Compute Multimodal
-                                                                # ADE/FDE evaluation when we have real multimodality
-                agent_last_obs = obs_traj[-1,agent_idx,:]
-                agent_pred_fake = dataset_utils.relative_to_abs(agent_pred_fake_rel, agent_last_obs) 
-                agent_non_linear_obj = non_linear_obj[agent_idx]
-                agent_linear_obj = 1 - agent_non_linear_obj
-
-                agent_obj_id = obj_id[agent_idx]
-                agent_mask = np.where(agent_obj_id.cpu() == -1, 0, 1)
-                agent_mask = torch.tensor(agent_mask, device=agent_obj_id.device).reshape(-1)
-                
-                ade, ade_l, ade_nl = cal_ade(agent_pred_gt, agent_pred_fake, agent_linear_obj, agent_non_linear_obj, agent_mask)
-
-                fde, fde_l, fde_nl = cal_fde(agent_pred_gt, agent_pred_fake, agent_linear_obj, agent_non_linear_obj, agent_mask)
-
-                ade = ade.item() / pred_len
-                fde = fde.item()
-
-                ade_list.append(ade)
-                fde_list.append(fde)
-                num_seq_list.append(seq_id)
-
-                # If the agent conducts a curve (these trajectories are suppossed to be harder -> Higher ADE and FDE)
-                if agent_non_linear_obj.item(): traj_kind_list.append(1) # Curved trajectory
-                else: traj_kind_list.append(0) # The agent conducts a curve
+                                                 smoothen=False,save=True,pred_trajectories_rel=pred_traj_fake_rel,
+                                                 ade_metric=ade_,fde_metric=fde_)
 
             pred_traj_fake_rel = pred_traj_fake_rel.unsqueeze(dim=0)
 
@@ -171,10 +231,8 @@ def evaluate(loader, generator, num_modes, split, current_cuda, pred_len):
             batch_size, pred_len, num_modes, xy = pred_traj_fake.shape
             pred_traj_fake = pred_traj_fake.view(-1, pred_len, xy) #  (assuming batch_size = 1) num_modes x pred_len x 2 (x,y)
 
-            key = num_seq[0].cpu().item()
-
-            output_all[key] = pred_traj_fake.cpu().numpy()
-            file_list.remove(key)
+            output_all[seq_id] = pred_traj_fake.cpu().numpy()
+            file_list.remove(seq_id)
 
             end = time.time()
             aux_time += (end-start)
@@ -185,9 +243,8 @@ def evaluate(loader, generator, num_modes, split, current_cuda, pred_len):
 
         # Add sequences not loaded in dataset
 
-        file_list = []
         try:
-            print("No processed files: {}".format(len(file_list.keys())))
+            print("No processed files: {}".format(len(file_list)))
         except:
             print("All files have been processed")
 
@@ -212,12 +269,13 @@ def main(args):
         config.base_dir = BASE_DIR
         config.device_gpu = args.device_gpu
 
-    config.dataset.split = "val" # test 
+    config.dataset.split = args.split 
     config.dataset.split_percentage = 1.0 # To generate the final results, must be 1
     config.dataset.batch_size = 1 # Better to build the h5 results file
     config.dataset.num_workers = 0
     config.dataset.class_balance = -1.0 # Do not consider class balance in the split test
     config.dataset.shuffle = False
+    config.dataset.data_augmentation = False
     if config.dataset.split == "test": # In test, 0 (we do not have the gt). Otherwise, 30
         config.hyperparameters.pred_len = 0 
     else:
@@ -277,36 +335,12 @@ def main(args):
 
         generate_forecasting_h5(output_all, results_path)
 
-    else: # val or train
-        # Save ADE and FDE values in CSVç
+    elif COMPUTE_METRICS: # val or train
 
-        mean_ade = round(sum(ade_list) / (len(ade_list)),3)
-        mean_fde = round(sum(fde_list) / (len(fde_list)),3)
+        # Write results (ade and fde with the corresponding trajectory type) in CSV
 
-        # Write ade and fde values in CSV
-
-        with open(results_path+'/metrics.csv', 'w', newline='') as csvfile:
-            csv_writer = csv.writer(csvfile, delimiter=' ', quotechar='|', quoting=csv.QUOTE_MINIMAL)
-
-            header = ['Index','Sequence.csv','Agent_Traj_Kind','ADE','FDE']
-            csv_writer.writerow(header)
-
-            sorted_indeces = np.argsort(ade_list)
-
-            for _,sorted_index in enumerate(sorted_indeces):
-                traj_kind = traj_kind_list[sorted_index]
-                seq_id = num_seq_list[sorted_index].item() 
-                curr_ade = round(ade_list[sorted_index],3)
-                curr_fde = round(fde_list[sorted_index],3)
-
-                data = [str(sorted_index),str(seq_id),traj_kind,curr_ade,curr_fde]
-
-                csv_writer.writerow(data)
-
-            # Write mean ADE and FDE 
-
-            csv_writer.writerow(['-','-','-'])
-            csv_writer.writerow(['Mean',mean_ade,mean_fde])
+        generate_csv(results_path,ade_list,fde_list,num_seq_list,traj_kind_list)
+        generate_csv(results_path,ade_list,fde_list,num_seq_list,traj_kind_list,sort=True)
 
 if __name__ == '__main__':
     args = parser.parse_args()
@@ -315,5 +349,5 @@ if __name__ == '__main__':
 """
 python evaluate/argoverse/generate_results.py \
 --model_path "save/argoverse/social_lstm_mhsa/best_unimodal_100_percent/argoverse_motion_forecasting_dataset_0_with_model.pt" \
---num_modes 6 --device_gpu 0
+--num_modes 6 --device_gpu 1 --split "val"
 """

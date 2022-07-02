@@ -39,7 +39,7 @@ COLORS_MM = ["darkviolet", "orange", "chartreuse"]
 
                         # Observation / Prediction (GT) / Prediction (Model)                   
                         # (color, linewidth, type, size, transparency)
-MARKER_DICT = {"AGENT":  (("b",6,"o",15,1.0),("c",6,"",15,0.5),("darkviolet",6,"D",15,1.0)),
+MARKER_DICT = {"AGENT":  (("b",6,"o",12,1.0),("c",6,"*",12,0.5),("darkviolet",6,"D",12,1.0)),
                "OTHER":  (("g",4,"o",10,1.0),("g",4,"*",10,0.5)),
                "AV":     (("r",4,"o",10,1.0),("m",4,"*",10,1.0))} 
 
@@ -72,18 +72,6 @@ def translate_object_type(int_id):
     else:
         return "OTHER"
 
-def renderize_image(fig_plot, new_shape=(600,600),normalize=True):
-    """
-    """
-    fig_plot.canvas.draw()
-
-    img_cv = cv2.cvtColor(np.asarray(fig_plot.canvas.buffer_rgba()), cv2.COLOR_RGBA2BGR)
-    img_rsz = cv2.resize(img_cv, new_shape)                
-    
-    if normalize:
-        img_rsz = img_rsz / 255.0 # Normalize from 0 to 1
-    return img_rsz
-
 def change_bg_color(img):
     """
     """
@@ -93,9 +81,9 @@ def change_bg_color(img):
 
 # Main plot function
 
-def plot_trajectories(filename,traj_rel,first_obs,map_origin,object_class_id_list,offset,
+def plot_trajectories(filename,traj_rel,first_obs,map_origin,object_class_id_list,dist_rasterized_map,
                       rot_angle=-1,obs_len=20,smoothen=False,save=False,data_aug=False,
-                      pred_trajectories_rel=torch.zeros((0))):
+                      pred_trajectories_rel=torch.zeros((0)),ade_metric=None,fde_metric=None):
     """
     N.B. All inputs must be torch tensors in CPU, not GPU (in order to plot the trajectories)!
 
@@ -122,19 +110,27 @@ def plot_trajectories(filename,traj_rel,first_obs,map_origin,object_class_id_lis
 
     xcenter, ycenter = map_origin[0].item(), map_origin[1].item()
 
-    x_min = xcenter + offset[0]
-    x_max = xcenter + offset[1]
-    y_min = ycenter + offset[2]
-    y_max = ycenter + offset[3]
+    x_min = xcenter + dist_rasterized_map[0]
+    x_max = xcenter + dist_rasterized_map[1]
+    y_min = ycenter + dist_rasterized_map[2]
+    y_max = ycenter + dist_rasterized_map[3]
 
     plot_object_trajectories = True
     plot_object_heads = True
 
-    fig, ax = plt.subplots(figsize=(6,6), facecolor="white")
+    fig, ax = plt.subplots(figsize=(6,6), facecolor="white", frameon=False)
     plt.xlim(x_min, x_max)
     plt.ylim(y_min, y_max)
     plt.axis("off") # Comment if you want to generate images with axis
-
+    if ade_metric and fde_metric:
+        font = {
+                'family': 'serif',
+                'color':  'blue',
+                'weight': 'normal',
+                'size': 16,
+               }
+        plt.title(f"ADE: {round(ade_metric,3)} ; FDE: {round(fde_metric,3)}", \
+                  fontdict=font, backgroundcolor= 'silver')
     t0 = time.time()
 
     object_type_tracker: Dict[int, int] = defaultdict(int)
@@ -261,23 +257,31 @@ def plot_trajectories(filename,traj_rel,first_obs,map_origin,object_class_id_lis
     else: # -1 (default)
         rot_angle = 0
 
-    height, width = img_map.shape[:-1]
+    ## Foreground (Trajectories)
 
-    ## Foreground
+    ### TODO: Is it possible to optimize this saving without padding? save -> read -> destroy
 
-    img_lanes = renderize_image(fig,new_shape=(width,height),normalize=False)
-    img2gray = cv2.cvtColor(img_lanes,cv2.COLOR_BGR2GRAY)
+    plt.savefig("aux.png", bbox_inches='tight', facecolor=fig.get_facecolor(), 
+                edgecolor='none', pad_inches=0)
+    img_trajectories = cv2.imread("aux.png")
+    os.system("rm -rf aux.png")
+    img_trajectories = cv2.resize(img_trajectories, img_map.shape[:2][::-1]) # ::-1 to invert (we need width,height, not height,width!) 
+    img2gray = cv2.cvtColor(img_trajectories,cv2.COLOR_BGR2GRAY)
     ret,mask = cv2.threshold(img2gray,253,255,cv2.THRESH_BINARY_INV)
-    img2_fg = cv2.bitwise_and(img_lanes,img_lanes,mask=mask)
+    img2_fg = cv2.bitwise_and(img_trajectories,img_trajectories,mask=mask)
 
-    ## Background
+    ## Background (Map lanes)
 
     mask_inv = cv2.bitwise_not(mask)
     img1_bg = cv2.bitwise_and(img_map,img_map,mask=mask_inv)
 
     ## Merge
-
-    full_img_cv = cv2.add(img1_bg,img2_fg)
+ 
+    if abs(dist_rasterized_map[0]) == 40: # Right now the preprocessed map images are generated
+        # based on a [40,-40,40,-40] top view image. Then, we can merge the information
+        full_img_cv = cv2.add(img1_bg,img2_fg)
+    else: # TODO: Preprocess here the map? That would be too slow ...
+        full_img_cv = img_trajectories
 
     if save:
         curr_seq = filename.split('/')[-1].split('.')[0]

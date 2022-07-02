@@ -61,7 +61,7 @@ def draw_lane_polygons(
 
 def map_generator(curr_num_seq,
                   origin_pos,
-                  offset,
+                  dist_rasterized_map,
                   avm,
                   city_name,
                   show: bool = False,
@@ -78,10 +78,10 @@ def map_generator(curr_num_seq,
     plot_local_lane_polygons = False
 
     xcenter, ycenter = origin_pos[0], origin_pos[1]
-    x_min = xcenter + offset[0]
-    x_max = xcenter + offset[1]
-    y_min = ycenter + offset[2]
-    y_max = ycenter + offset[3]
+    x_min = xcenter + dist_rasterized_map[0]
+    x_max = xcenter + dist_rasterized_map[1]
+    y_min = ycenter + dist_rasterized_map[2]
+    y_max = ycenter + dist_rasterized_map[3]
 
     # Get map info 
 
