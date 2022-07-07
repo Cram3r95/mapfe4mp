@@ -41,14 +41,16 @@ class EncoderLSTM(nn.Module):
         if bidirectional: self.D = 2
         else: self.D = 1
 
-        self.spatial_embedding = nn.Linear(self.data_dim, self.embedding_dim)
+        # self.spatial_embedding = nn.Linear(self.data_dim, self.embedding_dim)
+        self.conv1 = nn.Conv1d(self.data_dim,self.h_dim,kernel_size=3,
+                               padding=1,padding_mode="reflect")
         
         # TODO: Spatial embedding required?
 
-        # self.encoder = nn.LSTM(self.embedding_dim, self.h_dim, 1)#, bidirectional=bidirectional)
-        # self.encoder = nn.LSTM(self.embedding_dim, self.h_dim, num_layers, bidirectional=bidirectional)
+        # self.encoder = nn.LSTM(self.data_dim, self.h_dim, num_layers, 
+        #                        bidirectional=bidirectional, dropout=dropout)
 
-        self.encoder = nn.LSTM(self.data_dim, self.h_dim, num_layers, 
+        self.encoder = nn.LSTM(self.h_dim, self.h_dim, num_layers, 
                                bidirectional=bidirectional, dropout=dropout)
 
     def init_hidden(self, batch):
@@ -70,8 +72,9 @@ class EncoderLSTM(nn.Module):
         # obs_traj_embedding = F.leaky_relu(self.spatial_embedding(obs_traj.contiguous().view(-1, 2)))
         # obs_traj_embedding = obs_traj_embedding.view(-1, n_agents, self.embedding_dim)
         # output, state = self.encoder(obs_traj_embedding, state)
-
-        output, state = self.encoder(obs_traj, state)
+ 
+        obs_traj = self.conv1(obs_traj.permute(1,2,0))
+        output, state = self.encoder(obs_traj.permute(2,0,1), state)
 
         if self.D == 2: # LSTM bidirectional
             final_h = state[0][-2,:,:] # Take the forward information from the last stacked LSTM layer

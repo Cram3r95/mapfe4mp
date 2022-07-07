@@ -59,7 +59,7 @@ parser.add_argument("--split", required=True, default="val", type=str)
 # 
 # full_img_cv = cv2.add(img1_bg,img2_fg) -> full_img_cv = img_lanes
 
-dist_around = 80
+dist_around = 40
 dist_rasterized_map = [-dist_around, dist_around, -dist_around, dist_around]
 GENERATE_QUALITATIVE_RESULTS = True
 COMPUTE_METRICS = False
@@ -123,7 +123,11 @@ def evaluate(loader, generator, num_modes, split, current_cuda, pred_len):
     num_files = len(file_list)
     print("Num files ", num_files)
 
-    my_seqs = [2587,4504,6437] # batch_index (corresponds to 2723, 4723, 6735 .csv respectively)
+    # Very hard (batch_index/csv): 4504/4723, 
+
+    #my_seqs = [21866,36005,29100,27919,40897,32509] # Write here the index (assuming batch_size = 1), not the sequence.csv
+                                                    # See index and metrics in results/your_model/your_split/metrics.csv
+    my_seqs = [4504]
 
     time_per_iteration = float(0)
     aux_time = float(0)
@@ -133,17 +137,19 @@ def evaluate(loader, generator, num_modes, split, current_cuda, pred_len):
         for batch_index, batch in enumerate(loader):
             if limit != -1 and (batch_index+1 > limit):
                 break
-            print(f"Evaluating batch {batch_index+1}/{len(loader)}")
 
             if limit != -1: files_remaining = limit - (batch_index+1)
             else: files_remaining = num_files - (batch_index+1)
 
+            if my_seqs: # Analyze some specific sequences
+                if batch_index > max(my_seqs):
+                    break
+                elif batch_index not in my_seqs:
+                    continue
+            
             start = time.time()
 
-            if batch_index > max(my_seqs):
-                break
-            elif my_seqs and batch_index not in my_seqs:
-                continue
+            print(f"Evaluating batch {batch_index+1}/{len(loader)}")
         
             # Load batch in device
 
@@ -349,5 +355,5 @@ if __name__ == '__main__':
 """
 python evaluate/argoverse/generate_results.py \
 --model_path "save/argoverse/social_lstm_mhsa/best_unimodal_100_percent/argoverse_motion_forecasting_dataset_0_with_model.pt" \
---num_modes 6 --device_gpu 1 --split "val"
+--num_modes 6 --device_gpu 1 --split "train"
 """

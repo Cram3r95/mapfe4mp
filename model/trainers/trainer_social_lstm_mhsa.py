@@ -46,6 +46,7 @@ scaler = GradScaler()
 current_cuda = None
 absolute_root_folder = None
 
+CHECK_ACCURACY = True
 MAX_TIME_TO_CHECK_TRAIN = 120 # minutes
 MAX_TIME_TO_CHECK_VAL = 120 # minutes
 MAX_TIME_PATIENCE_LR_SCHEDULER = 120 # 60 # minutes
@@ -401,7 +402,7 @@ def model_trainer(config, logger):
 
             # Check training metrics
 
-            if current_iteration > 0 and current_iteration % hyperparameters.checkpoint_train_every == 0:
+            if CHECK_ACCURACY and current_iteration > 0 and current_iteration % hyperparameters.checkpoint_train_every == 0:
                 logger.info('Checking stats on train ...')
                 split = "train"
 
@@ -419,7 +420,7 @@ def model_trainer(config, logger):
 
             # Check validation metrics
 
-            if current_iteration > 0 and current_iteration % hyperparameters.checkpoint_val_every == 0:
+            if CHECK_ACCURACY and current_iteration > 0 and current_iteration % hyperparameters.checkpoint_val_every == 0:
                 logger.info('Checking stats on val ...')
                 split = "val"
 
@@ -670,8 +671,8 @@ def generator_step(hyperparameters, batch, generator, optimizer_g,
             w_loss = w_loss[:b, :]
             # loss_ade, loss_fde = calculate_mse_loss(pred_traj_gt_rel, pred_traj_fake_rel, loss_f["mse"], hyperparameters.loss_type_g)
             # loss_nll = calculate_nll_loss(pred_traj_gt_rel, pred_traj_fake_rel,loss_f["nll"])
-            loss_ade, loss_fde = calculate_mse_loss(pred_traj_gt, pred_traj_fake, loss_f["mse"], hyperparameters.loss_type_g)
-            loss_nll = calculate_nll_loss(pred_traj_gt, pred_traj_fake,loss_f["nll"])
+            loss_ade, loss_fde = calculate_mse_loss(pred_traj_gt, pred_traj_fake, loss_f["mse"])
+            loss_nll = calculate_nll_loss(pred_traj_gt, pred_traj_fake, loss_f["nll"])
 
             loss = hyperparameters.loss_ade_weight*loss_ade + \
                    hyperparameters.loss_fde_weight*loss_fde + \

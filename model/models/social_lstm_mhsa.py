@@ -25,7 +25,6 @@ import torchvision.transforms.functional as TF
 
 from model.modules.encoders import EncoderLSTM as Encoder
 from model.modules.attention import MultiHeadAttention
-from model.modules.decoders import DecoderLSTM as Decoder
 from model.modules.decoders import TemporalDecoderLSTM as TemporalDecoder
 
 # Aux functions
@@ -44,6 +43,7 @@ class TrajectoryGenerator(nn.Module):
         # Aux variables
 
         self.current_cuda = current_cuda
+        data_dim = 2 # xy
         
         # Encoder
 
@@ -68,8 +68,8 @@ class TrajectoryGenerator(nn.Module):
         assert config_mhsa.h_dim == config_encoder_lstm.h_dim
         self.context_h_dim = config_mhsa.h_dim
 
-        mlp_context_input = config_encoder_lstm.h_dim*2 # *2 since we want to concat of social context and encoded trajectories
-        self.lnc = nn.LayerNorm(mlp_context_input) # Layer normalization context decoder
+        mlp_context_input = config_encoder_lstm.h_dim*2 # *2 since we want to concat the encoded trajectories and social context 
+        self.lnd = nn.LayerNorm(mlp_context_input) # Layer normalization context decoder
 
         # Decoder
 
@@ -77,7 +77,6 @@ class TrajectoryGenerator(nn.Module):
 
         assert config_decoder_lstm.h_dim == config_encoder_lstm.h_dim
 
-        #mlp_decoder_context_dims = [mlp_context_input, config_decoder_lstm.mlp_dim, config_decoder_lstm.h_dim]
         mlp_decoder_context_dims = [mlp_context_input, *config_decoder_lstm.mlp_dim, config_decoder_lstm.h_dim]
         self.mlp_decoder_context = make_mlp(mlp_decoder_context_dims)
 
@@ -90,7 +89,7 @@ class TrajectoryGenerator(nn.Module):
                                        dropout=config_decoder_lstm.dropout,
                                        current_cuda=self.current_cuda)
 
-    def forward(self, obs_traj, obs_traj_rel, start_end_seq, agent_idx=None):
+    def old_forward(self, obs_traj, obs_traj_rel, start_end_seq, agent_idx=None):
         """
         Assuming obs_len = 20, pred_len = 30:
 
@@ -141,18 +140,18 @@ class TrajectoryGenerator(nn.Module):
         mlp_decoder_context_input = torch.cat(
             [
                 final_encoder_h.contiguous().view(-1, self.context_h_dim), 
-                attn_s.contiguous().view(-1, self.context_h_dim)
+                attn_s.contiguous().view(-1, self.context_h_dim) 
             ],
             dim=1
         ) 
 
         # Take the encoded trajectory and attention regarding only the AGENT for each sequence
-        # if NOT none
 
         if agent_idx is not None:
             mlp_decoder_context_input = mlp_decoder_context_input[agent_idx,:]
 
-        decoder_h = self.mlp_decoder_context(self.lnc(mlp_decoder_context_input))
+        decoder_h = self.mlp_decoder_context(self.lnd(mlp_decoder_context_input))
+
         decoder_h = torch.unsqueeze(decoder_h, 0) 
 
         # decoder_c = torch.zeros(tuple(decoder_h.shape)).cuda(self.current_cuda)
@@ -170,7 +169,80 @@ class TrajectoryGenerator(nn.Module):
 
         # Decode trajectories
 
-        # pred_traj_fake_rel = self.decoder(last_pos, last_pos_rel, state_tuple)
+        pred_traj_fake_rel = self.decoder(last_pos, last_pos_rel, decoder_h)
+        
+        return pred_traj_fake_rel
+
+    def forward(self, obs_traj, obs_traj_rel, start_end_seq, agent_idx=None):
+        """
+        Assuming obs_len = 20, pred_len = 30:
+
+        n: number of objects in all the scenes of the batch
+        b: batch
+        obs_traj: (20,n,2)
+        obs_traj_rel: (20,n,2)
+        start_end_seq: (b,2)
+        agent_idx: (b, 1) -> index of AGENT (of interest) in every sequence.
+            None: trajectories for every object in the scene will be generated
+            Not None: just trajectories for the agent in the scene will be generated
+        -----------------------------------------------------------------------------
+        pred_traj_fake_rel:
+            (30,n,2) -> if agent_idx is None
+            (30,b,2)
+        """
+
+        batch_features = []
+
+        for start, end in start_end_seq.data:
+            curr_obs_traj_rel = obs_traj_rel[:,start:end,:] # 20 x num_agents x 2
+
+            # curr_obs_traj_rel = self.conv1(curr_obs_traj_rel)
+            # pdb.set_trace()
+            curr_final_encoder_h = self.encoder(curr_obs_traj_rel) 
+            curr_final_encoder_h = self.lne(curr_final_encoder_h)
+            curr_final_encoder_h = torch.unsqueeze(curr_final_encoder_h, 0) # Required by Attention
+
+            curr_social_attn = self.sattn(
+                                          curr_final_encoder_h, # Key
+                                          curr_final_encoder_h, # Query
+                                          curr_final_encoder_h, # Value
+                                          None
+                                         )
+
+            concat_features = torch.cat(
+                [
+                    curr_final_encoder_h.contiguous().view(-1,self.context_h_dim),
+                    curr_social_attn.contiguous().view(-1,self.context_h_dim)
+                ],
+                dim=1
+            )
+
+            batch_features.append(concat_features)
+
+        # Here num_inputs_decoder refers to the number of sources of information. If we are computing
+        # for each scene (sequence) the encoded trajectories and the social attention, we have 2, 
+        # so the second dimension is 2 · hidden_dim (ej: 2 · 256 -> 512) 
+        mlp_decoder_context_input = torch.cat(batch_features,axis=0) # batch_size · num_agents x num_inputs_decoder · hidden_dim
+
+        # Take the encoded trajectory and attention regarding only the AGENT for each sequence
+
+        if agent_idx is not None:
+            mlp_decoder_context_input = mlp_decoder_context_input[agent_idx,:]
+
+        decoder_h = self.mlp_decoder_context(self.lnd(mlp_decoder_context_input))
+        decoder_h = torch.unsqueeze(decoder_h, 0) 
+
+        # Get agent last observations (both abs (around 0,0) and rel-rel)
+
+        if agent_idx is not None: # for single agent prediction
+            last_pos = obs_traj[:, agent_idx, :]
+            last_pos_rel = obs_traj_rel[:, agent_idx, :]
+        else:
+            last_pos = obs_traj[-1, :, :]
+            last_pos_rel = obs_traj_rel[-1, :, :]
+
+        # Decode trajectories
+
         pred_traj_fake_rel = self.decoder(last_pos, last_pos_rel, decoder_h)
         
         return pred_traj_fake_rel

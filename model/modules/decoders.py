@@ -146,11 +146,10 @@ class TemporalDecoderLSTM(nn.Module):
         decoder_h = decoder_h.repeat_interleave(repeats=self.D*self.num_layers,dim=0) # self.D*self.num_layers x b x self.h_dim
         decoder_c = torch.zeros(tuple(decoder_h.shape)).cuda(self.current_cuda)
         state_tuple = (decoder_h, decoder_c)
-
         pred_traj_fake_rel = []
         decoder_input = F.leaky_relu(self.spatial_embedding(self.ln1(traj_rel.contiguous().view(num_agents, -1))))
         decoder_input = decoder_input.contiguous().view(1, num_agents, self.embedding_dim)
-
+        #pdb.set_trace()
         for _ in range(self.pred_len):
             output, state_tuple = self.decoder(decoder_input, state_tuple)
  

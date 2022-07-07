@@ -1,8 +1,7 @@
 #!/usr/bin/env python3.8
 # -*- coding: utf-8 -*-
 
-## Preprocess the raw data. Get .npy files in order to avoid processing
-## the trajectories and map information each time
+## Test model utils
 
 """
 Created on Wed May 18 17:59:06 2022

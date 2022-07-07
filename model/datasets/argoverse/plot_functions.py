@@ -261,10 +261,10 @@ def plot_trajectories(filename,traj_rel,first_obs,map_origin,object_class_id_lis
 
     ### TODO: Is it possible to optimize this saving without padding? save -> read -> destroy
 
-    plt.savefig("aux.png", bbox_inches='tight', facecolor=fig.get_facecolor(), 
+    plt.savefig("evaluate/argoverse/aux.png", bbox_inches='tight', facecolor=fig.get_facecolor(), 
                 edgecolor='none', pad_inches=0)
-    img_trajectories = cv2.imread("aux.png")
-    os.system("rm -rf aux.png")
+    img_trajectories = cv2.imread("evaluate/argoverse/aux.png")
+    os.system("rm -rf evaluate/argoverse/aux.png")
     img_trajectories = cv2.resize(img_trajectories, img_map.shape[:2][::-1]) # ::-1 to invert (we need width,height, not height,width!) 
     img2gray = cv2.cvtColor(img_trajectories,cv2.COLOR_BGR2GRAY)
     ret,mask = cv2.threshold(img2gray,253,255,cv2.THRESH_BINARY_INV)
