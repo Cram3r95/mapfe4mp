@@ -22,26 +22,15 @@ Please cite this work if you use our code or ideas.
 }
 ```
 
+## Get Started and Usage
 
-## Requirements
+Tested in Ubuntu 16.04.
 
 If available, check `requirements.txt`
 
-- OpenCV==4.1.1
-- YAML
-- ProDict
-- torch (1.8.0+cu111)
-- torchfile (0.1.0)
-- torchsummary (1.5.1)
-- torchtext (0.5.0)
-- torchvision (0.9.0+cu111)
-
-## Get Started and Usage
-More details soon ...
-
 ```
-conda create --name efficient-goals-motion-prediction python=3.8 \
-conda install -n carlos_efficient-goals-motion-prediction ipykernel --update-deps --force-reinstall
+conda create --name mapfe4mp_env python=3.8 \
+conda install -n mapfe4mp ipykernel --update-deps --force-reinstall
 ```
 ```
 python3 -m pip install --upgrade pip \
@@ -54,6 +43,9 @@ pip install \
     pyyaml \
     torchvision \
     tensorboard \
+    glob2 \
+    matplotlib \
+    sklearn
     torchstat
 ```
 Download argoverse-api (1.0) in another folder (out of this directory). \
@@ -62,6 +54,7 @@ Go to the argoverse-api folder:
 pip install -e . (N.B. You must have the conda environment activated in order to have argoverse as a Python package of your environment)
 ```
 
+More details soon ...
 
 ## Qualitative results
 Coming soon ...

@@ -30,7 +30,5 @@ data/datasets.tar.gz
 save/*.pt
 save/argoverse/*
 
-# evaluate/**/*.ipynb
-evaluate/**/*.h5
-
-results/
+# Results file to submit to the Leaderboard
+results/**/*.h5 
