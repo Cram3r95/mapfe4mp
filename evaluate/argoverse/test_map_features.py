@@ -14,10 +14,12 @@ import sys
 import time
 import time
 import pandas as pd
+import git
 
 # Custom imports
 
-BASE_DIR = "/home/denso/carlos_vsr_workspace/mapfe4mp"
+repo = git.Repo('.', search_parent_directories=True)
+BASE_DIR = repo.working_tree_dir
 sys.path.append(BASE_DIR)
 
 from model.datasets.argoverse.map_functions import MapFeaturesUtils
@@ -43,7 +45,7 @@ mode = "test"
 split = "val"
 seq = "4723"
 
-seq_path = f"/home/denso/carlos_vsr_workspace/mapfe4mp/data/datasets/argoverse/motion-forecasting/{split}/data/{seq}.csv"
+seq_path = f"{BASE_DIR}/data/datasets/argoverse/motion-forecasting/{split}/data/{seq}.csv"
 df = pd.read_csv(seq_path, dtype={"TIMESTAMP": str})
 
 # Get social and map features for the agent

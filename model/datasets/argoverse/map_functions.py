@@ -8,15 +8,12 @@ Created on Mon Feb 7 12:33:19 2022
 
 # General purpose imports
 
-import random
-import math
 import pdb
-import copy
-import copy
 import time
 import pdb
 import os
-from collections import defaultdict
+import git
+
 from typing import Any, Dict, List, Tuple, Union
 from shapely.geometry import LineString, Point, Polygon
 from shapely.ops import unary_union
@@ -40,6 +37,9 @@ from argoverse.utils.centerline_utils import (
 )
 
 #######################################
+
+repo = git.Repo('.', search_parent_directories=True)
+BASE_DIR = repo.working_tree_dir
 
 # Aux functions
 
@@ -496,7 +496,7 @@ class MapFeaturesUtils:
             plt.title(f"Number of candidates = {len(candidate_centerlines)}")
             #plt.show()
             
-            filename = "/home/denso/carlos_vsr_workspace/mapfe4mp/evaluate/argoverse/test_centerlines.png"
+            filename = BASE_DIR+"/evaluate/argoverse/test_centerlines.png"
             plt.savefig(filename, bbox_inches='tight', facecolor=fig.get_facecolor(), 
                 edgecolor='none', pad_inches=0)
             #pdb.set_trace()

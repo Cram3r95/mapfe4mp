@@ -15,8 +15,10 @@ import sys
 import yaml
 from prodict import Prodict
 import os
+import git
 
-BASE_DIR = "/home/denso/carlos_vsr_workspace/mapfe4mp"
+repo = git.Repo('.', search_parent_directories=True)
+BASE_DIR = repo.working_tree_dir
 sys.path.append(BASE_DIR)
 
 # Custom imports
@@ -35,7 +37,6 @@ with open(r'../config/config_social_lstm_mhsa.yml') as config:
 splits_to_process = dict({"train":[True,1.0],
                           "val":[False,1.0],
                           "test":[False,1.0]})
-
 
 for k,v in splits_to_process.items():
     if v[0]:
