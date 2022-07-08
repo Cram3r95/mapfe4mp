@@ -45,7 +45,8 @@ pip install \
     tensorboard \
     glob2 \
     matplotlib \
-    sklearn
+    sklearn \
+    gitpython \
     torchstat
 ```
 Download argoverse-api (1.0) in another folder (out of this directory). \

@@ -1,6 +1,6 @@
-# LSTM based Encoder-Decoder with Multi-Head Self Attention configuration file
+## LSTM based Encoder-Decoder with Multi-Head Self Attention configuration file
 
-# Model hyperparameters
+# Dataset & HW
 
 use_gpu: 1
 device_gpu: 0 # Default CUDA device
@@ -8,7 +8,7 @@ dataset_name: argoverse_motion_forecasting_dataset
 dataset:
     path: data/datasets/argoverse/motion-forecasting/
     split: "train"
-    batch_size: 1024
+    batch_size: 8
     num_workers: 0
     start_from_percentage: 0.0 # By default, 0. If you want to analize a particular bunch of files (e.g. from 25 % to 50 %)
                                # then write here 0.25 and in split_percentage 0.25
@@ -20,6 +20,9 @@ dataset:
                         # sequence regardless if it is straight or curved)
     preprocess_data: False
     save_data: False
+
+# Model hyperparameters
+
 optim_parameters:
     g_learning_rate: 1.0e-3
     g_weight_decay: 0
@@ -36,7 +39,7 @@ hyperparameters:
                            # are observed for our AGENT
     output_single_agent: True
 
-    num_epochs: 100
+    num_epochs: 50
     print_every: 50
     checkpoint_name: "0"                      
     checkpoint_val_percentage: 0.3 # 0.1 # (0 - 1) Check accuracy in validation split every
@@ -57,10 +60,12 @@ hyperparameters:
     g_steps: 1
     clipping_threshold_g: 1.1
     
-    output_dir: "save/argoverse/social_lstm_mhsa/exp11"
+    save_root_dir: "save/argoverse"
+    exp_name: "exp1"
+    output_dir: # To be filled in the code (save_root_dir/model/split_percentage/exp)
     checkpoint_start_from:
     exp_description: "10 % dataset (both train and val).
-                      Batch size = 1024.
+                      Batch size = 2048.
                       Include data augmentation (with rotation). 
                       New forward -> Add conv 1d.
                       Ensure all curved trajectories are analyzed.
@@ -79,6 +84,7 @@ hyperparameters:
 # Model
 
 model:
+    name: "social_lstm_mhsa"
     generator:
         encoder_lstm:
             input_len: *obs_len # Must match with num observations
@@ -100,3 +106,5 @@ model:
             bidirectional: False
             mlp_dim: [64] # Always in list format, even if it is a single number
             dropout: *dropout
+
+

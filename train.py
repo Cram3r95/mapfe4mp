@@ -12,9 +12,7 @@ Created on Sun Mar 06 23:47:19 2022
 
 import sys
 import yaml
-from prodict import Prodict
-from datetime import datetime
-from pathlib import Path
+import git
 import logging
 import os
 import sys
@@ -22,15 +20,21 @@ import argparse
 import importlib
 import pdb
 
+from prodict import Prodict
+from datetime import datetime
+
 #######################################
 
-BASE_DIR = "/home/denso/carlos_vsr_workspace/mapfe4mp"
+repo = git.Repo('.', search_parent_directories=True)
+BASE_DIR = repo.working_tree_dir
 sys.path.append(BASE_DIR)
 
 TRAINER_LIST = [
                 "social_lstm_mhsa",
-                "social_set_transformer_mm",
-                "social_set_transformer_goals_mm"
+                "social_lstm_mhsa_mm"
+                "social_set_transformer",
+                "social_set_transformer_mm"
+                "social_latent_set_transformer_goals_mm"
                ]
 
 def create_logger(file_path):
@@ -83,17 +87,23 @@ if __name__ == "__main__":
         config["device_gpu"] = args.device_gpu
 
         config["base_dir"] = BASE_DIR
-        exp_path = os.path.join(config["base_dir"], config["hyperparameters"]["output_dir"])   
-        route_path = exp_path + "/config_file.yml"
 
+        split_percentage_str = str(100*config["dataset"]["split_percentage"]) + "_percent" 
+        config["hyperparameters"]["output_dir"] = os.path.join(config["hyperparameters"]["save_root_dir"],
+                                                               config["model"]["name"],
+                                                               split_percentage_str,
+                                                               config["hyperparameters"]["exp_name"])
+
+        route_path = config["hyperparameters"]["output_dir"] + "/config_file.yml"
+  
         if args.from_exp and os.path.isdir(args.from_exp): # Overwrite checkpoint_start_from
             model = config["dataset_name"] + "_" + args.num_ckpt + "_with_model.pt"
 
             config["hyperparameters"]["checkpoint_start_from"] = os.path.join(args.from_exp,model)
 
-        if not os.path.exists(exp_path):
-            print("Create experiment path: ", exp_path)
-            os.makedirs(exp_path) # makedirs creates intermediate folders
+        if not os.path.exists(config["hyperparameters"]["output_dir"]):
+            print("Create experiment path: ", config["hyperparameters"]["output_dir"])
+            os.makedirs(config["hyperparameters"]["output_dir"]) # makedirs creates intermediate folders
 
         with open(route_path,'w') as yaml_file:
             yaml.dump(config, yaml_file, default_flow_style=False)
@@ -103,7 +113,7 @@ if __name__ == "__main__":
     now = datetime.now()
     time = now.strftime("%H:%M:%S")
 
-    logger = create_logger(os.path.join(exp_path, f"{config.dataset_name}_{time}.log"))
+    logger = create_logger(os.path.join(config["hyperparameters"]["output_dir"], f"{config.dataset_name}_{time}.log"))
     logger.info("Config file: {}".format(config_path))
 
     # Modify some variables of the configuration given input arguments

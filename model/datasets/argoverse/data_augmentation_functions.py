@@ -154,7 +154,7 @@ def rotate_traj(traj,angle,output_shape=(20,2)):
     """
     """
 
-    angle_rad = torch.deg2rad(torch.tensor(angle))
+    angle_rad = torch.deg2rad(torch.tensor(angle).float())
 
     c, s = torch.cos(angle_rad), torch.sin(angle_rad)
     R = torch.tensor([[c,-s],  # Rot around the map z-axis
