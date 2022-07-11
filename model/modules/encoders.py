@@ -44,6 +44,8 @@ class EncoderLSTM(nn.Module):
         # self.spatial_embedding = nn.Linear(self.data_dim, self.embedding_dim)
         self.conv1 = nn.Conv1d(self.data_dim,self.h_dim,kernel_size=3,
                                padding=1,padding_mode="reflect")
+        # self.conv2 = nn.Conv1d(self.h_dim,self.h_dim,kernel_size=3,
+        #                        padding=1,padding_mode="reflect")
         
         # TODO: Spatial embedding required?
 
@@ -72,7 +74,7 @@ class EncoderLSTM(nn.Module):
         # obs_traj_embedding = F.leaky_relu(self.spatial_embedding(obs_traj.contiguous().view(-1, 2)))
         # obs_traj_embedding = obs_traj_embedding.view(-1, n_agents, self.embedding_dim)
         # output, state = self.encoder(obs_traj_embedding, state)
- 
+        pdb.set_trace()
         obs_traj = self.conv1(obs_traj.permute(1,2,0))
         output, state = self.encoder(obs_traj.permute(2,0,1), state)
 

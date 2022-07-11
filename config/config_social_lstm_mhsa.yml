@@ -39,7 +39,7 @@ hyperparameters:
                            # are observed for our AGENT
     output_single_agent: True
 
-    num_epochs: 50
+    num_epochs: 100
     print_every: 50
     checkpoint_name: "0"                      
     checkpoint_val_percentage: 0.3 # 0.1 # (0 - 1) Check accuracy in validation split every
@@ -62,9 +62,9 @@ hyperparameters:
     
     save_root_dir: "save/argoverse"
     exp_name: "exp1"
-    output_dir: # To be filled in the code (save_root_dir/model/split_percentage/exp)
+    output_dir: # To be filled in the code (save_root_dir/model_name/split_percentage/exp)
     checkpoint_start_from:
-    exp_description: "10 % dataset (both train and val).
+    exp_description: "100 % dataset (both train and val).
                       Batch size = 2048.
                       Include data augmentation (with rotation). 
                       New forward -> Add conv 1d.
