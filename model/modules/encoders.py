@@ -74,9 +74,11 @@ class EncoderLSTM(nn.Module):
         # obs_traj_embedding = F.leaky_relu(self.spatial_embedding(obs_traj.contiguous().view(-1, 2)))
         # obs_traj_embedding = obs_traj_embedding.view(-1, n_agents, self.embedding_dim)
         # output, state = self.encoder(obs_traj_embedding, state)
-        pdb.set_trace()
+
         obs_traj = self.conv1(obs_traj.permute(1,2,0))
         output, state = self.encoder(obs_traj.permute(2,0,1), state)
+
+        # output, state = self.encoder(obs_traj, state)
 
         if self.D == 2: # LSTM bidirectional
             final_h = state[0][-2,:,:] # Take the forward information from the last stacked LSTM layer

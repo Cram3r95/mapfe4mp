@@ -62,7 +62,7 @@ parser.add_argument("--split", required=True, default="val", type=str)
 dist_around = 40
 dist_rasterized_map = [-dist_around, dist_around, -dist_around, dist_around]
 GENERATE_QUALITATIVE_RESULTS = True
-COMPUTE_METRICS = False
+COMPUTE_METRICS = True
 
 def generate_csv(results_path,ade_list,fde_list,num_seq_list,traj_kind_list,sort=False):
     """
@@ -100,8 +100,8 @@ def generate_csv(results_path,ade_list,fde_list,num_seq_list,traj_kind_list,sort
 
         # Write mean ADE and FDE 
 
-        csv_writer.writerow(['-','-','-'])
-        csv_writer.writerow(['Mean',mean_ade,mean_fde])
+        csv_writer.writerow(['-','-','-','-','-'])
+        csv_writer.writerow(['-','-','Mean',mean_ade,mean_fde])
 
 def evaluate(loader, generator, num_modes, split, current_cuda, pred_len):
     """
@@ -123,11 +123,10 @@ def evaluate(loader, generator, num_modes, split, current_cuda, pred_len):
     num_files = len(file_list)
     print("Num files ", num_files)
 
-    # Very hard (batch_index/csv): 4504/4723, 
+    # Very hard (validation) (batch_index/csv): 4504/4723, 
 
-    #my_seqs = [21866,36005,29100,27919,40897,32509] # Write here the index (assuming batch_size = 1), not the sequence.csv
-                                                    # See index and metrics in results/your_model/your_split/metrics.csv
-    my_seqs = [4504]
+    # my_seqs = [21866,36005,29100,27919,40897,32509] # Write here the index (assuming batch_size = 1), not the sequence.csv
+                                                      # See index and metrics in results/your_model/your_split/metrics.csv
 
     time_per_iteration = float(0)
     aux_time = float(0)
@@ -141,7 +140,7 @@ def evaluate(loader, generator, num_modes, split, current_cuda, pred_len):
             if limit != -1: files_remaining = limit - (batch_index+1)
             else: files_remaining = num_files - (batch_index+1)
 
-            if my_seqs: # Analyze some specific sequences
+            if 'my_seqs' in locals(): # Analyze some specific sequences
                 if batch_index > max(my_seqs):
                     break
                 elif batch_index not in my_seqs:
@@ -174,7 +173,7 @@ def evaluate(loader, generator, num_modes, split, current_cuda, pred_len):
             # pred_traj_fake_rel = torch.repeat_interleave(pred_traj_fake_rel,num_modes,dim=2) # 1,30,1,2 -> 1,30,6,2
             pred_traj_fake_rel = torch.repeat_interleave(pred_traj_fake_rel,num_modes,dim=1) # 30,1,2 -> 30,6,2
 
-            if COMPUTE_METRICS: # Metrics must be in absolute coordinates (either around 0,0 or around map origin)
+            if COMPUTE_METRICS and split != "test": # Metrics must be in absolute coordinates (either around 0,0 or around map origin)
                 agent_pred_gt = pred_traj_gt[:,agent_idx,:]
                 agent_pred_fake_rel = pred_traj_fake_rel[:,0,:].unsqueeze(dim=1) # TODO: At this moment all modes are the same. Compute Multimodal
                                                                 # ADE/FDE evaluation when we have real multimodality
@@ -205,7 +204,7 @@ def evaluate(loader, generator, num_modes, split, current_cuda, pred_len):
 
             ## (Optional) Plot results
 
-            if GENERATE_QUALITATIVE_RESULTS:
+            if GENERATE_QUALITATIVE_RESULTS and seq_id < 150:
                 if split == "test":
                     curr_map_origin = map_origin[0]
                     curr_traj_rel = obs_traj_rel
@@ -223,7 +222,8 @@ def evaluate(loader, generator, num_modes, split, current_cuda, pred_len):
                                                  rot_angle=-1,obs_len=obs_traj.shape[0],
                                                  smoothen=False,save=True,pred_trajectories_rel=pred_traj_fake_rel,
                                                  ade_metric=ade_,fde_metric=fde_)
-
+            else:
+                assert 1 == 0
             pred_traj_fake_rel = pred_traj_fake_rel.unsqueeze(dim=0)
 
             # Get predictions in absolute coordinates 
@@ -263,10 +263,10 @@ def main(args):
     """
     """
 
-    # Load config file
+    # Load config file from this specific model
 
-    model = args.model_path.split('/')[2]
-    config_path = os.path.join(BASE_DIR,f"config/config_{model}.yml")
+    model = args.model_path.split('/')[:-1]
+    config_path = os.path.join(BASE_DIR,*model,"config_file.yml")
 
     with open(config_path) as config_file:
         config = yaml.safe_load(config_file)
@@ -321,7 +321,8 @@ def main(args):
 
     ## Get experiment name
 
-    exp_name = os.path.join(*args.model_path.split('/')[-3:-1]) # model_type/exp_name (e.g. social_lstm_mhsa/exp1)
+    exp_name = os.path.join(*args.model_path.split('/')[-4:-1]) # model_type/split_percentage/exp_name 
+                                                                # (e.g. social_lstm_mhsa/100.0_percent/exp1)
 
     print(f"Evaluate model in {config.dataset.split} split")
     output_all, ade_list, fde_list, traj_kind_list, num_seq_list = \
@@ -354,6 +355,6 @@ if __name__ == '__main__':
 
 """
 python evaluate/argoverse/generate_results.py \
---model_path "save/argoverse/social_lstm_mhsa/best_unimodal_100_percent/argoverse_motion_forecasting_dataset_0_with_model.pt" \
---num_modes 6 --device_gpu 1 --split "train"
+--model_path "save/argoverse/social_lstm_mhsa/100.0_percent/exp1/argoverse_motion_forecasting_dataset_0_with_model.pt" \
+--num_modes 6 --device_gpu 0 --split "test"
 """

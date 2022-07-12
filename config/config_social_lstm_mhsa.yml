@@ -54,7 +54,7 @@ hyperparameters:
     loss_fa_weight: 1
 
     lr_scheduler: True
-    lr_decay_factor: 0.8
+    lr_decay_factor: 0.65
     lr_epoch_percentage_patience: 0.1 # (0-N) E.g. If 0.05 -> the patience will be the 5 % of the total epochs
     
     g_steps: 1
