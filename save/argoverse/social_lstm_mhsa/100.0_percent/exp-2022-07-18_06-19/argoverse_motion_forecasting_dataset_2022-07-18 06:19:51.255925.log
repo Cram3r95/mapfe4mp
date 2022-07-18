@@ -1,0 +1,484 @@
+Config file: ./config/config_social_lstm_mhsa.yml
+Configuration: 
+{'use_gpu': 1, 'device_gpu': 0, 'dataset_name': 'argoverse_motion_forecasting_dataset', 'dataset': {'path': 'data/datasets/argoverse/motion-forecasting/', 'split': 'train', 'batch_size': 512, 'num_workers': 0, 'start_from_percentage': 0.0, 'split_percentage': 1.0, 'shuffle': True, 'data_augmentation': True, 'class_balance': 0.5, 'preprocess_data': False, 'save_data': False}, 'optim_parameters': {'g_learning_rate': 0.001, 'g_weight_decay': 0}, 'hyperparameters': {'num_modes': 6, 'obs_origin': 20, 'obs_len': 20, 'pred_len': 30, 'distance_threshold': 40, 'output_single_agent': True, 'num_epochs': 100, 'print_every': 50, 'checkpoint_name': '0', 'checkpoint_val_percentage': 0.3, 'checkpoint_train_percentage': 0.3, 'num_samples_check': 5000, 'loss_type_g': 'mse_w+nll', 'loss_ade_weight': 1, 'loss_fde_weight': 3, 'loss_nll_weight': 1.25, 'loss_fa_weight': 1, 'lr_scheduler': True, 'lr_decay_factor': 0.65, 'lr_epoch_percentage_patience': 0.1, 'g_steps': 1, 'clipping_threshold_g': 1.1, 'save_root_dir': 'save/argoverse', 'exp_name': 'exp-2022-07-18_06-19', 'output_dir': 'save/argoverse/social_lstm_mhsa/100.0_percent/exp-2022-07-18_06-19', 'checkpoint_start_from': None, 'exp_description': '100 % dataset (both train and val). Train with absolute coordinates, not rel-rel (only encoder). Add conv 1d to encoder (to model velocities and acceleration). Batch size = 1024. Include data augmentation (with rotation). Ensure all curved trajectories are analyzed. Encoder/Decoder h_dim 32 -> 256. MSE (ADE&FDE) + NLL as loss function. Loss with absolute and only single AGENT. loss_fde_weight = 1 -> 3 Remove noise (decoder input). For loop to encode trajectories. Remove spatial embedding in encoder. Bidirectional encoder = True. num_layers encoder 1 -> 2. Dropout = 0.2 -> 0.5.', 'tensorboard_active': True}, 'model': {'name': 'social_lstm_mhsa', 'generator': {'use_rel_disp': False, 'encoder_lstm': {'use_rel_disp': False, 'conv_filters': 16, 'input_len': 20, 'h_dim': 256, 'embedding_dim': 16, 'num_layers': 2, 'bidirectional': True, 'dropout': 0.5}, 'mhsa': {'h_dim': 256, 'num_heads': 4, 'dropout': 0.5}, 'decoder_lstm': {'use_rel_disp': False, 'input_len': 20, 'output_len': 30, 'h_dim': 256, 'embedding_dim': 16, 'num_layers': 1, 'bidirectional': False, 'mlp_dim': [64], 'dropout': 0.5}}}, 'base_dir': '/home/robesafe/mapfe4mp'}
+Initializing train dataset
+Initializing val dataset
+Generator model:
+TrajectoryGenerator(
+  (encoder): EncoderLSTM(
+    (conv1): Conv1d(2, 16, kernel_size=(3,), stride=(1,), padding=(1,), padding_mode=reflect)
+    (conv2): Conv1d(16, 16, kernel_size=(3,), stride=(1,), padding=(1,), padding_mode=reflect)
+    (encoder): LSTM(34, 256, num_layers=2, dropout=0.5, bidirectional=True)
+  )
+  (lne): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
+  (sattn): MultiHeadAttention(
+    (attention): DotProductAttention(
+      (dropout): Dropout(p=0.5, inplace=False)
+    )
+    (W_q): Linear(in_features=256, out_features=256, bias=False)
+    (W_k): Linear(in_features=256, out_features=256, bias=False)
+    (W_v): Linear(in_features=256, out_features=256, bias=False)
+    (W_o): Linear(in_features=256, out_features=256, bias=False)
+  )
+  (lnd): LayerNorm((512,), eps=1e-05, elementwise_affine=True)
+  (mlp_decoder_context): Sequential(
+    (0): Linear(in_features=512, out_features=64, bias=True)
+    (1): LeakyReLU(negative_slope=0.01)
+    (2): Linear(in_features=64, out_features=256, bias=True)
+    (3): LeakyReLU(negative_slope=0.01)
+  )
+  (decoder): TemporalDecoderLSTM(
+    (hidden2pos): Linear(in_features=256, out_features=2, bias=True)
+    (spatial_embedding): Linear(in_features=40, out_features=16, bias=True)
+    (ln1): LayerNorm((40,), eps=1e-05, elementwise_affine=True)
+    (ln2): LayerNorm((256,), eps=1e-05, elementwise_affine=True)
+    (decoder): LSTM(16, 256, dropout=0.5)
+  )
+)
+Optimizer:
+Adam (
+Parameter Group 0
+    amsgrad: False
+    betas: (0.9, 0.999)
+    eps: 1e-08
+    lr: 0.001
+    weight_decay: 0
+)
+Starting epoch 1
+
+ Iterations per epoch: 402.23046875 
+                              Total epochs: 100 
+                              Total iterations: 40223 (Aprox. 2031 min) 
+                              Checkpoint train every: 2376 iterations (Aprox. 120 min) 
+                              Checkpoint val every: 2376 iterations (Aprox. 120 min) 
+                              Decrease LR if condition not met every: 2376 (Aprox. 120 min)
+Iteration = 1 / 40223
+Time per iteration: 3.0298831462860107
+  [G] G_mse_ade_loss: 14.160
+  [G] G_mse_fde_loss: 27.212
+  [G] G_nll_loss: 4798.508
+  [G] G_total_loss: 6093.933
+Iteration = 51 / 40223
+Time per iteration: 2.780561428444058
+  [G] G_mse_ade_loss: 8.345
+  [G] G_mse_fde_loss: 16.324
+  [G] G_nll_loss: 1740.329
+  [G] G_total_loss: 2232.728
+Iteration = 101 / 40223
+Time per iteration: 2.76832379917107
+  [G] G_mse_ade_loss: 5.557
+  [G] G_mse_fde_loss: 11.690
+  [G] G_nll_loss: 979.371
+  [G] G_total_loss: 1264.841
+Iteration = 151 / 40223
+Time per iteration: 2.754954998066883
+  [G] G_mse_ade_loss: 3.729
+  [G] G_mse_fde_loss: 8.683
+  [G] G_nll_loss: 461.323
+  [G] G_total_loss: 606.431
+Iteration = 201 / 40223
+Time per iteration: 2.744122275072544
+  [G] G_mse_ade_loss: 3.466
+  [G] G_mse_fde_loss: 7.812
+  [G] G_nll_loss: 383.067
+  [G] G_total_loss: 505.736
+Iteration = 251 / 40223
+Time per iteration: 2.7376108255044396
+  [G] G_mse_ade_loss: 3.359
+  [G] G_mse_fde_loss: 7.676
+  [G] G_nll_loss: 401.762
+  [G] G_total_loss: 528.589
+Iteration = 301 / 40223
+Time per iteration: 2.7359140560872532
+  [G] G_mse_ade_loss: 3.228
+  [G] G_mse_fde_loss: 7.012
+  [G] G_nll_loss: 326.261
+  [G] G_total_loss: 432.091
+Iteration = 351 / 40223
+Time per iteration: 2.7296006244811575
+  [G] G_mse_ade_loss: 3.306
+  [G] G_mse_fde_loss: 7.581
+  [G] G_nll_loss: 384.597
+  [G] G_total_loss: 506.796
+Iteration = 401 / 40223
+Time per iteration: 2.733010682084614
+  [G] G_mse_ade_loss: 3.106
+  [G] G_mse_fde_loss: 6.911
+  [G] G_nll_loss: 354.825
+  [G] G_total_loss: 467.369
+Starting epoch 2
+Iteration = 451 / 40223
+Time per iteration: 2.727973113303174
+  [G] G_mse_ade_loss: 3.044
+  [G] G_mse_fde_loss: 6.649
+  [G] G_nll_loss: 306.819
+  [G] G_total_loss: 406.514
+Iteration = 501 / 40223
+Time per iteration: 2.7257312529101343
+  [G] G_mse_ade_loss: 2.911
+  [G] G_mse_fde_loss: 6.549
+  [G] G_nll_loss: 278.786
+  [G] G_total_loss: 371.039
+Iteration = 551 / 40223
+Time per iteration: 2.7243400870563765
+  [G] G_mse_ade_loss: 2.885
+  [G] G_mse_fde_loss: 6.509
+  [G] G_nll_loss: 306.119
+  [G] G_total_loss: 405.060
+Iteration = 601 / 40223
+Time per iteration: 2.7190213520792677
+  [G] G_mse_ade_loss: 2.898
+  [G] G_mse_fde_loss: 6.405
+  [G] G_nll_loss: 308.507
+  [G] G_total_loss: 407.746
+Iteration = 651 / 40223
+Time per iteration: 2.7141508869311775
+  [G] G_mse_ade_loss: 2.911
+  [G] G_mse_fde_loss: 6.436
+  [G] G_nll_loss: 315.668
+  [G] G_total_loss: 416.803
+Iteration = 701 / 40223
+Time per iteration: 2.7101268734299335
+  [G] G_mse_ade_loss: 3.192
+  [G] G_mse_fde_loss: 6.880
+  [G] G_nll_loss: 330.488
+  [G] G_total_loss: 436.941
+Iteration = 751 / 40223
+Time per iteration: 2.7063295031673262
+  [G] G_mse_ade_loss: 2.992
+  [G] G_mse_fde_loss: 6.579
+  [G] G_nll_loss: 297.003
+  [G] G_total_loss: 393.984
+Iteration = 801 / 40223
+Time per iteration: 2.702147531152218
+  [G] G_mse_ade_loss: 2.927
+  [G] G_mse_fde_loss: 6.546
+  [G] G_nll_loss: 300.191
+  [G] G_total_loss: 397.804
+Starting epoch 3
+Iteration = 851 / 40223
+Time per iteration: 2.695704679511549
+  [G] G_mse_ade_loss: 2.970
+  [G] G_mse_fde_loss: 6.595
+  [G] G_nll_loss: 320.169
+  [G] G_total_loss: 422.967
+Iteration = 901 / 40223
+Time per iteration: 2.694186110343044
+  [G] G_mse_ade_loss: 2.867
+  [G] G_mse_fde_loss: 6.334
+  [G] G_nll_loss: 276.185
+  [G] G_total_loss: 367.101
+Iteration = 951 / 40223
+Time per iteration: 2.692452086509841
+  [G] G_mse_ade_loss: 2.926
+  [G] G_mse_fde_loss: 6.408
+  [G] G_nll_loss: 301.432
+  [G] G_total_loss: 398.940
+Iteration = 1001 / 40223
+Time per iteration: 2.690115124314696
+  [G] G_mse_ade_loss: 2.969
+  [G] G_mse_fde_loss: 6.493
+  [G] G_nll_loss: 328.967
+  [G] G_total_loss: 433.658
+Iteration = 1051 / 40223
+Time per iteration: 2.6884453507631196
+  [G] G_mse_ade_loss: 2.736
+  [G] G_mse_fde_loss: 6.076
+  [G] G_nll_loss: 246.315
+  [G] G_total_loss: 328.858
+Iteration = 1101 / 40223
+Time per iteration: 2.686516460995583
+  [G] G_mse_ade_loss: 2.858
+  [G] G_mse_fde_loss: 6.235
+  [G] G_nll_loss: 330.604
+  [G] G_total_loss: 434.818
+Iteration = 1151 / 40223
+Time per iteration: 2.6846165431260443
+  [G] G_mse_ade_loss: 2.784
+  [G] G_mse_fde_loss: 5.985
+  [G] G_nll_loss: 286.512
+  [G] G_total_loss: 378.878
+Iteration = 1201 / 40223
+Time per iteration: 2.6832774310782987
+  [G] G_mse_ade_loss: 2.661
+  [G] G_mse_fde_loss: 5.877
+  [G] G_nll_loss: 256.295
+  [G] G_total_loss: 340.660
+Starting epoch 4
+Iteration = 1251 / 40223
+Time per iteration: 2.680486721577023
+  [G] G_mse_ade_loss: 2.609
+  [G] G_mse_fde_loss: 5.631
+  [G] G_nll_loss: 234.375
+  [G] G_total_loss: 312.469
+Iteration = 1301 / 40223
+Time per iteration: 2.6795025762459757
+  [G] G_mse_ade_loss: 2.776
+  [G] G_mse_fde_loss: 5.956
+  [G] G_nll_loss: 258.255
+  [G] G_total_loss: 343.463
+Iteration = 1351 / 40223
+Time per iteration: 2.6783658452249295
+  [G] G_mse_ade_loss: 3.027
+  [G] G_mse_fde_loss: 6.474
+  [G] G_nll_loss: 325.998
+  [G] G_total_loss: 429.945
+Iteration = 1401 / 40223
+Time per iteration: 2.6770006881961645
+  [G] G_mse_ade_loss: 3.067
+  [G] G_mse_fde_loss: 6.725
+  [G] G_nll_loss: 341.405
+  [G] G_total_loss: 449.998
+Iteration = 1451 / 40223
+Time per iteration: 2.675996917432789
+  [G] G_mse_ade_loss: 2.735
+  [G] G_mse_fde_loss: 5.926
+  [G] G_nll_loss: 267.546
+  [G] G_total_loss: 354.945
+Iteration = 1501 / 40223
+Time per iteration: 2.6749695222589036
+  [G] G_mse_ade_loss: 2.932
+  [G] G_mse_fde_loss: 6.327
+  [G] G_nll_loss: 299.868
+  [G] G_total_loss: 396.747
+Iteration = 1551 / 40223
+Time per iteration: 2.6738079728655935
+  [G] G_mse_ade_loss: 2.696
+  [G] G_mse_fde_loss: 5.915
+  [G] G_nll_loss: 259.688
+  [G] G_total_loss: 345.052
+Iteration = 1601 / 40223
+Time per iteration: 2.6729908646232703
+  [G] G_mse_ade_loss: 2.712
+  [G] G_mse_fde_loss: 6.006
+  [G] G_nll_loss: 253.927
+  [G] G_total_loss: 338.140
+Starting epoch 5
+Iteration = 1651 / 40223
+Time per iteration: 2.6706843995672513
+  [G] G_mse_ade_loss: 2.679
+  [G] G_mse_fde_loss: 5.846
+  [G] G_nll_loss: 245.307
+  [G] G_total_loss: 326.850
+Iteration = 1701 / 40223
+Time per iteration: 2.6704211185989064
+  [G] G_mse_ade_loss: 2.741
+  [G] G_mse_fde_loss: 5.995
+  [G] G_nll_loss: 271.915
+  [G] G_total_loss: 360.619
+Iteration = 1751 / 40223
+Time per iteration: 2.6702179110846744
+  [G] G_mse_ade_loss: 2.475
+  [G] G_mse_fde_loss: 5.534
+  [G] G_nll_loss: 196.913
+  [G] G_total_loss: 265.218
+Iteration = 1801 / 40223
+Time per iteration: 2.6699294702401764
+  [G] G_mse_ade_loss: 3.052
+  [G] G_mse_fde_loss: 6.508
+  [G] G_nll_loss: 322.955
+  [G] G_total_loss: 426.269
+Iteration = 1851 / 40223
+Time per iteration: 2.668837109621894
+  [G] G_mse_ade_loss: 2.840
+  [G] G_mse_fde_loss: 6.248
+  [G] G_nll_loss: 296.910
+  [G] G_total_loss: 392.723
+Iteration = 1901 / 40223
+Time per iteration: 2.6672117169564302
+  [G] G_mse_ade_loss: 2.755
+  [G] G_mse_fde_loss: 5.863
+  [G] G_nll_loss: 257.119
+  [G] G_total_loss: 341.743
+Iteration = 1951 / 40223
+Time per iteration: 2.6664442781421966
+  [G] G_mse_ade_loss: 2.725
+  [G] G_mse_fde_loss: 6.031
+  [G] G_nll_loss: 263.912
+  [G] G_total_loss: 350.709
+Iteration = 2001 / 40223
+Time per iteration: 2.6660916428754238
+  [G] G_mse_ade_loss: 2.652
+  [G] G_mse_fde_loss: 5.867
+  [G] G_nll_loss: 258.292
+  [G] G_total_loss: 343.117
+Starting epoch 6
+Iteration = 2051 / 40223
+Time per iteration: 2.664823786797377
+  [G] G_mse_ade_loss: 2.769
+  [G] G_mse_fde_loss: 5.914
+  [G] G_nll_loss: 278.002
+  [G] G_total_loss: 368.015
+Iteration = 2101 / 40223
+Time per iteration: 2.663802979617729
+  [G] G_mse_ade_loss: 2.686
+  [G] G_mse_fde_loss: 5.961
+  [G] G_nll_loss: 255.211
+  [G] G_total_loss: 339.583
+Iteration = 2151 / 40223
+Time per iteration: 2.6629980233368458
+  [G] G_mse_ade_loss: 2.764
+  [G] G_mse_fde_loss: 5.947
+  [G] G_nll_loss: 261.237
+  [G] G_total_loss: 347.151
+Iteration = 2201 / 40223
+Time per iteration: 2.6628464990613243
+  [G] G_mse_ade_loss: 2.649
+  [G] G_mse_fde_loss: 5.913
+  [G] G_nll_loss: 248.969
+  [G] G_total_loss: 331.598
+Iteration = 2251 / 40223
+Time per iteration: 2.6626973516514227
+  [G] G_mse_ade_loss: 2.851
+  [G] G_mse_fde_loss: 6.279
+  [G] G_nll_loss: 295.491
+  [G] G_total_loss: 391.053
+Iteration = 2301 / 40223
+Time per iteration: 2.6624271550524603
+  [G] G_mse_ade_loss: 2.769
+  [G] G_mse_fde_loss: 5.983
+  [G] G_nll_loss: 276.031
+  [G] G_total_loss: 365.757
+Iteration = 2351 / 40223
+Time per iteration: 2.6622143837301238
+  [G] G_mse_ade_loss: 2.869
+  [G] G_mse_fde_loss: 6.187
+  [G] G_nll_loss: 273.216
+  [G] G_total_loss: 362.948
+Checking stats on train ...
+  [train] train_ade: 2.571
+  [train] train_ade_l: 2.179
+  [train] train_ade_nl: 2.971
+  [train] train_fde: 5.693
+  [train] train_fde_l: 4.638
+  [train] train_fde_nl: 6.771
+  [train] train_g_l2_loss_abs: 16.404
+  [train] train_g_l2_loss_rel: 0.000
+Checking stats on val ...
+  [val] val_ade: 2.296
+  [val] val_ade_l: 2.055
+  [val] val_ade_nl: 2.858
+  [val] val_fde: 4.934
+  [val] val_fde_l: 4.296
+  [val] val_fde_nl: 6.419
+  [val] val_g_l2_loss_abs: 11.839
+  [val] val_g_l2_loss_rel: 0.000
+Min ADE: 2.296027144901238
+Min FDE: 4.934411330700501
+New low for avg_disp_error
+New low for avg_disp_error_nl
+Saving checkpoint to /home/robesafe/mapfe4mp/save/argoverse/social_lstm_mhsa/100.0_percent/exp-2022-07-18_06-19/argoverse_motion_forecasting_dataset_0_with_model.pt
+Done.
+Saving checkpoint to /home/robesafe/mapfe4mp/save/argoverse/social_lstm_mhsa/100.0_percent/exp-2022-07-18_06-19/argoverse_motion_forecasting_dataset_0_no_model.pt
+Done.
+Iteration = 2401 / 40223
+Time per iteration: 2.6622766247891922
+  [G] G_mse_ade_loss: 2.623
+  [G] G_mse_fde_loss: 5.829
+  [G] G_nll_loss: 262.899
+  [G] G_total_loss: 348.734
+Starting epoch 7
+Iteration = 2451 / 40223
+Time per iteration: 2.6616855588848374
+  [G] G_mse_ade_loss: 2.453
+  [G] G_mse_fde_loss: 5.493
+  [G] G_nll_loss: 219.356
+  [G] G_total_loss: 293.126
+Iteration = 2501 / 40223
+Time per iteration: 2.6617872410895873
+  [G] G_mse_ade_loss: 2.480
+  [G] G_mse_fde_loss: 5.432
+  [G] G_nll_loss: 219.580
+  [G] G_total_loss: 293.251
+Iteration = 2551 / 40223
+Time per iteration: 2.6611077325664656
+  [G] G_mse_ade_loss: 2.522
+  [G] G_mse_fde_loss: 5.582
+  [G] G_nll_loss: 222.141
+  [G] G_total_loss: 296.944
+Iteration = 2601 / 40223
+Time per iteration: 2.6609540349563603
+  [G] G_mse_ade_loss: 2.709
+  [G] G_mse_fde_loss: 6.065
+  [G] G_nll_loss: 281.852
+  [G] G_total_loss: 373.217
+Iteration = 2651 / 40223
+Time per iteration: 2.6609498151335256
+  [G] G_mse_ade_loss: 2.599
+  [G] G_mse_fde_loss: 5.795
+  [G] G_nll_loss: 253.355
+  [G] G_total_loss: 336.677
+Iteration = 2701 / 40223
+Time per iteration: 2.6610160544818084
+  [G] G_mse_ade_loss: 2.607
+  [G] G_mse_fde_loss: 5.813
+  [G] G_nll_loss: 260.607
+  [G] G_total_loss: 345.807
+Iteration = 2751 / 40223
+Time per iteration: 2.6609494575194037
+  [G] G_mse_ade_loss: 2.587
+  [G] G_mse_fde_loss: 5.877
+  [G] G_nll_loss: 244.952
+  [G] G_total_loss: 326.409
+Iteration = 2801 / 40223
+Time per iteration: 2.6608927250759637
+  [G] G_mse_ade_loss: 2.595
+  [G] G_mse_fde_loss: 5.596
+  [G] G_nll_loss: 234.585
+  [G] G_total_loss: 312.614
+Starting epoch 8
+Iteration = 2851 / 40223
+Time per iteration: 2.660214506003448
+  [G] G_mse_ade_loss: 2.688
+  [G] G_mse_fde_loss: 5.871
+  [G] G_nll_loss: 268.887
+  [G] G_total_loss: 356.409
+Iteration = 2901 / 40223
+Time per iteration: 2.660290606553618
+  [G] G_mse_ade_loss: 2.788
+  [G] G_mse_fde_loss: 6.183
+  [G] G_nll_loss: 267.967
+  [G] G_total_loss: 356.296
+Iteration = 2951 / 40223
+Time per iteration: 2.6604130424834316
+  [G] G_mse_ade_loss: 2.483
+  [G] G_mse_fde_loss: 5.520
+  [G] G_nll_loss: 212.730
+  [G] G_total_loss: 284.954
+Iteration = 3001 / 40223
+Time per iteration: 2.6604392004982307
+  [G] G_mse_ade_loss: 2.759
+  [G] G_mse_fde_loss: 6.043
+  [G] G_nll_loss: 272.378
+  [G] G_total_loss: 361.362
+Iteration = 3051 / 40223
+Time per iteration: 2.660451382740487
+  [G] G_mse_ade_loss: 2.511
+  [G] G_mse_fde_loss: 5.515
+  [G] G_nll_loss: 216.096
+  [G] G_total_loss: 289.176
+Iteration = 3101 / 40223
+Time per iteration: 2.6605533951522844
+  [G] G_mse_ade_loss: 2.442
+  [G] G_mse_fde_loss: 5.340
+  [G] G_nll_loss: 211.826
+  [G] G_total_loss: 283.244
+Iteration = 3151 / 40223
+Time per iteration: 2.661002508385603
+  [G] G_mse_ade_loss: 2.492
+  [G] G_mse_fde_loss: 5.430
+  [G] G_nll_loss: 212.507
+  [G] G_total_loss: 284.415
+Iteration = 3201 / 40223
+Time per iteration: 2.661454614941979
+  [G] G_mse_ade_loss: 2.514
+  [G] G_mse_fde_loss: 5.662
+  [G] G_nll_loss: 211.474
+  [G] G_total_loss: 283.842
+Starting epoch 9
+Iteration = 3251 / 40223
+Time per iteration: 2.661248154509658
+  [G] G_mse_ade_loss: 2.525
+  [G] G_mse_fde_loss: 5.702
+  [G] G_nll_loss: 214.914
+  [G] G_total_loss: 288.273

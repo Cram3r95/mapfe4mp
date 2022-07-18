@@ -170,3 +170,20 @@ class TrajectoryGenerator(nn.Module):
         pred_traj_fake_rel = self.decoder(last_pos, last_pos_rel, decoder_h)
         
         return pred_traj_fake_rel
+
+class TrajectoryDiscriminator(nn.Module):
+    def __init__(self, mlp_dim=64, h_dim=64):
+        super(TrajectoryDiscriminator, self).__init__()
+
+        self.mlp_dim = mlp_dim
+        self.h_dim = h_dim
+
+        self.encoder = Encoder()
+        real_classifier_dims = [self.h_dim, self.mlp_dim, 1]
+        self.real_classifier = make_mlp(real_classifier_dims)
+
+    def forward(self, traj, traj_rel):
+
+        final_h = self.encoder(traj_rel)
+        scores = self.real_classifier(final_h)
+        return scores

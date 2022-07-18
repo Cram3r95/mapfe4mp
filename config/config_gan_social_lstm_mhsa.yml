@@ -115,5 +115,26 @@ model:
             bidirectional: False
             mlp_dim: [64] # Always in list format, even if it is a single number
             dropout: *dropout
+            
+    discriminator:
+        # Encoder
+        encoder:
+            num_layers: 1
+            hidden_dim: 64
+            emb_dim: 16 # embedding input from mlp
+            mlp_config:
+                dim_list: [2, 16] # From 2 (x,y) to 16 (original embedding of the paper)
+                activation: 'relu'
+                batch_norm: True
+                dropout: 0.5
+            dropout: 0
+
+        # Classifier
+        classifier:
+            mlp_config:
+                dim_list: [64, 1024, 1]
+                activation: 'relu'
+                batch_norm: True
+                dropout: 0.5
 
 

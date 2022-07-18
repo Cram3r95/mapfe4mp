@@ -4,7 +4,8 @@
 
 Repo of the work presented at:
 - [Fresh  Perspectives  on  the  Future  of  Autonomous  Driving](https://www.icra2022av.org/) Workshop at ICRA 2022
-- [Multi-Agent Behavior:Representation, Modeling, Measurement, and Applications](https://sites.google.com/view/mabe22/home) Workshop at CVPR 2022.
+- [Multi-Agent Behavior:Representation, Modeling, Measurement, and Applications](https://sites.google.com/view/mabe22/home) Workshop at CVPR 2022
+- [25th IEEE International Conference on Intelligent Transportation Systems](https://www.ieee-itsc2022.org/#/)
 
 Check [our paper here!](https://arxiv.org/abs/2205.13071)
 
@@ -13,7 +14,7 @@ Check [our paper here!](https://arxiv.org/abs/2205.13071)
 <br>
 
 <img src="media/icra22-overview.png"/>
-
+<img src="media/gan-lstm-mhsa.JPG"/>
 
 Please cite this work if you use our code or ideas.
 

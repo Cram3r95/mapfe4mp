@@ -34,7 +34,7 @@ TRAINER_LIST = [
                 "social_lstm_mhsa_mm"
                 "social_set_transformer",
                 "social_set_transformer_mm"
-                "social_latent_set_transformer_goals_mm"
+                "gan_social_lstm_mhsa"
                ]
 
 def create_logger(file_path):
@@ -75,18 +75,23 @@ if __name__ == "__main__":
     if not args.from_exp: # Initialize new experiment from your current config file in configs folder
         config_path = "./config/config_%s.yml" % args.trainer
     elif os.path.isdir(args.from_exp): # Continue training from previous checkpoint with the 
-                                        # corresponding config file
+                                       # corresponding config file
         config_path = os.path.join(args.from_exp,"config_file.yml")
     else:
         assert 1 == 0, "Checkpoint not found!" 
         
     print("BASE_DIR: ", BASE_DIR)
 
+    now = datetime.now()
+    exp_name = now.strftime("exp-%Y-%m-%d_%H-%M")
+
     with open(config_path) as config_file:
         config = yaml.safe_load(config_file)
         config["device_gpu"] = args.device_gpu
-
         config["base_dir"] = BASE_DIR
+        
+        if not config["hyperparameters"]["exp_name"]: # Empty -> Fill with current hour and day
+            config["hyperparameters"]["exp_name"] = exp_name
 
         split_percentage_str = str(100*config["dataset"]["split_percentage"]) + "_percent" 
         config["hyperparameters"]["output_dir"] = os.path.join(config["hyperparameters"]["save_root_dir"],
@@ -110,10 +115,9 @@ if __name__ == "__main__":
 
         config = Prodict.from_dict(config)
 
-    now = datetime.now()
-    time = now.strftime("%H:%M:%S")
+    # Create logger
 
-    logger = create_logger(os.path.join(config["hyperparameters"]["output_dir"], f"{config.dataset_name}_{time}.log"))
+    logger = create_logger(os.path.join(config["hyperparameters"]["output_dir"], f"{config.dataset_name}_{exp_name}.log"))
     logger.info("Config file: {}".format(config_path))
 
     # Modify some variables of the configuration given input arguments

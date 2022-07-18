@@ -30,8 +30,11 @@ from torch.utils.tensorboard import SummaryWriter
 # Custom imports
 
 from model.datasets.argoverse.dataset import ArgoverseMotionForecastingDataset, seq_collate
-from model.models.social_lstm_mhsa import TrajectoryGenerator
-from model.modules.losses import l2_loss, mse_custom, pytorch_neg_multi_log_likelihood_batch, evaluate_feasible_area_prediction
+from model.models.social_lstm_mhsa import TrajectoryGenerator, TrajectoryDiscriminator
+from model.modules.losses import l2_loss, mse_custom, pytorch_neg_multi_log_likelihood_batch, \
+                                 evaluate_feasible_area_prediction, gan_g_loss, gan_g_loss_bce, \
+                                 gan_d_loss, gan_d_loss_bce
+
 from model.modules.evaluation_metrics import displacement_error, final_displacement_error
 from model.datasets.argoverse.dataset_utils import relative_to_abs
 from model.utils.checkpoint_data import Checkpoint, get_total_norm
@@ -225,7 +228,7 @@ def model_trainer(config, logger):
                             num_workers=config.dataset.num_workers,
                             collate_fn=seq_collate)
 
-    # Initialize motion prediction generator and optimizer
+    # Initialize motion prediction generator/discriminator (GAN model) and optimizer
 
     generator = TrajectoryGenerator(config_encoder_lstm=config.model.generator.encoder_lstm,
                                     config_decoder_lstm=config.model.generator.decoder_lstm,
@@ -236,6 +239,13 @@ def model_trainer(config, logger):
     generator.type(float_dtype).train() # train mode (if you compute metrics -> .eval() mode)
 
     optimizer_g = optim.Adam(generator.parameters(), lr=optim_parameters.g_learning_rate, weight_decay=optim_parameters.g_weight_decay)
+
+    discriminator = TrajectoryDiscriminator()
+    discriminator.to(device)
+    discriminator.apply(init_weights)
+    discriminator.type(float_dtype).train()
+
+    optimizer_d = optim.Adam(discriminator.parameters(), lr=optim_parameters.d_learning_rate, weight_decay=optim_parameters.d_weight_decay)
 
     ## Restore from checkpoint if specified in config file
 
@@ -248,9 +258,12 @@ def model_trainer(config, logger):
     if restore_path is not None and os.path.isfile(restore_path):
         logger.info('Restoring from checkpoint {}'.format(restore_path))
         checkpoint = torch.load(restore_path, map_location=current_cuda)
-        
+
         generator.load_state_dict(checkpoint.config_cp['g_best_state'], strict=False)
         optimizer_g.load_state_dict(checkpoint.config_cp['g_optim_state'])
+
+        discriminator.load_state_dict(checkpoint.config_cp['d_best_state'])
+        optimizer_d.load_state_dict(checkpoint.config_cp['d_optim_state'])
 
         t = checkpoint.config_cp['counters']['t'] # Restore num_iters and epochs from checkpoint
         epoch = checkpoint.config_cp['counters']['epoch']
@@ -289,6 +302,10 @@ def model_trainer(config, logger):
         scheduler_g = lrs.ReduceLROnPlateau(optimizer_g, "min", min_lr=1e-5, 
                                             verbose=True, factor=hyperparameters.lr_decay_factor, 
                                             patience=lr_scheduler_patience)
+
+        scheduler_d = lrs.ReduceLROnPlateau(optimizer_d, "min", min_lr=1e-5, 
+                                            verbose=True, factor=hyperparameters.lr_decay_factor, 
+                                            patience=lr_scheduler_patience)                                    
 
     if hyperparameters.loss_type_g == "mse" or hyperparameters.loss_type_g == "mse_w":
         loss_f = mse_custom

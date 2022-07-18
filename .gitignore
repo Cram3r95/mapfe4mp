@@ -28,7 +28,7 @@ data/datasets/
 data/datasets.tar.gz
 
 save/*.pt
-save/argoverse/*
+# save/argoverse/*
 
 # Results file to submit to the Leaderboard
 results/**/*.h5 
