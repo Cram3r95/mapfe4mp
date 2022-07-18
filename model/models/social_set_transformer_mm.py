@@ -68,7 +68,7 @@ class TrajectoryGenerator(nn.Module):
 
     def forward(self, seq_list_rel, seq_start_end): #
         """
-        seq_list_rel: Observation data (20 = obs_len x batch_size*num_agents x data_dimensionality = 2 (x|y))
+        seq_list_rel: Observation data (20 = obs_len x batch_size·num_agents x data_dimensionality = 2 (x|y))
                       Note that this data is in relative coordinates (displacements)
         start_end_seq: batch_size x 2 (each element indicates the number of agents per sequence batch element
                        in seq_list_rel
@@ -76,7 +76,6 @@ class TrajectoryGenerator(nn.Module):
         # pdb.set_trace()
         XX = []
         for start, end in seq_start_end.data:
-
             Y = seq_list_rel[:,start:end,:].contiguous().permute(1,0,2)
             num_agents, obs_len, data_dim = Y.shape
             Y = Y.contiguous().view(1, num_agents, data_dim*obs_len)

@@ -8,14 +8,14 @@ dataset_name: argoverse_motion_forecasting_dataset
 dataset:
     path: data/datasets/argoverse/motion-forecasting/
     split: "train"
-    batch_size: 8
+    batch_size: 1024
     num_workers: 0
     start_from_percentage: 0.0 # By default, 0. If you want to analize a particular bunch of files (e.g. from 25 % to 50 %)
                                # then write here 0.25 and in split_percentage 0.25
-    split_percentage: 0.1 # % of the dataset (0-1)
+    split_percentage: 1.0 # % of the dataset (0-1)
     shuffle: True # False to check the input data, always set to True (Only for training!)
     data_augmentation: True # Rotation, Swapping, Dropout, Gaussian noise
-    class_balance: 0.7 # % of straight trajectories (considering the AGENT). Remaining % are curved trajectories
+    class_balance: 0.5 # % of straight trajectories (considering the AGENT). Remaining % are curved trajectories
                         # (again, considering the AGENT). -1.0 if no class balance is used (get_item takes the corresponding
                         # sequence regardless if it is straight or curved)
     preprocess_data: False
@@ -49,7 +49,7 @@ hyperparameters:
 
     loss_type_g: "mse_w+nll" # (mse|mse_w), nll, (mse|mse_w)+nll, (mse|mse_w)+fa 
     loss_ade_weight: 1 
-    loss_fde_weight: 1.5
+    loss_fde_weight: 3
     loss_nll_weight: 1.25
     loss_fa_weight: 1
 
@@ -61,18 +61,19 @@ hyperparameters:
     clipping_threshold_g: 1.1
     
     save_root_dir: "save/argoverse"
-    exp_name: "exp1"
+    exp_name: "exp6"
     output_dir: # To be filled in the code (save_root_dir/model_name/split_percentage/exp)
     checkpoint_start_from:
     exp_description: "100 % dataset (both train and val).
-                      Batch size = 2048.
+                      Train with absolute coordinates, not rel-rel (only encoder).
+                      Add conv 1d to encoder (to model velocities and acceleration).
+                      Batch size = 1024.
                       Include data augmentation (with rotation). 
-                      New forward -> Add conv 1d.
                       Ensure all curved trajectories are analyzed.
                       Encoder/Decoder h_dim 32 -> 256.
                       MSE (ADE&FDE) + NLL as loss function.
                       Loss with absolute and only single AGENT.
-                      loss_fde_weight = 1 -> 1.5
+                      loss_fde_weight = 1 -> 3
                       Remove noise (decoder input).
                       For loop to encode trajectories.
                       Remove spatial embedding in encoder.
@@ -86,7 +87,14 @@ hyperparameters:
 model:
     name: "social_lstm_mhsa"
     generator:
+        use_rel_disp: &use_rel_disp False # If True, use dx/dy (equivalent to velocities) 
+                                          # to encode/decode. 
+                                          # Otherwise, use absolute coordinates
+                                          # (around target agent) and apply convolutions
+                                          # to model velocity and accelerations
         encoder_lstm:
+            use_rel_disp: *use_rel_disp
+            conv_filters: 16
             input_len: *obs_len # Must match with num observations
             h_dim: &h_dim 256
             embedding_dim: 16 # TODO: Required?
@@ -98,6 +106,7 @@ model:
             num_heads: 4
             dropout: *dropout
         decoder_lstm:
+            use_rel_disp: *use_rel_disp
             input_len: *obs_len # Must match with num observations 
             output_len: *pred_len # Must match with num predictions
             h_dim: *h_dim

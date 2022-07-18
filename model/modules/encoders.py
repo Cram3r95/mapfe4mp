@@ -29,7 +29,7 @@ class EncoderLSTM(nn.Module):
     """
     """
     def __init__(self, embedding_dim=16, h_dim=64, num_layers=1, bidirectional=False, 
-                       dropout=0.5, current_cuda="cuda:0"):
+                       dropout=0.5, current_cuda="cuda:0", use_rel_disp=False, conv_filters=16):
         super().__init__()
 
         self.data_dim = 2 # x,y
@@ -37,23 +37,25 @@ class EncoderLSTM(nn.Module):
         self.h_dim = h_dim # Number of LSTM units (per layer)
         self.num_layers = num_layers
         self.current_cuda = current_cuda
+        self.use_rel_disp = use_rel_disp
+        self.conv_filters = conv_filters
 
         if bidirectional: self.D = 2
         else: self.D = 1
 
-        # self.spatial_embedding = nn.Linear(self.data_dim, self.embedding_dim)
-        self.conv1 = nn.Conv1d(self.data_dim,self.h_dim,kernel_size=3,
-                               padding=1,padding_mode="reflect")
-        # self.conv2 = nn.Conv1d(self.h_dim,self.h_dim,kernel_size=3,
-        #                        padding=1,padding_mode="reflect")
-        
         # TODO: Spatial embedding required?
-
-        # self.encoder = nn.LSTM(self.data_dim, self.h_dim, num_layers, 
-        #                        bidirectional=bidirectional, dropout=dropout)
-
-        self.encoder = nn.LSTM(self.h_dim, self.h_dim, num_layers, 
-                               bidirectional=bidirectional, dropout=dropout)
+        # self.spatial_embedding = nn.Linear(self.data_dim, self.embedding_dim)
+        
+        if self.use_rel_disp:
+            self.encoder = nn.LSTM(self.data_dim, self.h_dim, num_layers, 
+                                   bidirectional=bidirectional, dropout=dropout)
+        else:
+            self.conv1 = nn.Conv1d(self.data_dim,self.conv_filters,kernel_size=3, # To model velocities
+                               padding=1,padding_mode="reflect")
+            self.conv2 = nn.Conv1d(self.conv_filters,self.conv_filters,kernel_size=3, # To model accelerations
+                                padding=1,padding_mode="reflect")
+            self.encoder = nn.LSTM(self.conv_filters*2+self.data_dim, self.h_dim, num_layers, 
+                                   bidirectional=bidirectional, dropout=dropout)
 
     def init_hidden(self, batch):
         """
@@ -64,7 +66,8 @@ class EncoderLSTM(nn.Module):
 
     def forward(self, obs_traj):
         """
-        obs_traj_rel in this case
+        obs_traj may be in absolute coordinates or relative displacements, depending
+        on the configuration file
         """
         n_agents = obs_traj.size(1)
         state = self.init_hidden(n_agents)
@@ -75,10 +78,15 @@ class EncoderLSTM(nn.Module):
         # obs_traj_embedding = obs_traj_embedding.view(-1, n_agents, self.embedding_dim)
         # output, state = self.encoder(obs_traj_embedding, state)
 
-        obs_traj = self.conv1(obs_traj.permute(1,2,0))
-        output, state = self.encoder(obs_traj.permute(2,0,1), state)
-
-        # output, state = self.encoder(obs_traj, state)
+        if self.use_rel_disp: # Relative displacements
+            output, state = self.encoder(obs_traj, state)
+        else: # Absolute positions (around 0,0)
+            vel_traj = torch.tanh(self.conv1(obs_traj.permute(1,2,0)))
+            acc_traj = torch.tanh(self.conv2(vel_traj))
+            kinematic_state = torch.cat([obs_traj,
+                                         vel_traj.permute(2,0,1),
+                                         acc_traj.permute(2,0,1)],dim=2) # 20 x num_agents x (conv_filters·2 + data_dim)
+            output, state = self.encoder(kinematic_state, state)
 
         if self.D == 2: # LSTM bidirectional
             final_h = state[0][-2,:,:] # Take the forward information from the last stacked LSTM layer

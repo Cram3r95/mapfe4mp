@@ -45,6 +45,7 @@ torch.backends.cudnn.benchmark = True
 scaler = GradScaler()
 current_cuda = None
 absolute_root_folder = None
+use_rel_disp_decoder = False
 
 CHECK_ACCURACY = True
 MAX_TIME_TO_CHECK_TRAIN = 120 # minutes
@@ -126,7 +127,7 @@ def calculate_nll_loss(gt, pred, loss_f):
     )
     return loss
 
-def cal_l2_losses(pred_traj_gt, pred_traj_gt_rel, pred_traj_fake, pred_traj_fake_rel,loss_mask):
+def cal_l2_losses(pred_traj_gt, pred_traj_gt_rel, pred_traj_fake, pred_traj_fake_rel, loss_mask):
     """
     """
     g_l2_loss_abs = l2_loss(pred_traj_fake, pred_traj_gt, loss_mask, mode='sum')
@@ -163,6 +164,7 @@ def model_trainer(config, logger):
 
     hyperparameters = config.hyperparameters
     optim_parameters = config.optim_parameters
+    use_rel_disp_decoder = config.model.generator.decoder_lstm.use_rel_disp
 
     ## Set specific device for both data and model
 
@@ -617,12 +619,15 @@ def generator_step(hyperparameters, batch, generator, optimizer_g,
     with autocast():
         # Forward (If agent_idx != None, model prediction refers only to target agent)
         
-        pred_traj_fake_rel = generator(obs_traj, obs_traj_rel, seq_start_end, agent_idx)
+        if use_rel_disp_decoder:
+            pred_traj_fake_rel = generator(obs_traj, obs_traj_rel, seq_start_end, agent_idx)
 
-        if hyperparameters.output_single_agent:
-            pred_traj_fake = relative_to_abs(pred_traj_fake_rel, obs_traj[-1,agent_idx,:])
+            if hyperparameters.output_single_agent:
+                pred_traj_fake = relative_to_abs(pred_traj_fake_rel, obs_traj[-1,agent_idx,:])
+            else:
+                pred_traj_fake = relative_to_abs(pred_traj_fake_rel, obs_traj[-1])
         else:
-            pred_traj_fake = relative_to_abs(pred_traj_fake_rel, obs_traj[-1])
+            pred_traj_fake = generator(obs_traj, obs_traj_rel, seq_start_end, agent_idx)
 
         # Take (if specified) data of only the AGENT of interest
 
@@ -741,7 +746,11 @@ def check_accuracy(hyperparameters, loader, generator,
 
             # Forward (If agent_idx != None, model prediction refers only to target agent)
 
-            pred_traj_fake_rel = generator(obs_traj, obs_traj_rel, seq_start_end, agent_idx) 
+            if use_rel_disp_decoder:
+                pred_traj_fake_rel = generator(obs_traj, obs_traj_rel, seq_start_end, agent_idx) 
+                pred_traj_fake = relative_to_abs(pred_traj_fake_rel, obs_traj[-1])
+            else:
+                pred_traj_fake = generator(obs_traj, obs_traj_rel, seq_start_end, agent_idx) 
 
             # single agent trajectories
             if hyperparameters.output_single_agent:
@@ -753,12 +762,14 @@ def check_accuracy(hyperparameters, loader, generator,
             # Relative displacements to absolute (around center) coordinates. 
             # NOT global (map) coordinates
 
-            pred_traj_fake = relative_to_abs(pred_traj_fake_rel, obs_traj[-1])
- 
             # L2 loss
 
-            g_l2_loss_abs, g_l2_loss_rel = cal_l2_losses(pred_traj_gt, pred_traj_gt_rel, pred_traj_fake,
-                                                         pred_traj_fake_rel, loss_mask)
+            if use_rel_disp_decoder:
+                g_l2_loss_abs, g_l2_loss_rel = cal_l2_losses(pred_traj_gt, pred_traj_gt_rel, 
+                                                             pred_traj_fake, pred_traj_fake_rel, loss_mask)
+            else:
+                g_l2_loss_abs, g_l2_loss_rel = cal_l2_losses(pred_traj_gt, torch.zeros((pred_traj_gt.shape)).cuda(current_cuda), 
+                                                             pred_traj_fake, torch.zeros((pred_traj_fake.shape)).cuda(current_cuda), loss_mask)
 
             ade, ade_l, ade_nl = cal_ade(pred_traj_gt, pred_traj_fake, linear_obj, non_linear_obj,
                                          mask if not hyperparameters.output_single_agent else None)
