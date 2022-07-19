@@ -1,0 +1,111 @@
+base_dir: /home/robesafe/mapfe4mp
+dataset:
+  batch_size: 512
+  class_balance: 0.5
+  data_augmentation: true
+  num_workers: 0
+  path: data/datasets/argoverse/motion-forecasting/
+  preprocess_data: false
+  save_data: false
+  shuffle: true
+  split: train
+  split_percentage: 0.1
+  start_from_percentage: 0.0
+dataset_name: argoverse_motion_forecasting_dataset
+device_gpu: 0
+hyperparameters:
+  checkpoint_name: '0'
+  checkpoint_start_from: null
+  checkpoint_train_percentage: 0.3
+  checkpoint_val_percentage: 0.3
+  clipping_threshold_d: 0
+  clipping_threshold_g: 1.1
+  d_steps: 2
+  distance_threshold: 40
+  exp_description: 100 % dataset (both train and val). Train with absolute coordinates,
+    not rel-rel (only encoder). Add conv 1d to encoder (to model velocities and acceleration).
+    Batch size = 1024. Include data augmentation (with rotation). Ensure all curved
+    trajectories are analyzed. Encoder/Decoder h_dim 32 -> 256. MSE (ADE&FDE) + NLL
+    as loss function. Loss with absolute and only single AGENT. loss_fde_weight =
+    1 -> 3 Remove noise (decoder input). For loop to encode trajectories. Remove spatial
+    embedding in encoder. Bidirectional encoder = True. num_layers encoder 1 -> 2.
+    Dropout = 0.2 -> 0.5.
+  exp_name: exp-2022-07-19_06-34
+  g_steps: 1
+  loss_ade_weight: 1
+  loss_fa_weight: 1
+  loss_fde_weight: 3
+  loss_nll_weight: 1.25
+  loss_type_g: mse_w+nll
+  lr_decay_factor: 0.65
+  lr_epoch_percentage_patience: 0.1
+  lr_scheduler: true
+  num_epochs: 100
+  num_modes: 6
+  num_samples_check: 5000
+  obs_len: 20
+  obs_origin: 20
+  output_dir: save/argoverse/gan_social_lstm_mhsa/10.0_percent/exp-2022-07-19_06-34
+  output_single_agent: true
+  pred_len: 30
+  print_every: 50
+  save_root_dir: save/argoverse
+  tensorboard_active: true
+model:
+  adversarial_training: true
+  discriminator:
+    classifier:
+      mlp_config:
+        activation: relu
+        batch_norm: true
+        dim_list:
+        - 64
+        - 1024
+        - 1
+        dropout: 0.5
+    encoder:
+      dropout: 0
+      emb_dim: 16
+      hidden_dim: 64
+      mlp_config:
+        activation: relu
+        batch_norm: true
+        dim_list:
+        - 2
+        - 16
+        dropout: 0.5
+      num_layers: 1
+  generator:
+    decoder_lstm:
+      bidirectional: false
+      dropout: 0.5
+      embedding_dim: 16
+      h_dim: 256
+      input_len: 20
+      mlp_dim:
+      - 64
+      num_layers: 1
+      output_len: 30
+      use_rel_disp: false
+    encoder_lstm:
+      bidirectional: true
+      conv_filters: 16
+      dropout: 0.5
+      embedding_dim: 16
+      h_dim: 256
+      input_len: 20
+      noise_dim: 8
+      num_layers: 2
+      use_rel_disp: false
+    mhsa:
+      dropout: 0.5
+      h_dim: 256
+      num_heads: 4
+    use_rel_disp: false
+  name: gan_social_lstm_mhsa
+optim_parameters:
+  d_learning_rate: 0.001
+  d_weight_decay: 0
+  g_learning_rate: 0.001
+  g_weight_decay: 0
+use_gpu: 1

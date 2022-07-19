@@ -36,18 +36,27 @@ def make_mlp(dim_list):
         layers.append(nn.LeakyReLU())
     return nn.Sequential(*layers)
 
+def get_noise(shape,current_cuda):
+    """
+    Only for adversarial model
+    """
+    return torch.randn(*shape).cuda(current_cuda)
+
 class TrajectoryGenerator(nn.Module):
-    def __init__(self, config_encoder_lstm, config_decoder_lstm, config_mhsa, current_cuda="cuda:0"):
+    def __init__(self, config_encoder_lstm, config_decoder_lstm, config_mhsa, 
+                       current_cuda="cuda:0", adversarial_training=False):
         super(TrajectoryGenerator, self).__init__() # initialize nn.Module with default parameters
 
         # Aux variables
 
         self.current_cuda = current_cuda
+        self.adversarial_training = adversarial_training
         data_dim = 2 # xy
         
         # Encoder
 
         self.encoder_use_rel_disp = config_encoder_lstm.use_rel_disp
+        self.noise_dim = config_encoder_lstm.noise_dim
 
         self.encoder = Encoder(h_dim=config_encoder_lstm.h_dim, # Num units
                                bidirectional=config_encoder_lstm.bidirectional, 
@@ -82,7 +91,10 @@ class TrajectoryGenerator(nn.Module):
 
         assert config_decoder_lstm.h_dim == config_encoder_lstm.h_dim
 
-        mlp_decoder_context_dims = [mlp_context_input, *config_decoder_lstm.mlp_dim, config_decoder_lstm.h_dim]
+        if self.adversarial_training:
+            mlp_decoder_context_dims = [mlp_context_input, *config_decoder_lstm.mlp_dim, config_decoder_lstm.h_dim - self.noise_dim]
+        else:
+            mlp_decoder_context_dims = [mlp_context_input, *config_decoder_lstm.mlp_dim, config_decoder_lstm.h_dim]
         self.mlp_decoder_context = make_mlp(mlp_decoder_context_dims)
 
         ## Final prediction
@@ -95,6 +107,15 @@ class TrajectoryGenerator(nn.Module):
                                        dropout=config_decoder_lstm.dropout,
                                        current_cuda=self.current_cuda,
                                        use_rel_disp=config_decoder_lstm.use_rel_disp)
+
+    def add_noise(self, _input):
+        """
+        """
+        num_objs = _input.size(0)
+        noise_shape = (self.noise_dim,)
+        z_decoder = get_noise(noise_shape,self.current_cuda)
+        vec = z_decoder.view(1, -1).repeat(num_objs, 1)
+        return torch.cat((_input, vec), dim=1)
 
     def forward(self, obs_traj, obs_traj_rel, start_end_seq, agent_idx=None):
         """
@@ -154,6 +175,10 @@ class TrajectoryGenerator(nn.Module):
             mlp_decoder_context_input = mlp_decoder_context_input[agent_idx,:]
 
         decoder_h = self.mlp_decoder_context(self.lnd(mlp_decoder_context_input))
+
+        if self.adversarial_training:
+            decoder_h = self.add_noise(decoder_h)
+
         decoder_h = torch.unsqueeze(decoder_h, 0) 
 
         # Get agent last observations (both abs (around 0,0) and rel-rel)
@@ -182,8 +207,11 @@ class TrajectoryDiscriminator(nn.Module):
         real_classifier_dims = [self.h_dim, self.mlp_dim, 1]
         self.real_classifier = make_mlp(real_classifier_dims)
 
-    def forward(self, traj, traj_rel):
+    def forward(self, traj):
+        """
+        traj can be either absolute coordinates (around 0,0) or relatives
+        """
 
-        final_h = self.encoder(traj_rel)
+        final_h = self.encoder(traj)
         scores = self.real_classifier(final_h)
         return scores

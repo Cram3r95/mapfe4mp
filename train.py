@@ -33,7 +33,7 @@ TRAINER_LIST = [
                 "social_lstm_mhsa",
                 "social_lstm_mhsa_mm"
                 "social_set_transformer",
-                "social_set_transformer_mm"
+                "social_set_transformer_mm",
                 "gan_social_lstm_mhsa"
                ]
 

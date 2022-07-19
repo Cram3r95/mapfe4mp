@@ -482,3 +482,2962 @@ Time per iteration: 2.661248154509658
   [G] G_mse_fde_loss: 5.702
   [G] G_nll_loss: 214.914
   [G] G_total_loss: 288.273
+Iteration = 3301 / 40223
+Time per iteration: 2.662045181393443
+  [G] G_mse_ade_loss: 2.595
+  [G] G_mse_fde_loss: 5.792
+  [G] G_nll_loss: 273.083
+  [G] G_total_loss: 361.324
+Iteration = 3351 / 40223
+Time per iteration: 2.6626972410081926
+  [G] G_mse_ade_loss: 2.501
+  [G] G_mse_fde_loss: 5.573
+  [G] G_nll_loss: 242.878
+  [G] G_total_loss: 322.818
+Iteration = 3401 / 40223
+Time per iteration: 2.663163641767269
+  [G] G_mse_ade_loss: 2.771
+  [G] G_mse_fde_loss: 5.973
+  [G] G_nll_loss: 351.172
+  [G] G_total_loss: 459.653
+Iteration = 3451 / 40223
+Time per iteration: 2.663577362476173
+  [G] G_mse_ade_loss: 2.568
+  [G] G_mse_fde_loss: 5.677
+  [G] G_nll_loss: 260.302
+  [G] G_total_loss: 344.976
+Iteration = 3501 / 40223
+Time per iteration: 2.6639581526119143
+  [G] G_mse_ade_loss: 2.558
+  [G] G_mse_fde_loss: 5.679
+  [G] G_nll_loss: 228.611
+  [G] G_total_loss: 305.358
+Iteration = 3551 / 40223
+Time per iteration: 2.6648652061412985
+  [G] G_mse_ade_loss: 2.617
+  [G] G_mse_fde_loss: 5.747
+  [G] G_nll_loss: 306.667
+  [G] G_total_loss: 403.190
+Iteration = 3601 / 40223
+Time per iteration: 2.665511108444519
+  [G] G_mse_ade_loss: 2.491
+  [G] G_mse_fde_loss: 5.439
+  [G] G_nll_loss: 257.829
+  [G] G_total_loss: 341.095
+Starting epoch 10
+Iteration = 3651 / 40223
+Time per iteration: 2.6659635922837603
+  [G] G_mse_ade_loss: 2.494
+  [G] G_mse_fde_loss: 5.586
+  [G] G_nll_loss: 226.501
+  [G] G_total_loss: 302.378
+Iteration = 3701 / 40223
+Time per iteration: 2.6665752567300536
+  [G] G_mse_ade_loss: 2.442
+  [G] G_mse_fde_loss: 5.385
+  [G] G_nll_loss: 225.090
+  [G] G_total_loss: 299.959
+Iteration = 3751 / 40223
+Time per iteration: 2.6675491402289673
+  [G] G_mse_ade_loss: 2.495
+  [G] G_mse_fde_loss: 5.380
+  [G] G_nll_loss: 230.631
+  [G] G_total_loss: 306.924
+Iteration = 3801 / 40223
+Time per iteration: 2.6682513936260315
+  [G] G_mse_ade_loss: 2.611
+  [G] G_mse_fde_loss: 5.755
+  [G] G_nll_loss: 258.590
+  [G] G_total_loss: 343.113
+Iteration = 3851 / 40223
+Time per iteration: 2.6690416872826406
+  [G] G_mse_ade_loss: 2.586
+  [G] G_mse_fde_loss: 5.719
+  [G] G_nll_loss: 234.371
+  [G] G_total_loss: 312.707
+Iteration = 3901 / 40223
+Time per iteration: 2.6696597483487534
+  [G] G_mse_ade_loss: 2.507
+  [G] G_mse_fde_loss: 5.705
+  [G] G_nll_loss: 205.086
+  [G] G_total_loss: 275.979
+Iteration = 3951 / 40223
+Time per iteration: 2.670180373661309
+  [G] G_mse_ade_loss: 2.585
+  [G] G_mse_fde_loss: 5.690
+  [G] G_nll_loss: 253.282
+  [G] G_total_loss: 336.258
+Iteration = 4001 / 40223
+Time per iteration: 2.6703718975465676
+  [G] G_mse_ade_loss: 2.545
+  [G] G_mse_fde_loss: 5.591
+  [G] G_nll_loss: 237.207
+  [G] G_total_loss: 315.827
+Starting epoch 11
+Iteration = 4051 / 40223
+Time per iteration: 2.6701261029070436
+  [G] G_mse_ade_loss: 2.562
+  [G] G_mse_fde_loss: 5.557
+  [G] G_nll_loss: 229.452
+  [G] G_total_loss: 306.049
+Iteration = 4101 / 40223
+Time per iteration: 2.6704208163103513
+  [G] G_mse_ade_loss: 2.568
+  [G] G_mse_fde_loss: 5.623
+  [G] G_nll_loss: 242.424
+  [G] G_total_loss: 322.466
+Iteration = 4151 / 40223
+Time per iteration: 2.6707886074055134
+  [G] G_mse_ade_loss: 2.516
+  [G] G_mse_fde_loss: 5.634
+  [G] G_nll_loss: 230.783
+  [G] G_total_loss: 307.898
+Iteration = 4201 / 40223
+Time per iteration: 2.671187589577736
+  [G] G_mse_ade_loss: 2.537
+  [G] G_mse_fde_loss: 5.398
+  [G] G_nll_loss: 249.131
+  [G] G_total_loss: 330.145
+Iteration = 4251 / 40223
+Time per iteration: 2.6714466379771817
+  [G] G_mse_ade_loss: 2.659
+  [G] G_mse_fde_loss: 5.956
+  [G] G_nll_loss: 272.863
+  [G] G_total_loss: 361.606
+Iteration = 4301 / 40223
+Time per iteration: 2.671614502286168
+  [G] G_mse_ade_loss: 2.433
+  [G] G_mse_fde_loss: 5.352
+  [G] G_nll_loss: 225.456
+  [G] G_total_loss: 300.308
+Iteration = 4351 / 40223
+Time per iteration: 2.6718241920747365
+  [G] G_mse_ade_loss: 2.577
+  [G] G_mse_fde_loss: 5.675
+  [G] G_nll_loss: 277.682
+  [G] G_total_loss: 366.704
+Iteration = 4401 / 40223
+Time per iteration: 2.6721208848565365
+  [G] G_mse_ade_loss: 2.460
+  [G] G_mse_fde_loss: 5.523
+  [G] G_nll_loss: 219.288
+  [G] G_total_loss: 293.140
+Starting epoch 12
+Iteration = 4451 / 40223
+Time per iteration: 2.671905024082198
+  [G] G_mse_ade_loss: 2.504
+  [G] G_mse_fde_loss: 5.497
+  [G] G_nll_loss: 232.675
+  [G] G_total_loss: 309.838
+Iteration = 4501 / 40223
+Time per iteration: 2.672198444492312
+  [G] G_mse_ade_loss: 2.575
+  [G] G_mse_fde_loss: 5.661
+  [G] G_nll_loss: 257.243
+  [G] G_total_loss: 341.112
+Iteration = 4551 / 40223
+Time per iteration: 2.6724860286272585
+  [G] G_mse_ade_loss: 2.636
+  [G] G_mse_fde_loss: 5.848
+  [G] G_nll_loss: 245.916
+  [G] G_total_loss: 327.573
+Iteration = 4601 / 40223
+Time per iteration: 2.6727148723249927
+  [G] G_mse_ade_loss: 2.317
+  [G] G_mse_fde_loss: 5.119
+  [G] G_nll_loss: 190.080
+  [G] G_total_loss: 255.275
+Iteration = 4651 / 40223
+Time per iteration: 2.6727751393237185
+  [G] G_mse_ade_loss: 2.396
+  [G] G_mse_fde_loss: 5.246
+  [G] G_nll_loss: 199.761
+  [G] G_total_loss: 267.836
+Iteration = 4701 / 40223
+Time per iteration: 2.6728690153891623
+  [G] G_mse_ade_loss: 2.509
+  [G] G_mse_fde_loss: 5.431
+  [G] G_nll_loss: 227.812
+  [G] G_total_loss: 303.565
+Iteration = 4751 / 40223
+Time per iteration: 2.673047214627291
+  [G] G_mse_ade_loss: 2.637
+  [G] G_mse_fde_loss: 5.749
+  [G] G_nll_loss: 281.799
+  [G] G_total_loss: 372.134
+Checking stats on train ...
+  [train] train_ade: 2.465
+  [train] train_ade_l: 2.159
+  [train] train_ade_nl: 2.777
+  [train] train_fde: 5.506
+  [train] train_fde_l: 4.689
+  [train] train_fde_nl: 6.340
+  [train] train_g_l2_loss_abs: 15.349
+  [train] train_g_l2_loss_rel: 0.000
+Checking stats on val ...
+  [val] val_ade: 2.233
+  [val] val_ade_l: 2.092
+  [val] val_ade_nl: 2.562
+  [val] val_fde: 4.874
+  [val] val_fde_l: 4.502
+  [val] val_fde_nl: 5.741
+  [val] val_g_l2_loss_abs: 10.999
+  [val] val_g_l2_loss_rel: 0.000
+Min ADE: 2.2333166412365886
+Min FDE: 4.874344598053436
+New low for avg_disp_error
+New low for avg_disp_error_nl
+Saving checkpoint to /home/robesafe/mapfe4mp/save/argoverse/social_lstm_mhsa/100.0_percent/exp-2022-07-18_06-19/argoverse_motion_forecasting_dataset_0_with_model.pt
+Done.
+Saving checkpoint to /home/robesafe/mapfe4mp/save/argoverse/social_lstm_mhsa/100.0_percent/exp-2022-07-18_06-19/argoverse_motion_forecasting_dataset_0_no_model.pt
+Done.
+Iteration = 4801 / 40223
+Time per iteration: 2.672980103187823
+  [G] G_mse_ade_loss: 2.503
+  [G] G_mse_fde_loss: 5.528
+  [G] G_nll_loss: 233.661
+  [G] G_total_loss: 311.163
+Starting epoch 13
+Iteration = 4851 / 40223
+Time per iteration: 2.672498360242433
+  [G] G_mse_ade_loss: 2.461
+  [G] G_mse_fde_loss: 5.637
+  [G] G_nll_loss: 226.842
+  [G] G_total_loss: 302.924
+Iteration = 4901 / 40223
+Time per iteration: 2.672450937900804
+  [G] G_mse_ade_loss: 2.589
+  [G] G_mse_fde_loss: 5.707
+  [G] G_nll_loss: 247.868
+  [G] G_total_loss: 329.545
+Iteration = 4951 / 40223
+Time per iteration: 2.672378233143162
+  [G] G_mse_ade_loss: 2.413
+  [G] G_mse_fde_loss: 5.309
+  [G] G_nll_loss: 204.079
+  [G] G_total_loss: 273.440
+Iteration = 5001 / 40223
+Time per iteration: 2.6722658004695905
+  [G] G_mse_ade_loss: 2.394
+  [G] G_mse_fde_loss: 5.269
+  [G] G_nll_loss: 222.907
+  [G] G_total_loss: 296.834
+Iteration = 5051 / 40223
+Time per iteration: 2.6721032456911757
+  [G] G_mse_ade_loss: 2.524
+  [G] G_mse_fde_loss: 5.555
+  [G] G_nll_loss: 232.485
+  [G] G_total_loss: 309.793
+Iteration = 5101 / 40223
+Time per iteration: 2.671974976468007
+  [G] G_mse_ade_loss: 2.457
+  [G] G_mse_fde_loss: 5.390
+  [G] G_nll_loss: 215.401
+  [G] G_total_loss: 287.877
+Iteration = 5151 / 40223
+Time per iteration: 2.6716027305649686
+  [G] G_mse_ade_loss: 2.696
+  [G] G_mse_fde_loss: 5.850
+  [G] G_nll_loss: 259.495
+  [G] G_total_loss: 344.616
+Iteration = 5201 / 40223
+Time per iteration: 2.6711255199884913
+  [G] G_mse_ade_loss: 2.715
+  [G] G_mse_fde_loss: 6.071
+  [G] G_nll_loss: 285.870
+  [G] G_total_loss: 378.265
+Starting epoch 14
+Iteration = 5251 / 40223
+Time per iteration: 2.670453207353437
+  [G] G_mse_ade_loss: 2.566
+  [G] G_mse_fde_loss: 5.530
+  [G] G_nll_loss: 222.233
+  [G] G_total_loss: 296.946
+Iteration = 5301 / 40223
+Time per iteration: 2.6703892670764358
+  [G] G_mse_ade_loss: 2.676
+  [G] G_mse_fde_loss: 5.911
+  [G] G_nll_loss: 286.644
+  [G] G_total_loss: 378.713
+Iteration = 5351 / 40223
+Time per iteration: 2.6705726335882316
+  [G] G_mse_ade_loss: 2.475
+  [G] G_mse_fde_loss: 5.474
+  [G] G_nll_loss: 209.652
+  [G] G_total_loss: 280.962
+Iteration = 5401 / 40223
+Time per iteration: 2.670972550937234
+  [G] G_mse_ade_loss: 2.595
+  [G] G_mse_fde_loss: 5.796
+  [G] G_nll_loss: 249.461
+  [G] G_total_loss: 331.810
+Iteration = 5451 / 40223
+Time per iteration: 2.6712612374903544
+  [G] G_mse_ade_loss: 2.505
+  [G] G_mse_fde_loss: 5.580
+  [G] G_nll_loss: 255.201
+  [G] G_total_loss: 338.247
+Iteration = 5501 / 40223
+Time per iteration: 2.671033217070038
+  [G] G_mse_ade_loss: 2.403
+  [G] G_mse_fde_loss: 5.232
+  [G] G_nll_loss: 210.481
+  [G] G_total_loss: 281.200
+Iteration = 5551 / 40223
+Time per iteration: 2.67111963689746
+  [G] G_mse_ade_loss: 2.267
+  [G] G_mse_fde_loss: 4.880
+  [G] G_nll_loss: 171.628
+  [G] G_total_loss: 231.443
+Iteration = 5601 / 40223
+Time per iteration: 2.6711550746468897
+  [G] G_mse_ade_loss: 2.561
+  [G] G_mse_fde_loss: 5.730
+  [G] G_nll_loss: 244.804
+  [G] G_total_loss: 325.756
+Starting epoch 15
+Iteration = 5651 / 40223
+Time per iteration: 2.6709253849170627
+  [G] G_mse_ade_loss: 2.318
+  [G] G_mse_fde_loss: 5.036
+  [G] G_nll_loss: 197.008
+  [G] G_total_loss: 263.685
+Iteration = 5701 / 40223
+Time per iteration: 2.6708521553977
+  [G] G_mse_ade_loss: 2.540
+  [G] G_mse_fde_loss: 5.525
+  [G] G_nll_loss: 237.532
+  [G] G_total_loss: 316.032
+Iteration = 5751 / 40223
+Time per iteration: 2.6707606817655742
+  [G] G_mse_ade_loss: 2.313
+  [G] G_mse_fde_loss: 5.076
+  [G] G_nll_loss: 189.794
+  [G] G_total_loss: 254.784
+Iteration = 5801 / 40223
+Time per iteration: 2.670562146224147
+  [G] G_mse_ade_loss: 2.512
+  [G] G_mse_fde_loss: 5.567
+  [G] G_nll_loss: 233.681
+  [G] G_total_loss: 311.315
+Iteration = 5851 / 40223
+Time per iteration: 2.670326558407953
+  [G] G_mse_ade_loss: 2.357
+  [G] G_mse_fde_loss: 5.290
+  [G] G_nll_loss: 244.253
+  [G] G_total_loss: 323.542
+Iteration = 5901 / 40223
+Time per iteration: 2.6701276366982576
+  [G] G_mse_ade_loss: 2.513
+  [G] G_mse_fde_loss: 5.643
+  [G] G_nll_loss: 257.482
+  [G] G_total_loss: 341.293
+Iteration = 5951 / 40223
+Time per iteration: 2.6700261924431477
+  [G] G_mse_ade_loss: 2.248
+  [G] G_mse_fde_loss: 4.844
+  [G] G_nll_loss: 203.484
+  [G] G_total_loss: 271.135
+Iteration = 6001 / 40223
+Time per iteration: 2.669877505544781
+  [G] G_mse_ade_loss: 2.318
+  [G] G_mse_fde_loss: 5.037
+  [G] G_nll_loss: 194.108
+  [G] G_total_loss: 260.062
+Starting epoch 16
+Iteration = 6051 / 40223
+Time per iteration: 2.669477796381199
+  [G] G_mse_ade_loss: 2.153
+  [G] G_mse_fde_loss: 4.854
+  [G] G_nll_loss: 177.268
+  [G] G_total_loss: 238.298
+Iteration = 6101 / 40223
+Time per iteration: 2.6694070654332767
+  [G] G_mse_ade_loss: 2.277
+  [G] G_mse_fde_loss: 5.039
+  [G] G_nll_loss: 196.481
+  [G] G_total_loss: 262.995
+Iteration = 6151 / 40223
+Time per iteration: 2.669273443598802
+  [G] G_mse_ade_loss: 2.329
+  [G] G_mse_fde_loss: 5.218
+  [G] G_nll_loss: 186.018
+  [G] G_total_loss: 250.507
+Iteration = 6201 / 40223
+Time per iteration: 2.6690685960135716
+  [G] G_mse_ade_loss: 2.487
+  [G] G_mse_fde_loss: 5.589
+  [G] G_nll_loss: 255.840
+  [G] G_total_loss: 339.054
+Iteration = 6251 / 40223
+Time per iteration: 2.668766552496864
+  [G] G_mse_ade_loss: 2.246
+  [G] G_mse_fde_loss: 4.872
+  [G] G_nll_loss: 183.365
+  [G] G_total_loss: 246.069
+Iteration = 6301 / 40223
+Time per iteration: 2.6685231096724484
+  [G] G_mse_ade_loss: 2.355
+  [G] G_mse_fde_loss: 5.258
+  [G] G_nll_loss: 211.039
+  [G] G_total_loss: 281.928
+Iteration = 6351 / 40223
+Time per iteration: 2.668356705567833
+  [G] G_mse_ade_loss: 2.299
+  [G] G_mse_fde_loss: 5.060
+  [G] G_nll_loss: 202.531
+  [G] G_total_loss: 270.642
+Iteration = 6401 / 40223
+Time per iteration: 2.668195337601852
+  [G] G_mse_ade_loss: 2.404
+  [G] G_mse_fde_loss: 5.130
+  [G] G_nll_loss: 223.549
+  [G] G_total_loss: 297.230
+Starting epoch 17
+Iteration = 6451 / 40223
+Time per iteration: 2.667768523150166
+  [G] G_mse_ade_loss: 2.377
+  [G] G_mse_fde_loss: 5.212
+  [G] G_nll_loss: 210.515
+  [G] G_total_loss: 281.156
+Iteration = 6501 / 40223
+Time per iteration: 2.66766102169866
+  [G] G_mse_ade_loss: 2.320
+  [G] G_mse_fde_loss: 5.030
+  [G] G_nll_loss: 225.071
+  [G] G_total_loss: 298.749
+Iteration = 6551 / 40223
+Time per iteration: 2.667587988505089
+  [G] G_mse_ade_loss: 2.392
+  [G] G_mse_fde_loss: 5.298
+  [G] G_nll_loss: 256.848
+  [G] G_total_loss: 339.345
+Iteration = 6601 / 40223
+Time per iteration: 2.667523153296674
+  [G] G_mse_ade_loss: 2.270
+  [G] G_mse_fde_loss: 5.085
+  [G] G_nll_loss: 192.622
+  [G] G_total_loss: 258.303
+Iteration = 6651 / 40223
+Time per iteration: 2.667447125458248
+  [G] G_mse_ade_loss: 2.346
+  [G] G_mse_fde_loss: 5.318
+  [G] G_nll_loss: 202.189
+  [G] G_total_loss: 271.036
+Iteration = 6701 / 40223
+Time per iteration: 2.667426383988108
+  [G] G_mse_ade_loss: 2.350
+  [G] G_mse_fde_loss: 5.140
+  [G] G_nll_loss: 230.549
+  [G] G_total_loss: 305.956
+Iteration = 6751 / 40223
+Time per iteration: 2.6673877411216407
+  [G] G_mse_ade_loss: 2.313
+  [G] G_mse_fde_loss: 5.181
+  [G] G_nll_loss: 204.835
+  [G] G_total_loss: 273.900
+Iteration = 6801 / 40223
+Time per iteration: 2.667339607225308
+  [G] G_mse_ade_loss: 2.347
+  [G] G_mse_fde_loss: 5.290
+  [G] G_nll_loss: 211.262
+  [G] G_total_loss: 282.295
+Iteration = 6851 / 40223
+Time per iteration: 2.6669883259611917
+  [G] G_mse_ade_loss: 2.157
+  [G] G_mse_fde_loss: 4.731
+  [G] G_nll_loss: 191.389
+  [G] G_total_loss: 255.587
+Starting epoch 18
+Iteration = 6901 / 40223
+Time per iteration: 2.6667715686418894
+  [G] G_mse_ade_loss: 2.498
+  [G] G_mse_fde_loss: 5.524
+  [G] G_nll_loss: 245.332
+  [G] G_total_loss: 325.736
+Iteration = 6951 / 40223
+Time per iteration: 2.666423502182415
+  [G] G_mse_ade_loss: 2.284
+  [G] G_mse_fde_loss: 4.960
+  [G] G_nll_loss: 188.819
+  [G] G_total_loss: 253.187
+Iteration = 7001 / 40223
+Time per iteration: 2.6662480407843434
+  [G] G_mse_ade_loss: 2.463
+  [G] G_mse_fde_loss: 5.437
+  [G] G_nll_loss: 231.589
+  [G] G_total_loss: 308.260
+Iteration = 7051 / 40223
+Time per iteration: 2.6661639137143633
+  [G] G_mse_ade_loss: 2.418
+  [G] G_mse_fde_loss: 5.494
+  [G] G_nll_loss: 243.660
+  [G] G_total_loss: 323.474
+Iteration = 7101 / 40223
+Time per iteration: 2.6658538808085317
+  [G] G_mse_ade_loss: 2.280
+  [G] G_mse_fde_loss: 5.069
+  [G] G_nll_loss: 187.168
+  [G] G_total_loss: 251.447
+Checking stats on train ...
+  [train] train_ade: 2.251
+  [train] train_ade_l: 1.959
+  [train] train_ade_nl: 2.550
+  [train] train_fde: 5.010
+  [train] train_fde_l: 4.251
+  [train] train_fde_nl: 5.786
+  [train] train_g_l2_loss_abs: 13.511
+  [train] train_g_l2_loss_rel: 0.000
+Checking stats on val ...
+  [val] val_ade: 2.038
+  [val] val_ade_l: 1.880
+  [val] val_ade_nl: 2.404
+  [val] val_fde: 4.471
+  [val] val_fde_l: 4.072
+  [val] val_fde_nl: 5.399
+  [val] val_g_l2_loss_abs: 9.687
+  [val] val_g_l2_loss_rel: 0.000
+Min ADE: 2.0379392296345618
+Min FDE: 4.471033538165825
+New low for avg_disp_error
+New low for avg_disp_error_nl
+Saving checkpoint to /home/robesafe/mapfe4mp/save/argoverse/social_lstm_mhsa/100.0_percent/exp-2022-07-18_06-19/argoverse_motion_forecasting_dataset_0_with_model.pt
+Done.
+Saving checkpoint to /home/robesafe/mapfe4mp/save/argoverse/social_lstm_mhsa/100.0_percent/exp-2022-07-18_06-19/argoverse_motion_forecasting_dataset_0_no_model.pt
+Done.
+Iteration = 7151 / 40223
+Time per iteration: 2.665778936964368
+  [G] G_mse_ade_loss: 2.134
+  [G] G_mse_fde_loss: 4.702
+  [G] G_nll_loss: 165.358
+  [G] G_total_loss: 222.938
+Iteration = 7201 / 40223
+Time per iteration: 2.665746884351968
+  [G] G_mse_ade_loss: 2.206
+  [G] G_mse_fde_loss: 4.868
+  [G] G_nll_loss: 189.622
+  [G] G_total_loss: 253.840
+Iteration = 7251 / 40223
+Time per iteration: 2.6656890100256327
+  [G] G_mse_ade_loss: 2.236
+  [G] G_mse_fde_loss: 4.875
+  [G] G_nll_loss: 195.193
+  [G] G_total_loss: 260.853
+Starting epoch 19
+Iteration = 7301 / 40223
+Time per iteration: 2.6653807668747307
+  [G] G_mse_ade_loss: 2.413
+  [G] G_mse_fde_loss: 5.371
+  [G] G_nll_loss: 242.020
+  [G] G_total_loss: 321.051
+Iteration = 7351 / 40223
+Time per iteration: 2.6653417756388484
+  [G] G_mse_ade_loss: 2.177
+  [G] G_mse_fde_loss: 4.776
+  [G] G_nll_loss: 170.603
+  [G] G_total_loss: 229.759
+Iteration = 7401 / 40223
+Time per iteration: 2.665347876186033
+  [G] G_mse_ade_loss: 2.179
+  [G] G_mse_fde_loss: 4.831
+  [G] G_nll_loss: 176.416
+  [G] G_total_loss: 237.193
+Iteration = 7451 / 40223
+Time per iteration: 2.665297300379447
+  [G] G_mse_ade_loss: 2.249
+  [G] G_mse_fde_loss: 5.021
+  [G] G_nll_loss: 189.183
+  [G] G_total_loss: 253.790
+Iteration = 7501 / 40223
+Time per iteration: 2.6652915666237176
+  [G] G_mse_ade_loss: 2.317
+  [G] G_mse_fde_loss: 5.076
+  [G] G_nll_loss: 235.082
+  [G] G_total_loss: 311.398
+Iteration = 7551 / 40223
+Time per iteration: 2.6653038238219247
+  [G] G_mse_ade_loss: 2.300
+  [G] G_mse_fde_loss: 5.107
+  [G] G_nll_loss: 189.199
+  [G] G_total_loss: 254.120
+Iteration = 7601 / 40223
+Time per iteration: 2.6652846486297754
+  [G] G_mse_ade_loss: 2.340
+  [G] G_mse_fde_loss: 5.169
+  [G] G_nll_loss: 207.845
+  [G] G_total_loss: 277.654
+Iteration = 7651 / 40223
+Time per iteration: 2.665285774686417
+  [G] G_mse_ade_loss: 2.233
+  [G] G_mse_fde_loss: 4.958
+  [G] G_nll_loss: 213.990
+  [G] G_total_loss: 284.594
+Starting epoch 20
+Iteration = 7701 / 40223
+Time per iteration: 2.664973286278386
+  [G] G_mse_ade_loss: 2.535
+  [G] G_mse_fde_loss: 5.645
+  [G] G_nll_loss: 283.354
+  [G] G_total_loss: 373.663
+Iteration = 7751 / 40223
+Time per iteration: 2.6648861310540775
+  [G] G_mse_ade_loss: 2.215
+  [G] G_mse_fde_loss: 4.933
+  [G] G_nll_loss: 187.599
+  [G] G_total_loss: 251.512
+Iteration = 7801 / 40223
+Time per iteration: 2.664843260454927
+  [G] G_mse_ade_loss: 2.270
+  [G] G_mse_fde_loss: 5.075
+  [G] G_nll_loss: 180.504
+  [G] G_total_loss: 243.126
+Iteration = 7851 / 40223
+Time per iteration: 2.664910567033034
+  [G] G_mse_ade_loss: 2.103
+  [G] G_mse_fde_loss: 4.606
+  [G] G_nll_loss: 152.040
+  [G] G_total_loss: 205.970
+Iteration = 7901 / 40223
+Time per iteration: 2.66496541143716
+  [G] G_mse_ade_loss: 2.304
+  [G] G_mse_fde_loss: 5.131
+  [G] G_nll_loss: 230.061
+  [G] G_total_loss: 305.274
+Iteration = 7951 / 40223
+Time per iteration: 2.6650363841816667
+  [G] G_mse_ade_loss: 2.270
+  [G] G_mse_fde_loss: 4.991
+  [G] G_nll_loss: 202.114
+  [G] G_total_loss: 269.885
+Iteration = 8001 / 40223
+Time per iteration: 2.6650802483634344
+  [G] G_mse_ade_loss: 2.454
+  [G] G_mse_fde_loss: 5.403
+  [G] G_nll_loss: 287.600
+  [G] G_total_loss: 378.163
+Iteration = 8051 / 40223
+Time per iteration: 2.6651634122256005
+  [G] G_mse_ade_loss: 2.285
+  [G] G_mse_fde_loss: 5.090
+  [G] G_nll_loss: 186.869
+  [G] G_total_loss: 251.142
+Starting epoch 21
+Iteration = 8101 / 40223
+Time per iteration: 2.664992847967672
+  [G] G_mse_ade_loss: 2.204
+  [G] G_mse_fde_loss: 4.819
+  [G] G_nll_loss: 180.815
+  [G] G_total_loss: 242.680
+Iteration = 8151 / 40223
+Time per iteration: 2.6650519687812646
+  [G] G_mse_ade_loss: 2.279
+  [G] G_mse_fde_loss: 4.997
+  [G] G_nll_loss: 208.863
+  [G] G_total_loss: 278.348
+Iteration = 8201 / 40223
+Time per iteration: 2.664968531911743
+  [G] G_mse_ade_loss: 2.443
+  [G] G_mse_fde_loss: 5.359
+  [G] G_nll_loss: 255.413
+  [G] G_total_loss: 337.788
+Iteration = 8251 / 40223
+Time per iteration: 2.6649372232363393
+  [G] G_mse_ade_loss: 2.046
+  [G] G_mse_fde_loss: 4.552
+  [G] G_nll_loss: 151.104
+  [G] G_total_loss: 204.581
+Iteration = 8301 / 40223
+Time per iteration: 2.664867312717748
+  [G] G_mse_ade_loss: 2.246
+  [G] G_mse_fde_loss: 4.959
+  [G] G_nll_loss: 199.725
+  [G] G_total_loss: 266.781
+Iteration = 8351 / 40223
+Time per iteration: 2.6647970793761404
+  [G] G_mse_ade_loss: 2.282
+  [G] G_mse_fde_loss: 4.970
+  [G] G_nll_loss: 223.879
+  [G] G_total_loss: 297.040
+Iteration = 8401 / 40223
+Time per iteration: 2.66473799074793
+  [G] G_mse_ade_loss: 2.282
+  [G] G_mse_fde_loss: 5.168
+  [G] G_nll_loss: 209.471
+  [G] G_total_loss: 279.626
+Iteration = 8451 / 40223
+Time per iteration: 2.664673300018509
+  [G] G_mse_ade_loss: 2.251
+  [G] G_mse_fde_loss: 5.047
+  [G] G_nll_loss: 211.245
+  [G] G_total_loss: 281.448
+Starting epoch 22
+Iteration = 8501 / 40223
+Time per iteration: 2.6644017967865365
+  [G] G_mse_ade_loss: 2.214
+  [G] G_mse_fde_loss: 4.964
+  [G] G_nll_loss: 185.488
+  [G] G_total_loss: 248.968
+Iteration = 8551 / 40223
+Time per iteration: 2.6644233178707637
+  [G] G_mse_ade_loss: 2.175
+  [G] G_mse_fde_loss: 4.779
+  [G] G_nll_loss: 201.608
+  [G] G_total_loss: 268.523
+Iteration = 8601 / 40223
+Time per iteration: 2.664399789524777
+  [G] G_mse_ade_loss: 2.211
+  [G] G_mse_fde_loss: 4.861
+  [G] G_nll_loss: 192.407
+  [G] G_total_loss: 257.304
+Iteration = 8651 / 40223
+Time per iteration: 2.6643568268126523
+  [G] G_mse_ade_loss: 2.187
+  [G] G_mse_fde_loss: 4.912
+  [G] G_nll_loss: 193.450
+  [G] G_total_loss: 258.734
+Iteration = 8701 / 40223
+Time per iteration: 2.6643489497432133
+  [G] G_mse_ade_loss: 2.193
+  [G] G_mse_fde_loss: 4.911
+  [G] G_nll_loss: 200.207
+  [G] G_total_loss: 267.184
+Iteration = 8751 / 40223
+Time per iteration: 2.6643318764319655
+  [G] G_mse_ade_loss: 2.231
+  [G] G_mse_fde_loss: 4.994
+  [G] G_nll_loss: 205.434
+  [G] G_total_loss: 274.006
+Iteration = 8801 / 40223
+Time per iteration: 2.664334803301561
+  [G] G_mse_ade_loss: 2.258
+  [G] G_mse_fde_loss: 5.062
+  [G] G_nll_loss: 200.903
+  [G] G_total_loss: 268.571
+Iteration = 8851 / 40223
+Time per iteration: 2.664164265620885
+  [G] G_mse_ade_loss: 2.296
+  [G] G_mse_fde_loss: 5.227
+  [G] G_nll_loss: 198.754
+  [G] G_total_loss: 266.420
+Starting epoch 23
+Iteration = 8901 / 40223
+Time per iteration: 2.6636697430648693
+  [G] G_mse_ade_loss: 2.092
+  [G] G_mse_fde_loss: 4.687
+  [G] G_nll_loss: 153.828
+  [G] G_total_loss: 208.437
+Iteration = 8951 / 40223
+Time per iteration: 2.663493282900697
+  [G] G_mse_ade_loss: 2.158
+  [G] G_mse_fde_loss: 4.777
+  [G] G_nll_loss: 195.761
+  [G] G_total_loss: 261.189
+Iteration = 9001 / 40223
+Time per iteration: 2.6634535871072815
+  [G] G_mse_ade_loss: 2.232
+  [G] G_mse_fde_loss: 4.867
+  [G] G_nll_loss: 191.993
+  [G] G_total_loss: 256.823
+Iteration = 9051 / 40223
+Time per iteration: 2.6634809629994325
+  [G] G_mse_ade_loss: 2.324
+  [G] G_mse_fde_loss: 5.124
+  [G] G_nll_loss: 229.321
+  [G] G_total_loss: 304.347
+Iteration = 9101 / 40223
+Time per iteration: 2.6634876733821193
+  [G] G_mse_ade_loss: 2.187
+  [G] G_mse_fde_loss: 4.810
+  [G] G_nll_loss: 184.979
+  [G] G_total_loss: 247.842
+Iteration = 9151 / 40223
+Time per iteration: 2.663341530058999
+  [G] G_mse_ade_loss: 2.227
+  [G] G_mse_fde_loss: 4.988
+  [G] G_nll_loss: 206.360
+  [G] G_total_loss: 275.141
+Iteration = 9201 / 40223
+Time per iteration: 2.663196587249023
+  [G] G_mse_ade_loss: 2.239
+  [G] G_mse_fde_loss: 4.980
+  [G] G_nll_loss: 196.661
+  [G] G_total_loss: 263.005
+Iteration = 9251 / 40223
+Time per iteration: 2.6629981402383858
+  [G] G_mse_ade_loss: 2.026
+  [G] G_mse_fde_loss: 4.583
+  [G] G_nll_loss: 162.296
+  [G] G_total_loss: 218.644
+Starting epoch 24
+Iteration = 9301 / 40223
+Time per iteration: 2.6625249615511244
+  [G] G_mse_ade_loss: 2.187
+  [G] G_mse_fde_loss: 4.865
+  [G] G_nll_loss: 179.946
+  [G] G_total_loss: 241.716
+Iteration = 9351 / 40223
+Time per iteration: 2.6623156818524105
+  [G] G_mse_ade_loss: 2.177
+  [G] G_mse_fde_loss: 4.779
+  [G] G_nll_loss: 176.635
+  [G] G_total_loss: 237.307
+Iteration = 9401 / 40223
+Time per iteration: 2.662142241638958
+  [G] G_mse_ade_loss: 2.064
+  [G] G_mse_fde_loss: 4.612
+  [G] G_nll_loss: 161.874
+  [G] G_total_loss: 218.243
+Iteration = 9451 / 40223
+Time per iteration: 2.661987565129084
+  [G] G_mse_ade_loss: 2.341
+  [G] G_mse_fde_loss: 5.262
+  [G] G_nll_loss: 215.725
+  [G] G_total_loss: 287.782
+Iteration = 9501 / 40223
+Time per iteration: 2.661951586191635
+  [G] G_mse_ade_loss: 2.098
+  [G] G_mse_fde_loss: 4.669
+  [G] G_nll_loss: 171.071
+  [G] G_total_loss: 229.943
+Checking stats on train ...
+  [train] train_ade: 2.142
+  [train] train_ade_l: 1.851
+  [train] train_ade_nl: 2.440
+  [train] train_fde: 4.777
+  [train] train_fde_l: 4.025
+  [train] train_fde_nl: 5.545
+  [train] train_g_l2_loss_abs: 12.535
+  [train] train_g_l2_loss_rel: 0.000
+Checking stats on val ...
+  [val] val_ade: 1.884
+  [val] val_ade_l: 1.702
+  [val] val_ade_nl: 2.308
+  [val] val_fde: 4.161
+  [val] val_fde_l: 3.701
+  [val] val_fde_nl: 5.233
+  [val] val_g_l2_loss_abs: 8.822
+  [val] val_g_l2_loss_rel: 0.000
+Min ADE: 1.8839407290079968
+Min FDE: 4.161115432974294
+New low for avg_disp_error
+New low for avg_disp_error_nl
+Saving checkpoint to /home/robesafe/mapfe4mp/save/argoverse/social_lstm_mhsa/100.0_percent/exp-2022-07-18_06-19/argoverse_motion_forecasting_dataset_0_with_model.pt
+Done.
+Saving checkpoint to /home/robesafe/mapfe4mp/save/argoverse/social_lstm_mhsa/100.0_percent/exp-2022-07-18_06-19/argoverse_motion_forecasting_dataset_0_no_model.pt
+Done.
+Iteration = 9551 / 40223
+Time per iteration: 2.661954880160145
+  [G] G_mse_ade_loss: 2.201
+  [G] G_mse_fde_loss: 4.828
+  [G] G_nll_loss: 170.509
+  [G] G_total_loss: 229.821
+Iteration = 9601 / 40223
+Time per iteration: 2.6620172864260145
+  [G] G_mse_ade_loss: 2.324
+  [G] G_mse_fde_loss: 5.161
+  [G] G_nll_loss: 217.281
+  [G] G_total_loss: 289.408
+Iteration = 9651 / 40223
+Time per iteration: 2.6620547961427836
+  [G] G_mse_ade_loss: 2.378
+  [G] G_mse_fde_loss: 5.335
+  [G] G_nll_loss: 231.630
+  [G] G_total_loss: 307.920
+Starting epoch 25
+Iteration = 9701 / 40223
+Time per iteration: 2.6617966765608325
+  [G] G_mse_ade_loss: 2.171
+  [G] G_mse_fde_loss: 4.778
+  [G] G_nll_loss: 182.016
+  [G] G_total_loss: 244.025
+Iteration = 9751 / 40223
+Time per iteration: 2.6618353670627055
+  [G] G_mse_ade_loss: 2.224
+  [G] G_mse_fde_loss: 4.939
+  [G] G_nll_loss: 178.874
+  [G] G_total_loss: 240.634
+Iteration = 9801 / 40223
+Time per iteration: 2.6618500029282988
+  [G] G_mse_ade_loss: 2.360
+  [G] G_mse_fde_loss: 5.186
+  [G] G_nll_loss: 260.929
+  [G] G_total_loss: 344.079
+Iteration = 9851 / 40223
+Time per iteration: 2.6618752519971354
+  [G] G_mse_ade_loss: 2.383
+  [G] G_mse_fde_loss: 5.267
+  [G] G_nll_loss: 223.062
+  [G] G_total_loss: 297.013
+Iteration = 9901 / 40223
+Time per iteration: 2.6618999283117017
+  [G] G_mse_ade_loss: 2.207
+  [G] G_mse_fde_loss: 4.854
+  [G] G_nll_loss: 181.640
+  [G] G_total_loss: 243.820
+Iteration = 9951 / 40223
+Time per iteration: 2.6619269137717456
+  [G] G_mse_ade_loss: 2.159
+  [G] G_mse_fde_loss: 4.820
+  [G] G_nll_loss: 180.078
+  [G] G_total_loss: 241.717
+Iteration = 10001 / 40223
+Time per iteration: 2.661816086557886
+  [G] G_mse_ade_loss: 2.277
+  [G] G_mse_fde_loss: 4.970
+  [G] G_nll_loss: 201.978
+  [G] G_total_loss: 269.659
+Iteration = 10051 / 40223
+Time per iteration: 2.661705457159636
+  [G] G_mse_ade_loss: 2.292
+  [G] G_mse_fde_loss: 5.220
+  [G] G_nll_loss: 210.600
+  [G] G_total_loss: 281.202
+Starting epoch 26
+Iteration = 10101 / 40223
+Time per iteration: 2.6612674487768904
+  [G] G_mse_ade_loss: 2.248
+  [G] G_mse_fde_loss: 5.009
+  [G] G_nll_loss: 193.332
+  [G] G_total_loss: 258.941
+Iteration = 10151 / 40223
+Time per iteration: 2.6611180180294176
+  [G] G_mse_ade_loss: 2.191
+  [G] G_mse_fde_loss: 4.875
+  [G] G_nll_loss: 178.249
+  [G] G_total_loss: 239.628
+Iteration = 10201 / 40223
+Time per iteration: 2.6609599195780818
+  [G] G_mse_ade_loss: 2.400
+  [G] G_mse_fde_loss: 5.374
+  [G] G_nll_loss: 236.689
+  [G] G_total_loss: 314.383
+Iteration = 10251 / 40223
+Time per iteration: 2.660862992024052
+  [G] G_mse_ade_loss: 2.181
+  [G] G_mse_fde_loss: 4.732
+  [G] G_nll_loss: 163.906
+  [G] G_total_loss: 221.259
+Iteration = 10301 / 40223
+Time per iteration: 2.660893365626497
+  [G] G_mse_ade_loss: 2.370
+  [G] G_mse_fde_loss: 5.371
+  [G] G_nll_loss: 232.399
+  [G] G_total_loss: 308.983
+Iteration = 10351 / 40223
+Time per iteration: 2.660940041899992
+  [G] G_mse_ade_loss: 2.288
+  [G] G_mse_fde_loss: 5.186
+  [G] G_nll_loss: 211.528
+  [G] G_total_loss: 282.257
+Iteration = 10401 / 40223
+Time per iteration: 2.6609787221665955
+  [G] G_mse_ade_loss: 2.158
+  [G] G_mse_fde_loss: 4.899
+  [G] G_nll_loss: 174.311
+  [G] G_total_loss: 234.742
+Iteration = 10451 / 40223
+Time per iteration: 2.6609985071464584
+  [G] G_mse_ade_loss: 2.078
+  [G] G_mse_fde_loss: 4.692
+  [G] G_nll_loss: 171.724
+  [G] G_total_loss: 230.810
+Starting epoch 27
+Iteration = 10501 / 40223
+Time per iteration: 2.660804586516779
+  [G] G_mse_ade_loss: 2.238
+  [G] G_mse_fde_loss: 4.989
+  [G] G_nll_loss: 185.869
+  [G] G_total_loss: 249.540
+Iteration = 10551 / 40223
+Time per iteration: 2.6608141947330406
+  [G] G_mse_ade_loss: 2.171
+  [G] G_mse_fde_loss: 4.855
+  [G] G_nll_loss: 175.532
+  [G] G_total_loss: 236.150
+Iteration = 10601 / 40223
+Time per iteration: 2.6608323908090568
+  [G] G_mse_ade_loss: 2.158
+  [G] G_mse_fde_loss: 4.663
+  [G] G_nll_loss: 160.053
+  [G] G_total_loss: 216.214
+Iteration = 10651 / 40223
+Time per iteration: 2.660869942082115
+  [G] G_mse_ade_loss: 2.194
+  [G] G_mse_fde_loss: 4.786
+  [G] G_nll_loss: 172.382
+  [G] G_total_loss: 232.029
+Iteration = 10701 / 40223
+Time per iteration: 2.6609656745480015
+  [G] G_mse_ade_loss: 2.108
+  [G] G_mse_fde_loss: 4.772
+  [G] G_nll_loss: 178.933
+  [G] G_total_loss: 240.089
+Iteration = 10751 / 40223
+Time per iteration: 2.661035398629286
+  [G] G_mse_ade_loss: 2.153
+  [G] G_mse_fde_loss: 4.708
+  [G] G_nll_loss: 164.738
+  [G] G_total_loss: 222.197
+Iteration = 10801 / 40223
+Time per iteration: 2.661120765397487
+  [G] G_mse_ade_loss: 2.143
+  [G] G_mse_fde_loss: 4.796
+  [G] G_nll_loss: 174.160
+  [G] G_total_loss: 234.233
+Iteration = 10851 / 40223
+Time per iteration: 2.661190180127692
+  [G] G_mse_ade_loss: 2.158
+  [G] G_mse_fde_loss: 4.711
+  [G] G_nll_loss: 165.588
+  [G] G_total_loss: 223.278
+Starting epoch 28
+Iteration = 10901 / 40223
+Time per iteration: 2.6610871669666754
+  [G] G_mse_ade_loss: 2.149
+  [G] G_mse_fde_loss: 4.668
+  [G] G_nll_loss: 180.373
+  [G] G_total_loss: 241.620
+Iteration = 10951 / 40223
+Time per iteration: 2.6611531240821877
+  [G] G_mse_ade_loss: 2.274
+  [G] G_mse_fde_loss: 4.994
+  [G] G_nll_loss: 206.134
+  [G] G_total_loss: 274.923
+Iteration = 11001 / 40223
+Time per iteration: 2.661193070569024
+  [G] G_mse_ade_loss: 2.339
+  [G] G_mse_fde_loss: 5.184
+  [G] G_nll_loss: 218.710
+  [G] G_total_loss: 291.280
+Iteration = 11051 / 40223
+Time per iteration: 2.661240325622586
+  [G] G_mse_ade_loss: 2.095
+  [G] G_mse_fde_loss: 4.698
+  [G] G_nll_loss: 175.559
+  [G] G_total_loss: 235.638
+Iteration = 11101 / 40223
+Time per iteration: 2.6612547621749756
+  [G] G_mse_ade_loss: 2.436
+  [G] G_mse_fde_loss: 5.346
+  [G] G_nll_loss: 257.049
+  [G] G_total_loss: 339.786
+Iteration = 11151 / 40223
+Time per iteration: 2.6612683894783697
+  [G] G_mse_ade_loss: 2.377
+  [G] G_mse_fde_loss: 5.199
+  [G] G_nll_loss: 228.424
+  [G] G_total_loss: 303.505
+Iteration = 11201 / 40223
+Time per iteration: 2.661293421076
+  [G] G_mse_ade_loss: 2.206
+  [G] G_mse_fde_loss: 4.808
+  [G] G_nll_loss: 170.530
+  [G] G_total_loss: 229.791
+Iteration = 11251 / 40223
+Time per iteration: 2.661310960828818
+  [G] G_mse_ade_loss: 2.191
+  [G] G_mse_fde_loss: 4.947
+  [G] G_nll_loss: 176.617
+  [G] G_total_loss: 237.803
+Starting epoch 29
+Iteration = 11301 / 40223
+Time per iteration: 2.661159984855122
+  [G] G_mse_ade_loss: 2.105
+  [G] G_mse_fde_loss: 4.642
+  [G] G_nll_loss: 170.019
+  [G] G_total_loss: 228.556
+Iteration = 11351 / 40223
+Time per iteration: 2.6611884331537254
+  [G] G_mse_ade_loss: 2.269
+  [G] G_mse_fde_loss: 5.116
+  [G] G_nll_loss: 207.007
+  [G] G_total_loss: 276.375
+Iteration = 11401 / 40223
+Time per iteration: 2.661211624154709
+  [G] G_mse_ade_loss: 2.176
+  [G] G_mse_fde_loss: 4.917
+  [G] G_nll_loss: 178.025
+  [G] G_total_loss: 239.458
+Iteration = 11451 / 40223
+Time per iteration: 2.6612193233195836
+  [G] G_mse_ade_loss: 2.277
+  [G] G_mse_fde_loss: 5.105
+  [G] G_nll_loss: 201.332
+  [G] G_total_loss: 269.258
+Iteration = 11501 / 40223
+Time per iteration: 2.6612218886746
+  [G] G_mse_ade_loss: 2.367
+  [G] G_mse_fde_loss: 5.225
+  [G] G_nll_loss: 220.817
+  [G] G_total_loss: 294.064
+Iteration = 11551 / 40223
+Time per iteration: 2.661252771535587
+  [G] G_mse_ade_loss: 2.206
+  [G] G_mse_fde_loss: 4.839
+  [G] G_nll_loss: 182.660
+  [G] G_total_loss: 245.049
+Iteration = 11601 / 40223
+Time per iteration: 2.661277275230954
+  [G] G_mse_ade_loss: 2.319
+  [G] G_mse_fde_loss: 5.121
+  [G] G_nll_loss: 208.254
+  [G] G_total_loss: 278.001
+Iteration = 11651 / 40223
+Time per iteration: 2.661308698639441
+  [G] G_mse_ade_loss: 2.035
+  [G] G_mse_fde_loss: 4.465
+  [G] G_nll_loss: 152.311
+  [G] G_total_loss: 205.819
+Starting epoch 30
+Iteration = 11701 / 40223
+Time per iteration: 2.6611274346848064
+  [G] G_mse_ade_loss: 2.388
+  [G] G_mse_fde_loss: 5.322
+  [G] G_nll_loss: 219.984
+  [G] G_total_loss: 293.335
+Iteration = 11751 / 40223
+Time per iteration: 2.6611553948642386
+  [G] G_mse_ade_loss: 2.053
+  [G] G_mse_fde_loss: 4.626
+  [G] G_nll_loss: 149.963
+  [G] G_total_loss: 203.385
+Iteration = 11801 / 40223
+Time per iteration: 2.661072924605629
+  [G] G_mse_ade_loss: 2.244
+  [G] G_mse_fde_loss: 4.986
+  [G] G_nll_loss: 203.554
+  [G] G_total_loss: 271.643
+Iteration = 11851 / 40223
+Time per iteration: 2.6610795536400165
+  [G] G_mse_ade_loss: 2.111
+  [G] G_mse_fde_loss: 4.782
+  [G] G_nll_loss: 178.993
+  [G] G_total_loss: 240.198
+Checking stats on train ...
+  [train] train_ade: 2.144
+  [train] train_ade_l: 1.844
+  [train] train_ade_nl: 2.451
+  [train] train_fde: 4.764
+  [train] train_fde_l: 3.985
+  [train] train_fde_nl: 5.561
+  [train] train_g_l2_loss_abs: 12.458
+  [train] train_g_l2_loss_rel: 0.000
+Checking stats on val ...
+  [val] val_ade: 1.854
+  [val] val_ade_l: 1.667
+  [val] val_ade_nl: 2.287
+  [val] val_fde: 4.052
+  [val] val_fde_l: 3.578
+  [val] val_fde_nl: 5.154
+  [val] val_g_l2_loss_abs: 8.654
+  [val] val_g_l2_loss_rel: 0.000
+Min ADE: 1.8535091916091893
+Min FDE: 4.051517850336973
+New low for avg_disp_error
+New low for avg_disp_error_nl
+Saving checkpoint to /home/robesafe/mapfe4mp/save/argoverse/social_lstm_mhsa/100.0_percent/exp-2022-07-18_06-19/argoverse_motion_forecasting_dataset_0_with_model.pt
+Done.
+Saving checkpoint to /home/robesafe/mapfe4mp/save/argoverse/social_lstm_mhsa/100.0_percent/exp-2022-07-18_06-19/argoverse_motion_forecasting_dataset_0_no_model.pt
+Done.
+Iteration = 11901 / 40223
+Time per iteration: 2.6611323249248904
+  [G] G_mse_ade_loss: 2.311
+  [G] G_mse_fde_loss: 5.052
+  [G] G_nll_loss: 215.665
+  [G] G_total_loss: 287.050
+Iteration = 11951 / 40223
+Time per iteration: 2.661227715144087
+  [G] G_mse_ade_loss: 2.321
+  [G] G_mse_fde_loss: 5.089
+  [G] G_nll_loss: 221.759
+  [G] G_total_loss: 294.786
+Iteration = 12001 / 40223
+Time per iteration: 2.661286672625221
+  [G] G_mse_ade_loss: 2.275
+  [G] G_mse_fde_loss: 5.027
+  [G] G_nll_loss: 219.319
+  [G] G_total_loss: 291.506
+Iteration = 12051 / 40223
+Time per iteration: 2.661345986229445
+  [G] G_mse_ade_loss: 2.198
+  [G] G_mse_fde_loss: 4.968
+  [G] G_nll_loss: 193.957
+  [G] G_total_loss: 259.548
+Starting epoch 31
+Iteration = 12101 / 40223
+Time per iteration: 2.661253343760578
+  [G] G_mse_ade_loss: 2.228
+  [G] G_mse_fde_loss: 4.909
+  [G] G_nll_loss: 205.494
+  [G] G_total_loss: 273.824
+Iteration = 12151 / 40223
+Time per iteration: 2.661335381566031
+  [G] G_mse_ade_loss: 2.180
+  [G] G_mse_fde_loss: 4.960
+  [G] G_nll_loss: 190.931
+  [G] G_total_loss: 255.723
+Iteration = 12201 / 40223
+Time per iteration: 2.6614210807674294
+  [G] G_mse_ade_loss: 2.362
+  [G] G_mse_fde_loss: 5.219
+  [G] G_nll_loss: 232.192
+  [G] G_total_loss: 308.257
+Iteration = 12251 / 40223
+Time per iteration: 2.6615075346752337
+  [G] G_mse_ade_loss: 2.246
+  [G] G_mse_fde_loss: 4.933
+  [G] G_nll_loss: 188.393
+  [G] G_total_loss: 252.536
+Iteration = 12301 / 40223
+Time per iteration: 2.661570972412081
+  [G] G_mse_ade_loss: 2.099
+  [G] G_mse_fde_loss: 4.573
+  [G] G_nll_loss: 158.044
+  [G] G_total_loss: 213.374
+Iteration = 12351 / 40223
+Time per iteration: 2.661578531062957
+  [G] G_mse_ade_loss: 2.161
+  [G] G_mse_fde_loss: 4.774
+  [G] G_nll_loss: 190.058
+  [G] G_total_loss: 254.056
+Iteration = 12401 / 40223
+Time per iteration: 2.6615886390425487
+  [G] G_mse_ade_loss: 2.231
+  [G] G_mse_fde_loss: 4.951
+  [G] G_nll_loss: 204.721
+  [G] G_total_loss: 272.986
+Iteration = 12451 / 40223
+Time per iteration: 2.661474144226116
+  [G] G_mse_ade_loss: 2.256
+  [G] G_mse_fde_loss: 5.164
+  [G] G_nll_loss: 218.811
+  [G] G_total_loss: 291.260
+Starting epoch 32
+Iteration = 12501 / 40223
+Time per iteration: 2.6611820687371135
+  [G] G_mse_ade_loss: 2.222
+  [G] G_mse_fde_loss: 4.877
+  [G] G_nll_loss: 196.686
+  [G] G_total_loss: 262.710
+Iteration = 12551 / 40223
+Time per iteration: 2.661048914747745
+  [G] G_mse_ade_loss: 2.226
+  [G] G_mse_fde_loss: 4.936
+  [G] G_nll_loss: 194.532
+  [G] G_total_loss: 260.199
+Iteration = 12601 / 40223
+Time per iteration: 2.6608769880401817
+  [G] G_mse_ade_loss: 2.202
+  [G] G_mse_fde_loss: 4.870
+  [G] G_nll_loss: 187.955
+  [G] G_total_loss: 251.755
+Iteration = 12651 / 40223
+Time per iteration: 2.660739818323027
+  [G] G_mse_ade_loss: 2.087
+  [G] G_mse_fde_loss: 4.643
+  [G] G_nll_loss: 158.761
+  [G] G_total_loss: 214.469
+Iteration = 12701 / 40223
+Time per iteration: 2.6607208426341646
+  [G] G_mse_ade_loss: 2.287
+  [G] G_mse_fde_loss: 5.049
+  [G] G_nll_loss: 215.496
+  [G] G_total_loss: 286.802
+Iteration = 12751 / 40223
+Time per iteration: 2.660785123812209
+  [G] G_mse_ade_loss: 2.303
+  [G] G_mse_fde_loss: 5.186
+  [G] G_nll_loss: 218.894
+  [G] G_total_loss: 291.477
+Iteration = 12801 / 40223
+Time per iteration: 2.6608339762391546
+  [G] G_mse_ade_loss: 2.170
+  [G] G_mse_fde_loss: 4.718
+  [G] G_nll_loss: 170.776
+  [G] G_total_loss: 229.792
+Iteration = 12851 / 40223
+Time per iteration: 2.6608572215127086
+  [G] G_mse_ade_loss: 2.153
+  [G] G_mse_fde_loss: 4.712
+  [G] G_nll_loss: 176.603
+  [G] G_total_loss: 237.043
+Starting epoch 33
+Iteration = 12901 / 40223
+Time per iteration: 2.660739697723294
+  [G] G_mse_ade_loss: 2.308
+  [G] G_mse_fde_loss: 5.139
+  [G] G_nll_loss: 199.160
+  [G] G_total_loss: 266.674
+Iteration = 12951 / 40223
+Time per iteration: 2.6607715643913017
+  [G] G_mse_ade_loss: 2.222
+  [G] G_mse_fde_loss: 4.930
+  [G] G_nll_loss: 204.458
+  [G] G_total_loss: 272.583
+Iteration = 13001 / 40223
+Time per iteration: 2.6608107492159205
+  [G] G_mse_ade_loss: 2.318
+  [G] G_mse_fde_loss: 5.093
+  [G] G_nll_loss: 232.528
+  [G] G_total_loss: 308.257
+Iteration = 13051 / 40223
+Time per iteration: 2.660832982311376
+  [G] G_mse_ade_loss: 2.030
+  [G] G_mse_fde_loss: 4.435
+  [G] G_nll_loss: 141.949
+  [G] G_total_loss: 192.771
+Iteration = 13101 / 40223
+Time per iteration: 2.6608474062977923
+  [G] G_mse_ade_loss: 2.263
+  [G] G_mse_fde_loss: 4.974
+  [G] G_nll_loss: 214.185
+  [G] G_total_loss: 284.916
+Iteration = 13151 / 40223
+Time per iteration: 2.6608076583984714
+  [G] G_mse_ade_loss: 2.066
+  [G] G_mse_fde_loss: 4.497
+  [G] G_nll_loss: 172.511
+  [G] G_total_loss: 231.194
+Iteration = 13201 / 40223
+Time per iteration: 2.66082039104069
+  [G] G_mse_ade_loss: 2.213
+  [G] G_mse_fde_loss: 4.971
+  [G] G_nll_loss: 178.008
+  [G] G_total_loss: 239.635
+Iteration = 13251 / 40223
+Time per iteration: 2.6607385825664625
+  [G] G_mse_ade_loss: 2.091
+  [G] G_mse_fde_loss: 4.734
+  [G] G_nll_loss: 159.036
+  [G] G_total_loss: 215.088
+Starting epoch 34
+Iteration = 13301 / 40223
+Time per iteration: 2.660598309252838
+  [G] G_mse_ade_loss: 2.275
+  [G] G_mse_fde_loss: 4.970
+  [G] G_nll_loss: 213.282
+  [G] G_total_loss: 283.788
+Iteration = 13351 / 40223
+Time per iteration: 2.6606289947553483
+  [G] G_mse_ade_loss: 2.132
+  [G] G_mse_fde_loss: 4.747
+  [G] G_nll_loss: 184.052
+  [G] G_total_loss: 246.438
+Iteration = 13401 / 40223
+Time per iteration: 2.660674744457925
+  [G] G_mse_ade_loss: 2.188
+  [G] G_mse_fde_loss: 4.801
+  [G] G_nll_loss: 182.073
+  [G] G_total_loss: 244.182
+Iteration = 13451 / 40223
+Time per iteration: 2.6607174418352058
+  [G] G_mse_ade_loss: 2.164
+  [G] G_mse_fde_loss: 4.839
+  [G] G_nll_loss: 185.141
+  [G] G_total_loss: 248.107
+Iteration = 13501 / 40223
+Time per iteration: 2.66076359695156
+  [G] G_mse_ade_loss: 2.334
+  [G] G_mse_fde_loss: 5.285
+  [G] G_nll_loss: 244.622
+  [G] G_total_loss: 323.967
+Iteration = 13551 / 40223
+Time per iteration: 2.6608067534082656
+  [G] G_mse_ade_loss: 2.243
+  [G] G_mse_fde_loss: 4.938
+  [G] G_nll_loss: 204.510
+  [G] G_total_loss: 272.694
+Iteration = 13601 / 40223
+Time per iteration: 2.660863938642577
+  [G] G_mse_ade_loss: 2.267
+  [G] G_mse_fde_loss: 5.026
+  [G] G_nll_loss: 201.554
+  [G] G_total_loss: 269.288
+Iteration = 13651 / 40223
+Time per iteration: 2.660941893412913
+  [G] G_mse_ade_loss: 2.245
+  [G] G_mse_fde_loss: 4.870
+  [G] G_nll_loss: 196.169
+  [G] G_total_loss: 262.068
+Iteration = 13701 / 40223
+Time per iteration: 2.660967825520744
+  [G] G_mse_ade_loss: 2.226
+  [G] G_mse_fde_loss: 4.846
+  [G] G_nll_loss: 187.082
+  [G] G_total_loss: 250.617
+Starting epoch 35
+Iteration = 13751 / 40223
+Time per iteration: 2.660865711148076
+  [G] G_mse_ade_loss: 2.296
+  [G] G_mse_fde_loss: 5.017
+  [G] G_nll_loss: 210.755
+  [G] G_total_loss: 280.793
+Iteration = 13801 / 40223
+Time per iteration: 2.6609170610304718
+  [G] G_mse_ade_loss: 2.248
+  [G] G_mse_fde_loss: 4.974
+  [G] G_nll_loss: 217.457
+  [G] G_total_loss: 288.992
+Iteration = 13851 / 40223
+Time per iteration: 2.660966174437779
+  [G] G_mse_ade_loss: 2.214
+  [G] G_mse_fde_loss: 4.902
+  [G] G_nll_loss: 191.725
+  [G] G_total_loss: 256.575
+Iteration = 13901 / 40223
+Time per iteration: 2.660986050162656
+  [G] G_mse_ade_loss: 2.427
+  [G] G_mse_fde_loss: 5.534
+  [G] G_nll_loss: 243.775
+  [G] G_total_loss: 323.749
+Iteration = 13951 / 40223
+Time per iteration: 2.6610217832184277
+  [G] G_mse_ade_loss: 2.093
+  [G] G_mse_fde_loss: 4.673
+  [G] G_nll_loss: 176.292
+  [G] G_total_loss: 236.478
+Iteration = 14001 / 40223
+Time per iteration: 2.6611071354950693
+  [G] G_mse_ade_loss: 2.325
+  [G] G_mse_fde_loss: 5.214
+  [G] G_nll_loss: 207.215
+  [G] G_total_loss: 276.987
+Iteration = 14051 / 40223
+Time per iteration: 2.6611646959072552
+  [G] G_mse_ade_loss: 2.090
+  [G] G_mse_fde_loss: 4.673
+  [G] G_nll_loss: 160.603
+  [G] G_total_loss: 216.861
+Iteration = 14101 / 40223
+Time per iteration: 2.66121374016222
+  [G] G_mse_ade_loss: 2.219
+  [G] G_mse_fde_loss: 4.851
+  [G] G_nll_loss: 203.747
+  [G] G_total_loss: 271.455
+Starting epoch 36
+Iteration = 14151 / 40223
+Time per iteration: 2.6610585654399377
+  [G] G_mse_ade_loss: 2.151
+  [G] G_mse_fde_loss: 4.807
+  [G] G_nll_loss: 187.817
+  [G] G_total_loss: 251.342
+Iteration = 14201 / 40223
+Time per iteration: 2.661099462322463
+  [G] G_mse_ade_loss: 2.036
+  [G] G_mse_fde_loss: 4.498
+  [G] G_nll_loss: 153.038
+  [G] G_total_loss: 206.828
+Iteration = 14251 / 40223
+Time per iteration: 2.6611422737576103
+  [G] G_mse_ade_loss: 2.266
+  [G] G_mse_fde_loss: 5.036
+  [G] G_nll_loss: 212.241
+  [G] G_total_loss: 282.674
+Checking stats on train ...
+  [train] train_ade: 2.088
+  [train] train_ade_l: 1.803
+  [train] train_ade_nl: 2.379
+  [train] train_fde: 4.641
+  [train] train_fde_l: 3.898
+  [train] train_fde_nl: 5.401
+  [train] train_g_l2_loss_abs: 11.950
+  [train] train_g_l2_loss_rel: 0.000
+Checking stats on val ...
+  [val] val_ade: 1.787
+  [val] val_ade_l: 1.589
+  [val] val_ade_nl: 2.246
+  [val] val_fde: 3.902
+  [val] val_fde_l: 3.398
+  [val] val_fde_nl: 5.073
+  [val] val_g_l2_loss_abs: 8.183
+  [val] val_g_l2_loss_rel: 0.000
+Min ADE: 1.786501416063457
+Min FDE: 3.90151548134348
+New low for avg_disp_error
+New low for avg_disp_error_nl
+Saving checkpoint to /home/robesafe/mapfe4mp/save/argoverse/social_lstm_mhsa/100.0_percent/exp-2022-07-18_06-19/argoverse_motion_forecasting_dataset_0_with_model.pt
+Done.
+Saving checkpoint to /home/robesafe/mapfe4mp/save/argoverse/social_lstm_mhsa/100.0_percent/exp-2022-07-18_06-19/argoverse_motion_forecasting_dataset_0_no_model.pt
+Done.
+Iteration = 14301 / 40223
+Time per iteration: 2.6611836105116216
+  [G] G_mse_ade_loss: 2.257
+  [G] G_mse_fde_loss: 5.012
+  [G] G_nll_loss: 200.016
+  [G] G_total_loss: 267.315
+Iteration = 14351 / 40223
+Time per iteration: 2.6612445428956053
+  [G] G_mse_ade_loss: 2.127
+  [G] G_mse_fde_loss: 4.705
+  [G] G_nll_loss: 173.614
+  [G] G_total_loss: 233.258
+Iteration = 14401 / 40223
+Time per iteration: 2.6612994982777236
+  [G] G_mse_ade_loss: 2.139
+  [G] G_mse_fde_loss: 4.741
+  [G] G_nll_loss: 166.462
+  [G] G_total_loss: 224.441
+Iteration = 14451 / 40223
+Time per iteration: 2.6613451068471123
+  [G] G_mse_ade_loss: 2.110
+  [G] G_mse_fde_loss: 4.672
+  [G] G_nll_loss: 186.455
+  [G] G_total_loss: 249.197
+Iteration = 14501 / 40223
+Time per iteration: 2.6613950974020035
+  [G] G_mse_ade_loss: 2.038
+  [G] G_mse_fde_loss: 4.518
+  [G] G_nll_loss: 167.700
+  [G] G_total_loss: 225.218
+Starting epoch 37
+Iteration = 14551 / 40223
+Time per iteration: 2.6613010394598606
+  [G] G_mse_ade_loss: 2.319
+  [G] G_mse_fde_loss: 5.103
+  [G] G_nll_loss: 233.533
+  [G] G_total_loss: 309.544
+Iteration = 14601 / 40223
+Time per iteration: 2.6613570501947885
+  [G] G_mse_ade_loss: 2.173
+  [G] G_mse_fde_loss: 4.700
+  [G] G_nll_loss: 182.284
+  [G] G_total_loss: 244.128
+Iteration = 14651 / 40223
+Time per iteration: 2.6614126877429647
+  [G] G_mse_ade_loss: 2.131
+  [G] G_mse_fde_loss: 4.737
+  [G] G_nll_loss: 186.871
+  [G] G_total_loss: 249.930
+Iteration = 14701 / 40223
+Time per iteration: 2.6614702555218748
+  [G] G_mse_ade_loss: 2.223
+  [G] G_mse_fde_loss: 4.884
+  [G] G_nll_loss: 183.422
+  [G] G_total_loss: 246.154
+Iteration = 14751 / 40223
+Time per iteration: 2.661527432875588
+  [G] G_mse_ade_loss: 2.156
+  [G] G_mse_fde_loss: 4.847
+  [G] G_nll_loss: 176.707
+  [G] G_total_loss: 237.580
+Iteration = 14801 / 40223
+Time per iteration: 2.661571814122937
+  [G] G_mse_ade_loss: 2.132
+  [G] G_mse_fde_loss: 4.861
+  [G] G_nll_loss: 176.784
+  [G] G_total_loss: 237.696
+Iteration = 14851 / 40223
+Time per iteration: 2.661600975900072
+  [G] G_mse_ade_loss: 2.128
+  [G] G_mse_fde_loss: 4.692
+  [G] G_nll_loss: 184.227
+  [G] G_total_loss: 246.488
+Iteration = 14901 / 40223
+Time per iteration: 2.661634764329882
+  [G] G_mse_ade_loss: 2.168
+  [G] G_mse_fde_loss: 4.812
+  [G] G_nll_loss: 172.709
+  [G] G_total_loss: 232.490
+Starting epoch 38
+Iteration = 14951 / 40223
+Time per iteration: 2.6614389466119923
+  [G] G_mse_ade_loss: 2.257
+  [G] G_mse_fde_loss: 5.089
+  [G] G_nll_loss: 267.988
+  [G] G_total_loss: 352.509
+Iteration = 15001 / 40223
+Time per iteration: 2.6613731663208484
+  [G] G_mse_ade_loss: 2.054
+  [G] G_mse_fde_loss: 4.614
+  [G] G_nll_loss: 168.540
+  [G] G_total_loss: 226.573
+Iteration = 15051 / 40223
+Time per iteration: 2.6613111636003586
+  [G] G_mse_ade_loss: 2.203
+  [G] G_mse_fde_loss: 4.821
+  [G] G_nll_loss: 187.021
+  [G] G_total_loss: 250.442
+Iteration = 15101 / 40223
+Time per iteration: 2.6612935925894137
+  [G] G_mse_ade_loss: 2.286
+  [G] G_mse_fde_loss: 5.187
+  [G] G_nll_loss: 198.212
+  [G] G_total_loss: 265.611
+Iteration = 15151 / 40223
+Time per iteration: 2.6613396599177723
+  [G] G_mse_ade_loss: 2.118
+  [G] G_mse_fde_loss: 4.679
+  [G] G_nll_loss: 202.682
+  [G] G_total_loss: 269.508
+Iteration = 15201 / 40223
+Time per iteration: 2.661324777569271
+  [G] G_mse_ade_loss: 2.054
+  [G] G_mse_fde_loss: 4.459
+  [G] G_nll_loss: 147.296
+  [G] G_total_loss: 199.553
+Iteration = 15251 / 40223
+Time per iteration: 2.6613915588619528
+  [G] G_mse_ade_loss: 2.124
+  [G] G_mse_fde_loss: 4.703
+  [G] G_nll_loss: 161.757
+  [G] G_total_loss: 218.430
+Iteration = 15301 / 40223
+Time per iteration: 2.6614125879533415
+  [G] G_mse_ade_loss: 2.127
+  [G] G_mse_fde_loss: 4.657
+  [G] G_nll_loss: 175.537
+  [G] G_total_loss: 235.519
+Starting epoch 39
+Iteration = 15351 / 40223
+Time per iteration: 2.6613009224946893
+  [G] G_mse_ade_loss: 2.067
+  [G] G_mse_fde_loss: 4.547
+  [G] G_nll_loss: 187.091
+  [G] G_total_loss: 249.570
+Iteration = 15401 / 40223
+Time per iteration: 2.6613130781853496
+  [G] G_mse_ade_loss: 2.460
+  [G] G_mse_fde_loss: 5.475
+  [G] G_nll_loss: 235.019
+  [G] G_total_loss: 312.661
+Iteration = 15451 / 40223
+Time per iteration: 2.661352519857545
+  [G] G_mse_ade_loss: 2.183
+  [G] G_mse_fde_loss: 4.734
+  [G] G_nll_loss: 168.761
+  [G] G_total_loss: 227.337
+Iteration = 15501 / 40223
+Time per iteration: 2.6614119861058425
+  [G] G_mse_ade_loss: 2.133
+  [G] G_mse_fde_loss: 4.675
+  [G] G_nll_loss: 178.446
+  [G] G_total_loss: 239.215
+Iteration = 15551 / 40223
+Time per iteration: 2.661472720353521
+  [G] G_mse_ade_loss: 2.041
+  [G] G_mse_fde_loss: 4.365
+  [G] G_nll_loss: 153.565
+  [G] G_total_loss: 207.091
+Iteration = 15601 / 40223
+Time per iteration: 2.6615331423572224
+  [G] G_mse_ade_loss: 2.183
+  [G] G_mse_fde_loss: 4.845
+  [G] G_nll_loss: 187.386
+  [G] G_total_loss: 250.951
+Iteration = 15651 / 40223
+Time per iteration: 2.661593076284149
+  [G] G_mse_ade_loss: 2.144
+  [G] G_mse_fde_loss: 4.754
+  [G] G_nll_loss: 172.717
+  [G] G_total_loss: 232.304
+Iteration = 15701 / 40223
+Time per iteration: 2.66167339436773
+  [G] G_mse_ade_loss: 2.277
+  [G] G_mse_fde_loss: 5.032
+  [G] G_nll_loss: 219.897
+  [G] G_total_loss: 292.246
+Starting epoch 40
+Iteration = 15751 / 40223
+Time per iteration: 2.661637823677511
+  [G] G_mse_ade_loss: 2.098
+  [G] G_mse_fde_loss: 4.655
+  [G] G_nll_loss: 158.348
+  [G] G_total_loss: 213.997
+Iteration = 15801 / 40223
+Time per iteration: 2.6617058330182446
+  [G] G_mse_ade_loss: 2.327
+  [G] G_mse_fde_loss: 5.367
+  [G] G_nll_loss: 232.481
+  [G] G_total_loss: 309.029
+Iteration = 15851 / 40223
+Time per iteration: 2.6617545075585327
+  [G] G_mse_ade_loss: 2.133
+  [G] G_mse_fde_loss: 4.632
+  [G] G_nll_loss: 180.553
+  [G] G_total_loss: 241.719
+Iteration = 15901 / 40223
+Time per iteration: 2.6618065821300565
+  [G] G_mse_ade_loss: 2.264
+  [G] G_mse_fde_loss: 5.026
+  [G] G_nll_loss: 220.300
+  [G] G_total_loss: 292.717
+Iteration = 15951 / 40223
+Time per iteration: 2.6619224177655827
+  [G] G_mse_ade_loss: 2.092
+  [G] G_mse_fde_loss: 4.728
+  [G] G_nll_loss: 181.459
+  [G] G_total_loss: 243.099
+Iteration = 16001 / 40223
+Time per iteration: 2.6619806358511915
+  [G] G_mse_ade_loss: 1.959
+  [G] G_mse_fde_loss: 4.315
+  [G] G_nll_loss: 147.647
+  [G] G_total_loss: 199.462
+Iteration = 16051 / 40223
+Time per iteration: 2.6621098244615777
+  [G] G_mse_ade_loss: 2.129
+  [G] G_mse_fde_loss: 4.719
+  [G] G_nll_loss: 163.289
+  [G] G_total_loss: 220.398
+Iteration = 16101 / 40223
+Time per iteration: 2.662220033101655
+  [G] G_mse_ade_loss: 2.166
+  [G] G_mse_fde_loss: 4.761
+  [G] G_nll_loss: 180.757
+  [G] G_total_loss: 242.396
+Starting epoch 41
+Iteration = 16151 / 40223
+Time per iteration: 2.6622507731306775
+  [G] G_mse_ade_loss: 2.115
+  [G] G_mse_fde_loss: 4.746
+  [G] G_nll_loss: 169.397
+  [G] G_total_loss: 228.100
+Iteration = 16201 / 40223
+Time per iteration: 2.66241183881958
+  [G] G_mse_ade_loss: 2.155
+  [G] G_mse_fde_loss: 4.847
+  [G] G_nll_loss: 172.510
+  [G] G_total_loss: 232.331
+Iteration = 16251 / 40223
+Time per iteration: 2.662546433930646
+  [G] G_mse_ade_loss: 2.225
+  [G] G_mse_fde_loss: 4.938
+  [G] G_nll_loss: 192.395
+  [G] G_total_loss: 257.534
+Iteration = 16301 / 40223
+Time per iteration: 2.6626298950169103
+  [G] G_mse_ade_loss: 2.277
+  [G] G_mse_fde_loss: 5.027
+  [G] G_nll_loss: 202.233
+  [G] G_total_loss: 270.148
+Iteration = 16351 / 40223
+Time per iteration: 2.662757230194313
+  [G] G_mse_ade_loss: 2.259
+  [G] G_mse_fde_loss: 5.045
+  [G] G_nll_loss: 207.051
+  [G] G_total_loss: 276.207
+Iteration = 16401 / 40223
+Time per iteration: 2.662867381204796
+  [G] G_mse_ade_loss: 2.079
+  [G] G_mse_fde_loss: 4.612
+  [G] G_nll_loss: 157.801
+  [G] G_total_loss: 213.167
+Iteration = 16451 / 40223
+Time per iteration: 2.6629039610666267
+  [G] G_mse_ade_loss: 2.146
+  [G] G_mse_fde_loss: 4.847
+  [G] G_nll_loss: 189.440
+  [G] G_total_loss: 253.486
+Iteration = 16501 / 40223
+Time per iteration: 2.662923781310173
+  [G] G_mse_ade_loss: 2.321
+  [G] G_mse_fde_loss: 5.221
+  [G] G_nll_loss: 247.522
+  [G] G_total_loss: 327.385
+Starting epoch 42
+Iteration = 16551 / 40223
+Time per iteration: 2.6628211388436123
+  [G] G_mse_ade_loss: 2.127
+  [G] G_mse_fde_loss: 4.666
+  [G] G_nll_loss: 180.062
+  [G] G_total_loss: 241.203
+Iteration = 16601 / 40223
+Time per iteration: 2.6628231383556273
+  [G] G_mse_ade_loss: 2.071
+  [G] G_mse_fde_loss: 4.495
+  [G] G_nll_loss: 162.436
+  [G] G_total_loss: 218.600
+Checking stats on train ...
+  [train] train_ade: 2.097
+  [train] train_ade_l: 1.810
+  [train] train_ade_nl: 2.390
+  [train] train_fde: 4.660
+  [train] train_fde_l: 3.921
+  [train] train_fde_nl: 5.415
+  [train] train_g_l2_loss_abs: 12.033
+  [train] train_g_l2_loss_rel: 0.000
+Checking stats on val ...
+  [val] val_ade: 1.818
+  [val] val_ade_l: 1.632
+  [val] val_ade_nl: 2.252
+  [val] val_fde: 3.956
+  [val] val_fde_l: 3.465
+  [val] val_fde_nl: 5.098
+  [val] val_g_l2_loss_abs: 8.399
+  [val] val_g_l2_loss_rel: 0.000
+Min ADE: 1.786501416063457
+Min FDE: 3.90151548134348
+Iteration = 16651 / 40223
+Time per iteration: 2.662880890047677
+  [G] G_mse_ade_loss: 2.104
+  [G] G_mse_fde_loss: 4.713
+  [G] G_nll_loss: 174.072
+  [G] G_total_loss: 233.834
+Iteration = 16701 / 40223
+Time per iteration: 2.662949441271723
+  [G] G_mse_ade_loss: 2.093
+  [G] G_mse_fde_loss: 4.558
+  [G] G_nll_loss: 171.592
+  [G] G_total_loss: 230.256
+Iteration = 16751 / 40223
+Time per iteration: 2.6630089674968946
+  [G] G_mse_ade_loss: 2.258
+  [G] G_mse_fde_loss: 5.013
+  [G] G_nll_loss: 219.504
+  [G] G_total_loss: 291.677
+Iteration = 16801 / 40223
+Time per iteration: 2.6630905273379146
+  [G] G_mse_ade_loss: 2.200
+  [G] G_mse_fde_loss: 4.759
+  [G] G_nll_loss: 212.596
+  [G] G_total_loss: 282.224
+Iteration = 16851 / 40223
+Time per iteration: 2.6631686968036834
+  [G] G_mse_ade_loss: 2.113
+  [G] G_mse_fde_loss: 4.714
+  [G] G_nll_loss: 180.985
+  [G] G_total_loss: 242.487
+Iteration = 16901 / 40223
+Time per iteration: 2.6632320322825933
+  [G] G_mse_ade_loss: 2.133
+  [G] G_mse_fde_loss: 4.727
+  [G] G_nll_loss: 172.224
+  [G] G_total_loss: 231.593
+Starting epoch 43
+Iteration = 16951 / 40223
+Time per iteration: 2.6631554040041836
+  [G] G_mse_ade_loss: 2.120
+  [G] G_mse_fde_loss: 4.692
+  [G] G_nll_loss: 170.987
+  [G] G_total_loss: 229.932
+Iteration = 17001 / 40223
+Time per iteration: 2.6632148549175425
+  [G] G_mse_ade_loss: 2.195
+  [G] G_mse_fde_loss: 4.883
+  [G] G_nll_loss: 187.935
+  [G] G_total_loss: 251.764
+Iteration = 17051 / 40223
+Time per iteration: 2.6632523806407917
+  [G] G_mse_ade_loss: 2.373
+  [G] G_mse_fde_loss: 5.195
+  [G] G_nll_loss: 233.305
+  [G] G_total_loss: 309.589
+Iteration = 17101 / 40223
+Time per iteration: 2.6632834314414686
+  [G] G_mse_ade_loss: 2.316
+  [G] G_mse_fde_loss: 5.271
+  [G] G_nll_loss: 220.882
+  [G] G_total_loss: 294.233
+Iteration = 17151 / 40223
+Time per iteration: 2.6633218486179353
+  [G] G_mse_ade_loss: 1.984
+  [G] G_mse_fde_loss: 4.321
+  [G] G_nll_loss: 146.281
+  [G] G_total_loss: 197.799
+Iteration = 17201 / 40223
+Time per iteration: 2.663385576650463
+  [G] G_mse_ade_loss: 2.207
+  [G] G_mse_fde_loss: 4.958
+  [G] G_nll_loss: 207.077
+  [G] G_total_loss: 275.928
+Iteration = 17251 / 40223
+Time per iteration: 2.6634619344069255
+  [G] G_mse_ade_loss: 2.187
+  [G] G_mse_fde_loss: 4.842
+  [G] G_nll_loss: 190.707
+  [G] G_total_loss: 255.096
+Iteration = 17301 / 40223
+Time per iteration: 2.663541141999718
+  [G] G_mse_ade_loss: 2.045
+  [G] G_mse_fde_loss: 4.526
+  [G] G_nll_loss: 152.754
+  [G] G_total_loss: 206.565
+Starting epoch 44
+Iteration = 17351 / 40223
+Time per iteration: 2.663486689808362
+  [G] G_mse_ade_loss: 2.247
+  [G] G_mse_fde_loss: 4.985
+  [G] G_nll_loss: 195.616
+  [G] G_total_loss: 261.724
+Iteration = 17401 / 40223
+Time per iteration: 2.6635271745758162
+  [G] G_mse_ade_loss: 2.118
+  [G] G_mse_fde_loss: 4.749
+  [G] G_nll_loss: 170.742
+  [G] G_total_loss: 229.792
+Iteration = 17451 / 40223
+Time per iteration: 2.6636176100843416
+  [G] G_mse_ade_loss: 2.016
+  [G] G_mse_fde_loss: 4.382
+  [G] G_nll_loss: 152.715
+  [G] G_total_loss: 206.056
+Iteration = 17501 / 40223
+Time per iteration: 2.6636856374968922
+  [G] G_mse_ade_loss: 2.189
+  [G] G_mse_fde_loss: 4.777
+  [G] G_nll_loss: 188.208
+  [G] G_total_loss: 251.780
+Iteration = 17551 / 40223
+Time per iteration: 2.66373673336274
+  [G] G_mse_ade_loss: 2.177
+  [G] G_mse_fde_loss: 4.791
+  [G] G_nll_loss: 202.143
+  [G] G_total_loss: 269.229
+Iteration = 17601 / 40223
+Time per iteration: 2.6637927936048755
+  [G] G_mse_ade_loss: 2.087
+  [G] G_mse_fde_loss: 4.660
+  [G] G_nll_loss: 155.251
+  [G] G_total_loss: 210.129
+Iteration = 17651 / 40223
+Time per iteration: 2.6638738874416297
+  [G] G_mse_ade_loss: 2.197
+  [G] G_mse_fde_loss: 4.844
+  [G] G_nll_loss: 180.154
+  [G] G_total_loss: 241.921
+Iteration = 17701 / 40223
+Time per iteration: 2.663953599306993
+  [G] G_mse_ade_loss: 2.228
+  [G] G_mse_fde_loss: 5.022
+  [G] G_nll_loss: 196.685
+  [G] G_total_loss: 263.148
+Starting epoch 45
+Iteration = 17751 / 40223
+Time per iteration: 2.663917869159883
+  [G] G_mse_ade_loss: 2.348
+  [G] G_mse_fde_loss: 5.133
+  [G] G_nll_loss: 244.775
+  [G] G_total_loss: 323.718
+Iteration = 17801 / 40223
+Time per iteration: 2.663978461221151
+  [G] G_mse_ade_loss: 2.070
+  [G] G_mse_fde_loss: 4.606
+  [G] G_nll_loss: 165.065
+  [G] G_total_loss: 222.218
+Iteration = 17851 / 40223
+Time per iteration: 2.664078257142793
+  [G] G_mse_ade_loss: 2.036
+  [G] G_mse_fde_loss: 4.439
+  [G] G_nll_loss: 172.905
+  [G] G_total_loss: 231.484
+Iteration = 17901 / 40223
+Time per iteration: 2.6641477192122807
+  [G] G_mse_ade_loss: 2.353
+  [G] G_mse_fde_loss: 5.252
+  [G] G_nll_loss: 233.467
+  [G] G_total_loss: 309.942
+Iteration = 17951 / 40223
+Time per iteration: 2.664168413206964
+  [G] G_mse_ade_loss: 2.105
+  [G] G_mse_fde_loss: 4.633
+  [G] G_nll_loss: 155.046
+  [G] G_total_loss: 209.812
+Iteration = 18001 / 40223
+Time per iteration: 2.6642416504302107
+  [G] G_mse_ade_loss: 2.240
+  [G] G_mse_fde_loss: 4.955
+  [G] G_nll_loss: 210.556
+  [G] G_total_loss: 280.299
+Iteration = 18051 / 40223
+Time per iteration: 2.6643294624909557
+  [G] G_mse_ade_loss: 2.172
+  [G] G_mse_fde_loss: 4.822
+  [G] G_nll_loss: 189.639
+  [G] G_total_loss: 253.686
+Iteration = 18101 / 40223
+Time per iteration: 2.6643797612099362
+  [G] G_mse_ade_loss: 2.119
+  [G] G_mse_fde_loss: 4.893
+  [G] G_nll_loss: 178.393
+  [G] G_total_loss: 239.791
+Starting epoch 46
+Iteration = 18151 / 40223
+Time per iteration: 2.6642372595837647
+  [G] G_mse_ade_loss: 2.139
+  [G] G_mse_fde_loss: 4.768
+  [G] G_nll_loss: 172.507
+  [G] G_total_loss: 232.077
+Iteration = 18201 / 40223
+Time per iteration: 2.664292406141152
+  [G] G_mse_ade_loss: 2.217
+  [G] G_mse_fde_loss: 4.943
+  [G] G_nll_loss: 182.512
+  [G] G_total_loss: 245.185
+Iteration = 18251 / 40223
+Time per iteration: 2.66438052910438
+  [G] G_mse_ade_loss: 2.171
+  [G] G_mse_fde_loss: 4.788
+  [G] G_nll_loss: 187.786
+  [G] G_total_loss: 251.268
+Iteration = 18301 / 40223
+Time per iteration: 2.6644734973093507
+  [G] G_mse_ade_loss: 2.162
+  [G] G_mse_fde_loss: 4.832
+  [G] G_nll_loss: 190.035
+  [G] G_total_loss: 254.203
+Iteration = 18351 / 40223
+Time per iteration: 2.6645294575657186
+  [G] G_mse_ade_loss: 2.068
+  [G] G_mse_fde_loss: 4.509
+  [G] G_nll_loss: 172.915
+  [G] G_total_loss: 231.739
+Iteration = 18401 / 40223
+Time per iteration: 2.6645739761216958
+  [G] G_mse_ade_loss: 2.155
+  [G] G_mse_fde_loss: 4.726
+  [G] G_nll_loss: 192.211
+  [G] G_total_loss: 256.598
+Iteration = 18451 / 40223
+Time per iteration: 2.6646453663492764
+  [G] G_mse_ade_loss: 2.159
+  [G] G_mse_fde_loss: 4.802
+  [G] G_nll_loss: 197.478
+  [G] G_total_loss: 263.412
+Iteration = 18501 / 40223
+Time per iteration: 2.6647231867491095
+  [G] G_mse_ade_loss: 2.167
+  [G] G_mse_fde_loss: 4.801
+  [G] G_nll_loss: 180.945
+  [G] G_total_loss: 242.750
+Starting epoch 47
+Iteration = 18551 / 40223
+Time per iteration: 2.6646901178948608
+  [G] G_mse_ade_loss: 2.195
+  [G] G_mse_fde_loss: 4.883
+  [G] G_nll_loss: 172.164
+  [G] G_total_loss: 232.049
+Iteration = 18601 / 40223
+Time per iteration: 2.6647368569597365
+  [G] G_mse_ade_loss: 2.099
+  [G] G_mse_fde_loss: 4.711
+  [G] G_nll_loss: 198.446
+  [G] G_total_loss: 264.288
+Iteration = 18651 / 40223
+Time per iteration: 2.6648057557246583
+  [G] G_mse_ade_loss: 2.011
+  [G] G_mse_fde_loss: 4.457
+  [G] G_nll_loss: 154.365
+  [G] G_total_loss: 208.338
+Iteration = 18701 / 40223
+Time per iteration: 2.6648671538184323
+  [G] G_mse_ade_loss: 2.132
+  [G] G_mse_fde_loss: 4.804
+  [G] G_nll_loss: 171.206
+  [G] G_total_loss: 230.553
+Iteration = 18751 / 40223
+Time per iteration: 2.6649216743769517
+  [G] G_mse_ade_loss: 2.132
+  [G] G_mse_fde_loss: 4.711
+  [G] G_nll_loss: 190.379
+  [G] G_total_loss: 254.237
+Iteration = 18801 / 40223
+Time per iteration: 2.6649554667526862
+  [G] G_mse_ade_loss: 2.139
+  [G] G_mse_fde_loss: 4.750
+  [G] G_nll_loss: 219.683
+  [G] G_total_loss: 290.993
+Iteration = 18851 / 40223
+Time per iteration: 2.6650089823113885
+  [G] G_mse_ade_loss: 2.251
+  [G] G_mse_fde_loss: 4.964
+  [G] G_nll_loss: 212.952
+  [G] G_total_loss: 283.333
+Iteration = 18901 / 40223
+Time per iteration: 2.6650821076178133
+  [G] G_mse_ade_loss: 2.247
+  [G] G_mse_fde_loss: 4.925
+  [G] G_nll_loss: 189.643
+  [G] G_total_loss: 254.077
+Starting epoch 48
+Iteration = 18951 / 40223
+Time per iteration: 2.665010390297529
+  [G] G_mse_ade_loss: 2.158
+  [G] G_mse_fde_loss: 4.843
+  [G] G_nll_loss: 197.950
+  [G] G_total_loss: 264.125
+Iteration = 19001 / 40223
+Time per iteration: 2.665065977737895
+  [G] G_mse_ade_loss: 2.169
+  [G] G_mse_fde_loss: 4.733
+  [G] G_nll_loss: 181.183
+  [G] G_total_loss: 242.847
+Checking stats on train ...
+  [train] train_ade: 2.056
+  [train] train_ade_l: 1.776
+  [train] train_ade_nl: 2.342
+  [train] train_fde: 4.562
+  [train] train_fde_l: 3.837
+  [train] train_fde_nl: 5.303
+  [train] train_g_l2_loss_abs: 11.635
+  [train] train_g_l2_loss_rel: 0.000
+Checking stats on val ...
+  [val] val_ade: 1.767
+  [val] val_ade_l: 1.565
+  [val] val_ade_nl: 2.236
+  [val] val_fde: 3.863
+  [val] val_fde_l: 3.351
+  [val] val_fde_nl: 5.056
+  [val] val_g_l2_loss_abs: 8.091
+  [val] val_g_l2_loss_rel: 0.000
+Min ADE: 1.7667164411211058
+Min FDE: 3.8632760996948043
+New low for avg_disp_error
+New low for avg_disp_error_nl
+Saving checkpoint to /home/robesafe/mapfe4mp/save/argoverse/social_lstm_mhsa/100.0_percent/exp-2022-07-18_06-19/argoverse_motion_forecasting_dataset_0_with_model.pt
+Done.
+Saving checkpoint to /home/robesafe/mapfe4mp/save/argoverse/social_lstm_mhsa/100.0_percent/exp-2022-07-18_06-19/argoverse_motion_forecasting_dataset_0_no_model.pt
+Done.
+Iteration = 19051 / 40223
+Time per iteration: 2.665137897382026
+  [G] G_mse_ade_loss: 2.223
+  [G] G_mse_fde_loss: 4.821
+  [G] G_nll_loss: 223.572
+  [G] G_total_loss: 296.150
+Iteration = 19101 / 40223
+Time per iteration: 2.665202730619797
+  [G] G_mse_ade_loss: 2.055
+  [G] G_mse_fde_loss: 4.679
+  [G] G_nll_loss: 157.060
+  [G] G_total_loss: 212.416
+Iteration = 19151 / 40223
+Time per iteration: 2.6652725408185676
+  [G] G_mse_ade_loss: 2.237
+  [G] G_mse_fde_loss: 5.009
+  [G] G_nll_loss: 203.424
+  [G] G_total_loss: 271.545
+Iteration = 19201 / 40223
+Time per iteration: 2.6653442084432286
+  [G] G_mse_ade_loss: 2.196
+  [G] G_mse_fde_loss: 4.940
+  [G] G_nll_loss: 208.480
+  [G] G_total_loss: 277.616
+Iteration = 19251 / 40223
+Time per iteration: 2.6654122701824923
+  [G] G_mse_ade_loss: 2.124
+  [G] G_mse_fde_loss: 4.650
+  [G] G_nll_loss: 166.457
+  [G] G_total_loss: 224.146
+Iteration = 19301 / 40223
+Time per iteration: 2.665476801061771
+  [G] G_mse_ade_loss: 2.112
+  [G] G_mse_fde_loss: 4.753
+  [G] G_nll_loss: 171.483
+  [G] G_total_loss: 230.725
+Starting epoch 49
+Iteration = 19351 / 40223
+Time per iteration: 2.6654302787056303
+  [G] G_mse_ade_loss: 2.148
+  [G] G_mse_fde_loss: 4.691
+  [G] G_nll_loss: 184.024
+  [G] G_total_loss: 246.253
+Iteration = 19401 / 40223
+Time per iteration: 2.6654896700752744
+  [G] G_mse_ade_loss: 2.266
+  [G] G_mse_fde_loss: 5.025
+  [G] G_nll_loss: 233.105
+  [G] G_total_loss: 308.722
+Iteration = 19451 / 40223
+Time per iteration: 2.665540590230361
+  [G] G_mse_ade_loss: 2.056
+  [G] G_mse_fde_loss: 4.494
+  [G] G_nll_loss: 161.769
+  [G] G_total_loss: 217.749
+Iteration = 19501 / 40223
+Time per iteration: 2.6656111344258777
+  [G] G_mse_ade_loss: 2.049
+  [G] G_mse_fde_loss: 4.525
+  [G] G_nll_loss: 149.234
+  [G] G_total_loss: 202.166
+Iteration = 19551 / 40223
+Time per iteration: 2.665679665735192
+  [G] G_mse_ade_loss: 2.115
+  [G] G_mse_fde_loss: 4.637
+  [G] G_nll_loss: 184.404
+  [G] G_total_loss: 246.531
+Iteration = 19601 / 40223
+Time per iteration: 2.6657516758792603
+  [G] G_mse_ade_loss: 2.067
+  [G] G_mse_fde_loss: 4.611
+  [G] G_nll_loss: 161.614
+  [G] G_total_loss: 217.918
+Iteration = 19651 / 40223
+Time per iteration: 2.665727128000285
+  [G] G_mse_ade_loss: 2.097
+  [G] G_mse_fde_loss: 4.617
+  [G] G_nll_loss: 167.150
+  [G] G_total_loss: 224.887
+Iteration = 19701 / 40223
+Time per iteration: 2.6658740252639115
+  [G] G_mse_ade_loss: 2.101
+  [G] G_mse_fde_loss: 4.625
+  [G] G_nll_loss: 184.521
+  [G] G_total_loss: 246.627
+Starting epoch 50
+Iteration = 19751 / 40223
+Time per iteration: 2.666062201700852
+  [G] G_mse_ade_loss: 2.110
+  [G] G_mse_fde_loss: 4.739
+  [G] G_nll_loss: 181.126
+  [G] G_total_loss: 242.735
+Iteration = 19801 / 40223
+Time per iteration: 2.6662988297163035
+  [G] G_mse_ade_loss: 1.911
+  [G] G_mse_fde_loss: 4.275
+  [G] G_nll_loss: 147.064
+  [G] G_total_loss: 198.566
+Iteration = 19851 / 40223
+Time per iteration: 2.6664510854671395
+  [G] G_mse_ade_loss: 1.979
+  [G] G_mse_fde_loss: 4.302
+  [G] G_nll_loss: 148.602
+  [G] G_total_loss: 200.637
+Iteration = 19901 / 40223
+Time per iteration: 2.666588056818887
+  [G] G_mse_ade_loss: 2.150
+  [G] G_mse_fde_loss: 4.832
+  [G] G_nll_loss: 190.217
+  [G] G_total_loss: 254.418
+Iteration = 19951 / 40223
+Time per iteration: 2.666707116687192
+  [G] G_mse_ade_loss: 2.273
+  [G] G_mse_fde_loss: 5.058
+  [G] G_nll_loss: 207.596
+  [G] G_total_loss: 276.940
+Iteration = 20001 / 40223
+Time per iteration: 2.6668102066431407
+  [G] G_mse_ade_loss: 2.156
+  [G] G_mse_fde_loss: 4.716
+  [G] G_nll_loss: 181.418
+  [G] G_total_loss: 243.077
+Iteration = 20051 / 40223
+Time per iteration: 2.666886698497536
+  [G] G_mse_ade_loss: 2.178
+  [G] G_mse_fde_loss: 4.879
+  [G] G_nll_loss: 186.846
+  [G] G_total_loss: 250.373
+Iteration = 20101 / 40223
+Time per iteration: 2.6669654339369564
+  [G] G_mse_ade_loss: 2.052
+  [G] G_mse_fde_loss: 4.581
+  [G] G_nll_loss: 173.718
+  [G] G_total_loss: 232.942
+Starting epoch 51
+Iteration = 20151 / 40223
+Time per iteration: 2.666978361328437
+  [G] G_mse_ade_loss: 2.239
+  [G] G_mse_fde_loss: 4.940
+  [G] G_nll_loss: 238.767
+  [G] G_total_loss: 315.519
+Iteration = 20201 / 40223
+Time per iteration: 2.667065101332915
+  [G] G_mse_ade_loss: 2.089
+  [G] G_mse_fde_loss: 4.660
+  [G] G_nll_loss: 176.998
+  [G] G_total_loss: 237.316
+Iteration = 20251 / 40223
+Time per iteration: 2.6671851104432864
+  [G] G_mse_ade_loss: 2.192
+  [G] G_mse_fde_loss: 4.913
+  [G] G_nll_loss: 181.690
+  [G] G_total_loss: 244.042
+Iteration = 20301 / 40223
+Time per iteration: 2.6673300677194693
+  [G] G_mse_ade_loss: 2.007
+  [G] G_mse_fde_loss: 4.545
+  [G] G_nll_loss: 148.398
+  [G] G_total_loss: 201.139
+Iteration = 20351 / 40223
+Time per iteration: 2.667418099862575
+  [G] G_mse_ade_loss: 2.266
+  [G] G_mse_fde_loss: 5.073
+  [G] G_nll_loss: 233.725
+  [G] G_total_loss: 309.641
+Iteration = 20401 / 40223
+Time per iteration: 2.66753472526204
+  [G] G_mse_ade_loss: 2.180
+  [G] G_mse_fde_loss: 4.770
+  [G] G_nll_loss: 192.839
+  [G] G_total_loss: 257.540
+Iteration = 20451 / 40223
+Time per iteration: 2.6676367054906116
+  [G] G_mse_ade_loss: 2.114
+  [G] G_mse_fde_loss: 4.664
+  [G] G_nll_loss: 176.351
+  [G] G_total_loss: 236.546
+Iteration = 20501 / 40223
+Time per iteration: 2.667743328774675
+  [G] G_mse_ade_loss: 2.072
+  [G] G_mse_fde_loss: 4.563
+  [G] G_nll_loss: 165.613
+  [G] G_total_loss: 222.776
+Iteration = 20551 / 40223
+Time per iteration: 2.6678565611288696
+  [G] G_mse_ade_loss: 2.163
+  [G] G_mse_fde_loss: 4.870
+  [G] G_nll_loss: 195.334
+  [G] G_total_loss: 260.939
+Starting epoch 52
+Iteration = 20601 / 40223
+Time per iteration: 2.6678908761916396
+  [G] G_mse_ade_loss: 2.000
+  [G] G_mse_fde_loss: 4.483
+  [G] G_nll_loss: 151.013
+  [G] G_total_loss: 204.214
+Iteration = 20651 / 40223
+Time per iteration: 2.6680034332936695
+  [G] G_mse_ade_loss: 2.144
+  [G] G_mse_fde_loss: 4.822
+  [G] G_nll_loss: 188.147
+  [G] G_total_loss: 251.794
+Iteration = 20701 / 40223
+Time per iteration: 2.6681311786085518
+  [G] G_mse_ade_loss: 2.125
+  [G] G_mse_fde_loss: 4.801
+  [G] G_nll_loss: 195.172
+  [G] G_total_loss: 260.495
+Iteration = 20751 / 40223
+Time per iteration: 2.6682609721187407
+  [G] G_mse_ade_loss: 2.227
+  [G] G_mse_fde_loss: 4.897
+  [G] G_nll_loss: 200.897
+  [G] G_total_loss: 268.039
+Iteration = 20801 / 40223
+Time per iteration: 2.6683725544274024
+  [G] G_mse_ade_loss: 2.052
+  [G] G_mse_fde_loss: 4.569
+  [G] G_nll_loss: 162.186
+  [G] G_total_loss: 218.492
+Iteration = 20851 / 40223
+Time per iteration: 2.6684937336811783
+  [G] G_mse_ade_loss: 1.969
+  [G] G_mse_fde_loss: 4.438
+  [G] G_nll_loss: 144.092
+  [G] G_total_loss: 195.397
+Iteration = 20901 / 40223
+Time per iteration: 2.6686225169914475
+  [G] G_mse_ade_loss: 2.114
+  [G] G_mse_fde_loss: 4.616
+  [G] G_nll_loss: 208.791
+  [G] G_total_loss: 276.952
+Iteration = 20951 / 40223
+Time per iteration: 2.6687242510119495
+  [G] G_mse_ade_loss: 2.118
+  [G] G_mse_fde_loss: 4.731
+  [G] G_nll_loss: 166.445
+  [G] G_total_loss: 224.366
+Starting epoch 53
+Iteration = 21001 / 40223
+Time per iteration: 2.6687306892893994
+  [G] G_mse_ade_loss: 2.124
+  [G] G_mse_fde_loss: 4.671
+  [G] G_nll_loss: 173.465
+  [G] G_total_loss: 232.969
+Iteration = 21051 / 40223
+Time per iteration: 2.66874189271728
+  [G] G_mse_ade_loss: 2.196
+  [G] G_mse_fde_loss: 4.846
+  [G] G_nll_loss: 196.343
+  [G] G_total_loss: 262.162
+Iteration = 21101 / 40223
+Time per iteration: 2.66877656163528
+  [G] G_mse_ade_loss: 1.983
+  [G] G_mse_fde_loss: 4.477
+  [G] G_nll_loss: 166.672
+  [G] G_total_loss: 223.754
+Iteration = 21151 / 40223
+Time per iteration: 2.6688786348007705
+  [G] G_mse_ade_loss: 2.007
+  [G] G_mse_fde_loss: 4.341
+  [G] G_nll_loss: 185.352
+  [G] G_total_loss: 246.718
+Iteration = 21201 / 40223
+Time per iteration: 2.668943376002697
+  [G] G_mse_ade_loss: 2.252
+  [G] G_mse_fde_loss: 5.053
+  [G] G_nll_loss: 215.516
+  [G] G_total_loss: 286.806
+Iteration = 21251 / 40223
+Time per iteration: 2.6690553981362215
+  [G] G_mse_ade_loss: 2.011
+  [G] G_mse_fde_loss: 4.529
+  [G] G_nll_loss: 147.090
+  [G] G_total_loss: 199.459
+Iteration = 21301 / 40223
+Time per iteration: 2.6691753723482465
+  [G] G_mse_ade_loss: 2.229
+  [G] G_mse_fde_loss: 5.015
+  [G] G_nll_loss: 212.734
+  [G] G_total_loss: 283.190
+Iteration = 21351 / 40223
+Time per iteration: 2.669294564686337
+  [G] G_mse_ade_loss: 2.069
+  [G] G_mse_fde_loss: 4.650
+  [G] G_nll_loss: 164.936
+  [G] G_total_loss: 222.191
+Starting epoch 54
+Checking stats on train ...
+  [train] train_ade: 2.035
+  [train] train_ade_l: 1.763
+  [train] train_ade_nl: 2.313
+  [train] train_fde: 4.518
+  [train] train_fde_l: 3.822
+  [train] train_fde_nl: 5.229
+  [train] train_g_l2_loss_abs: 11.374
+  [train] train_g_l2_loss_rel: 0.000
+Checking stats on val ...
+  [val] val_ade: 1.764
+  [val] val_ade_l: 1.568
+  [val] val_ade_nl: 2.220
+  [val] val_fde: 3.846
+  [val] val_fde_l: 3.343
+  [val] val_fde_nl: 5.017
+  [val] val_g_l2_loss_abs: 8.102
+  [val] val_g_l2_loss_rel: 0.000
+Min ADE: 1.7642442484447045
+Min FDE: 3.846023642296824
+New low for avg_disp_error
+New low for avg_disp_error_nl
+Saving checkpoint to /home/robesafe/mapfe4mp/save/argoverse/social_lstm_mhsa/100.0_percent/exp-2022-07-18_06-19/argoverse_motion_forecasting_dataset_0_with_model.pt
+Done.
+Saving checkpoint to /home/robesafe/mapfe4mp/save/argoverse/social_lstm_mhsa/100.0_percent/exp-2022-07-18_06-19/argoverse_motion_forecasting_dataset_0_no_model.pt
+Done.
+Iteration = 21401 / 40223
+Time per iteration: 2.6693098925746526
+  [G] G_mse_ade_loss: 2.067
+  [G] G_mse_fde_loss: 4.691
+  [G] G_nll_loss: 162.223
+  [G] G_total_loss: 218.918
+Iteration = 21451 / 40223
+Time per iteration: 2.6694103785869565
+  [G] G_mse_ade_loss: 2.078
+  [G] G_mse_fde_loss: 4.808
+  [G] G_nll_loss: 195.941
+  [G] G_total_loss: 261.429
+Iteration = 21501 / 40223
+Time per iteration: 2.669549844812878
+  [G] G_mse_ade_loss: 2.161
+  [G] G_mse_fde_loss: 4.894
+  [G] G_nll_loss: 194.495
+  [G] G_total_loss: 259.961
+Iteration = 21551 / 40223
+Time per iteration: 2.6696726002497804
+  [G] G_mse_ade_loss: 1.997
+  [G] G_mse_fde_loss: 4.329
+  [G] G_nll_loss: 165.183
+  [G] G_total_loss: 221.462
+Iteration = 21601 / 40223
+Time per iteration: 2.66978206170289
+  [G] G_mse_ade_loss: 2.072
+  [G] G_mse_fde_loss: 4.586
+  [G] G_nll_loss: 171.038
+  [G] G_total_loss: 229.626
+Iteration = 21651 / 40223
+Time per iteration: 2.6698859897278058
+  [G] G_mse_ade_loss: 2.175
+  [G] G_mse_fde_loss: 4.769
+  [G] G_nll_loss: 184.108
+  [G] G_total_loss: 246.618
+Iteration = 21701 / 40223
+Time per iteration: 2.6699889867153375
+  [G] G_mse_ade_loss: 2.048
+  [G] G_mse_fde_loss: 4.519
+  [G] G_nll_loss: 150.293
+  [G] G_total_loss: 203.471
+Iteration = 21751 / 40223
+Time per iteration: 2.670097043194073
+  [G] G_mse_ade_loss: 2.231
+  [G] G_mse_fde_loss: 4.935
+  [G] G_nll_loss: 208.637
+  [G] G_total_loss: 277.833
+Starting epoch 55
+Iteration = 21801 / 40223
+Time per iteration: 2.670076628550658
+  [G] G_mse_ade_loss: 2.205
+  [G] G_mse_fde_loss: 4.940
+  [G] G_nll_loss: 183.507
+  [G] G_total_loss: 246.410
+Iteration = 21851 / 40223
+Time per iteration: 2.6701587666570936
+  [G] G_mse_ade_loss: 2.157
+  [G] G_mse_fde_loss: 4.772
+  [G] G_nll_loss: 193.301
+  [G] G_total_loss: 258.098
+Iteration = 21901 / 40223
+Time per iteration: 2.6702855663383165
+  [G] G_mse_ade_loss: 2.226
+  [G] G_mse_fde_loss: 4.919
+  [G] G_nll_loss: 226.428
+  [G] G_total_loss: 300.018
+Iteration = 21951 / 40223
+Time per iteration: 2.670406886838432
+  [G] G_mse_ade_loss: 2.097
+  [G] G_mse_fde_loss: 4.574
+  [G] G_nll_loss: 164.609
+  [G] G_total_loss: 221.582
+Iteration = 22001 / 40223
+Time per iteration: 2.6705069663194
+  [G] G_mse_ade_loss: 1.925
+  [G] G_mse_fde_loss: 4.171
+  [G] G_nll_loss: 140.121
+  [G] G_total_loss: 189.590
+Iteration = 22051 / 40223
+Time per iteration: 2.670608319466814
+  [G] G_mse_ade_loss: 2.084
+  [G] G_mse_fde_loss: 4.660
+  [G] G_nll_loss: 195.524
+  [G] G_total_loss: 260.468
+Iteration = 22101 / 40223
+Time per iteration: 2.670705939896975
+  [G] G_mse_ade_loss: 1.997
+  [G] G_mse_fde_loss: 4.363
+  [G] G_nll_loss: 157.703
+  [G] G_total_loss: 212.216
+Iteration = 22151 / 40223
+Time per iteration: 2.670792386169213
+  [G] G_mse_ade_loss: 2.197
+  [G] G_mse_fde_loss: 4.904
+  [G] G_nll_loss: 204.883
+  [G] G_total_loss: 273.013
+Starting epoch 56
+Iteration = 22201 / 40223
+Time per iteration: 2.6707850191798395
+  [G] G_mse_ade_loss: 1.891
+  [G] G_mse_fde_loss: 4.225
+  [G] G_nll_loss: 131.561
+  [G] G_total_loss: 179.018
+Iteration = 22251 / 40223
+Time per iteration: 2.670882022073845
+  [G] G_mse_ade_loss: 2.068
+  [G] G_mse_fde_loss: 4.517
+  [G] G_nll_loss: 166.467
+  [G] G_total_loss: 223.704
+Iteration = 22301 / 40223
+Time per iteration: 2.670973745484367
+  [G] G_mse_ade_loss: 2.125
+  [G] G_mse_fde_loss: 4.704
+  [G] G_nll_loss: 184.933
+  [G] G_total_loss: 247.405
+Iteration = 22351 / 40223
+Time per iteration: 2.671078440636459
+  [G] G_mse_ade_loss: 2.165
+  [G] G_mse_fde_loss: 4.785
+  [G] G_nll_loss: 191.799
+  [G] G_total_loss: 256.268
+Iteration = 22401 / 40223
+Time per iteration: 2.6712094922400142
+  [G] G_mse_ade_loss: 2.095
+  [G] G_mse_fde_loss: 4.618
+  [G] G_nll_loss: 180.467
+  [G] G_total_loss: 241.533
+Iteration = 22451 / 40223
+Time per iteration: 2.671316475227019
+  [G] G_mse_ade_loss: 2.025
+  [G] G_mse_fde_loss: 4.429
+  [G] G_nll_loss: 160.625
+  [G] G_total_loss: 216.094
+Iteration = 22501 / 40223
+Time per iteration: 2.6714257268840793
+  [G] G_mse_ade_loss: 2.150
+  [G] G_mse_fde_loss: 4.705
+  [G] G_nll_loss: 179.024
+  [G] G_total_loss: 240.047
+Iteration = 22551 / 40223
+Time per iteration: 2.671518795051827
+  [G] G_mse_ade_loss: 1.973
+  [G] G_mse_fde_loss: 4.223
+  [G] G_nll_loss: 140.190
+  [G] G_total_loss: 189.881
+Starting epoch 57
+Iteration = 22601 / 40223
+Time per iteration: 2.671505974592411
+  [G] G_mse_ade_loss: 2.080
+  [G] G_mse_fde_loss: 4.602
+  [G] G_nll_loss: 158.578
+  [G] G_total_loss: 214.110
+Iteration = 22651 / 40223
+Time per iteration: 2.6715660901276155
+  [G] G_mse_ade_loss: 2.047
+  [G] G_mse_fde_loss: 4.556
+  [G] G_nll_loss: 177.510
+  [G] G_total_loss: 237.604
+Iteration = 22701 / 40223
+Time per iteration: 2.6716182854809816
+  [G] G_mse_ade_loss: 2.101
+  [G] G_mse_fde_loss: 4.539
+  [G] G_nll_loss: 185.050
+  [G] G_total_loss: 247.031
+Iteration = 22751 / 40223
+Time per iteration: 2.6716802725922504
+  [G] G_mse_ade_loss: 2.195
+  [G] G_mse_fde_loss: 4.943
+  [G] G_nll_loss: 229.108
+  [G] G_total_loss: 303.409
+Iteration = 22801 / 40223
+Time per iteration: 2.6717763639511727
+  [G] G_mse_ade_loss: 2.108
+  [G] G_mse_fde_loss: 4.658
+  [G] G_nll_loss: 165.110
+  [G] G_total_loss: 222.470
+Iteration = 22851 / 40223
+Time per iteration: 2.6718758162948832
+  [G] G_mse_ade_loss: 2.293
+  [G] G_mse_fde_loss: 5.113
+  [G] G_nll_loss: 208.249
+  [G] G_total_loss: 277.944
+Iteration = 22901 / 40223
+Time per iteration: 2.6719675275426904
+  [G] G_mse_ade_loss: 2.066
+  [G] G_mse_fde_loss: 4.589
+  [G] G_nll_loss: 184.919
+  [G] G_total_loss: 246.981
+Iteration = 22951 / 40223
+Time per iteration: 2.672066237317633
+  [G] G_mse_ade_loss: 1.954
+  [G] G_mse_fde_loss: 4.446
+  [G] G_nll_loss: 152.523
+  [G] G_total_loss: 205.945
+Starting epoch 58
+Iteration = 23001 / 40223
+Time per iteration: 2.6720637700686347
+  [G] G_mse_ade_loss: 2.011
+  [G] G_mse_fde_loss: 4.459
+  [G] G_nll_loss: 155.420
+  [G] G_total_loss: 209.664
+Iteration = 23051 / 40223
+Time per iteration: 2.672106566043755
+  [G] G_mse_ade_loss: 2.168
+  [G] G_mse_fde_loss: 4.741
+  [G] G_nll_loss: 223.865
+  [G] G_total_loss: 296.223
+Iteration = 23101 / 40223
+Time per iteration: 2.672152076952953
+  [G] G_mse_ade_loss: 2.190
+  [G] G_mse_fde_loss: 4.808
+  [G] G_nll_loss: 174.984
+  [G] G_total_loss: 235.346
+Iteration = 23151 / 40223
+Time per iteration: 2.6721934443297464
+  [G] G_mse_ade_loss: 2.195
+  [G] G_mse_fde_loss: 4.945
+  [G] G_nll_loss: 223.041
+  [G] G_total_loss: 295.832
+Iteration = 23201 / 40223
+Time per iteration: 2.6722523433823744
+  [G] G_mse_ade_loss: 1.961
+  [G] G_mse_fde_loss: 4.301
+  [G] G_nll_loss: 155.841
+  [G] G_total_loss: 209.665
+Iteration = 23251 / 40223
+Time per iteration: 2.672310504752956
+  [G] G_mse_ade_loss: 2.111
+  [G] G_mse_fde_loss: 4.742
+  [G] G_nll_loss: 183.640
+  [G] G_total_loss: 245.886
+Iteration = 23301 / 40223
+Time per iteration: 2.672365362872065
+  [G] G_mse_ade_loss: 2.069
+  [G] G_mse_fde_loss: 4.684
+  [G] G_nll_loss: 191.094
+  [G] G_total_loss: 254.988
+Iteration = 23351 / 40223
+Time per iteration: 2.6723864226263445
+  [G] G_mse_ade_loss: 2.035
+  [G] G_mse_fde_loss: 4.596
+  [G] G_nll_loss: 163.838
+  [G] G_total_loss: 220.621
+Starting epoch 59
+Iteration = 23401 / 40223
+Time per iteration: 2.6723310751087883
+  [G] G_mse_ade_loss: 2.165
+  [G] G_mse_fde_loss: 4.697
+  [G] G_nll_loss: 179.641
+  [G] G_total_loss: 240.807
+Iteration = 23451 / 40223
+Time per iteration: 2.6723705487212444
+  [G] G_mse_ade_loss: 1.935
+  [G] G_mse_fde_loss: 4.259
+  [G] G_nll_loss: 146.631
+  [G] G_total_loss: 197.998
+Iteration = 23501 / 40223
+Time per iteration: 2.67237068186374
+  [G] G_mse_ade_loss: 2.035
+  [G] G_mse_fde_loss: 4.646
+  [G] G_nll_loss: 181.054
+  [G] G_total_loss: 242.291
+Iteration = 23551 / 40223
+Time per iteration: 2.672382656234444
+  [G] G_mse_ade_loss: 2.147
+  [G] G_mse_fde_loss: 4.774
+  [G] G_nll_loss: 184.677
+  [G] G_total_loss: 247.316
+Iteration = 23601 / 40223
+Time per iteration: 2.6724187902088747
+  [G] G_mse_ade_loss: 2.044
+  [G] G_mse_fde_loss: 4.502
+  [G] G_nll_loss: 165.925
+  [G] G_total_loss: 222.955
+Iteration = 23651 / 40223
+Time per iteration: 2.672470435033283
+  [G] G_mse_ade_loss: 2.091
+  [G] G_mse_fde_loss: 4.545
+  [G] G_nll_loss: 192.477
+  [G] G_total_loss: 256.321
+Iteration = 23701 / 40223
+Time per iteration: 2.6725203190104962
+  [G] G_mse_ade_loss: 2.092
+  [G] G_mse_fde_loss: 4.594
+  [G] G_nll_loss: 158.948
+  [G] G_total_loss: 214.557
+Iteration = 23751 / 40223
+Time per iteration: 2.6725703480419254
+  [G] G_mse_ade_loss: 1.987
+  [G] G_mse_fde_loss: 4.358
+  [G] G_nll_loss: 160.670
+  [G] G_total_loss: 215.900
+Checking stats on train ...
+  [train] train_ade: 2.020
+  [train] train_ade_l: 1.742
+  [train] train_ade_nl: 2.305
+  [train] train_fde: 4.485
+  [train] train_fde_l: 3.773
+  [train] train_fde_nl: 5.213
+  [train] train_g_l2_loss_abs: 11.272
+  [train] train_g_l2_loss_rel: 0.000
+Checking stats on val ...
+  [val] val_ade: 1.740
+  [val] val_ade_l: 1.539
+  [val] val_ade_nl: 2.206
+  [val] val_fde: 3.797
+  [val] val_fde_l: 3.286
+  [val] val_fde_nl: 4.986
+  [val] val_g_l2_loss_abs: 7.941
+  [val] val_g_l2_loss_rel: 0.000
+Min ADE: 1.7397211096219445
+Min FDE: 3.7973863379791966
+New low for avg_disp_error
+New low for avg_disp_error_nl
+Saving checkpoint to /home/robesafe/mapfe4mp/save/argoverse/social_lstm_mhsa/100.0_percent/exp-2022-07-18_06-19/argoverse_motion_forecasting_dataset_0_with_model.pt
+Done.
+Saving checkpoint to /home/robesafe/mapfe4mp/save/argoverse/social_lstm_mhsa/100.0_percent/exp-2022-07-18_06-19/argoverse_motion_forecasting_dataset_0_no_model.pt
+Done.
+Starting epoch 60
+Iteration = 23801 / 40223
+Time per iteration: 2.67253089562158
+  [G] G_mse_ade_loss: 1.817
+  [G] G_mse_fde_loss: 3.968
+  [G] G_nll_loss: 116.266
+  [G] G_total_loss: 159.052
+Iteration = 23851 / 40223
+Time per iteration: 2.6725677488774933
+  [G] G_mse_ade_loss: 2.113
+  [G] G_mse_fde_loss: 4.690
+  [G] G_nll_loss: 197.005
+  [G] G_total_loss: 262.440
+Iteration = 23901 / 40223
+Time per iteration: 2.6726171204766582
+  [G] G_mse_ade_loss: 2.260
+  [G] G_mse_fde_loss: 4.988
+  [G] G_nll_loss: 231.495
+  [G] G_total_loss: 306.592
+Iteration = 23951 / 40223
+Time per iteration: 2.672670211619183
+  [G] G_mse_ade_loss: 2.009
+  [G] G_mse_fde_loss: 4.507
+  [G] G_nll_loss: 170.753
+  [G] G_total_loss: 228.971
+Iteration = 24001 / 40223
+Time per iteration: 2.67272620848589
+  [G] G_mse_ade_loss: 2.099
+  [G] G_mse_fde_loss: 4.730
+  [G] G_nll_loss: 198.574
+  [G] G_total_loss: 264.507
+Iteration = 24051 / 40223
+Time per iteration: 2.672775403778497
+  [G] G_mse_ade_loss: 1.954
+  [G] G_mse_fde_loss: 4.279
+  [G] G_nll_loss: 157.607
+  [G] G_total_loss: 211.799
+Iteration = 24101 / 40223
+Time per iteration: 2.6728226610854584
+  [G] G_mse_ade_loss: 2.085
+  [G] G_mse_fde_loss: 4.575
+  [G] G_nll_loss: 161.428
+  [G] G_total_loss: 217.596
+Iteration = 24151 / 40223
+Time per iteration: 2.67287561023839
+  [G] G_mse_ade_loss: 2.235
+  [G] G_mse_fde_loss: 5.053
+  [G] G_nll_loss: 212.089
+  [G] G_total_loss: 282.504
+Starting epoch 61
+Iteration = 24201 / 40223
+Time per iteration: 2.6728985389103244
+  [G] G_mse_ade_loss: 2.211
+  [G] G_mse_fde_loss: 4.844
+  [G] G_nll_loss: 185.403
+  [G] G_total_loss: 248.496
+Iteration = 24251 / 40223
+Time per iteration: 2.673121131457947
+  [G] G_mse_ade_loss: 2.185
+  [G] G_mse_fde_loss: 4.829
+  [G] G_nll_loss: 183.652
+  [G] G_total_loss: 246.238
+Iteration = 24301 / 40223
+Time per iteration: 2.6734594339932154
+  [G] G_mse_ade_loss: 2.117
+  [G] G_mse_fde_loss: 4.687
+  [G] G_nll_loss: 169.622
+  [G] G_total_loss: 228.207
+Iteration = 24351 / 40223
+Time per iteration: 2.6738045177520027
+  [G] G_mse_ade_loss: 2.161
+  [G] G_mse_fde_loss: 4.747
+  [G] G_nll_loss: 179.457
+  [G] G_total_loss: 240.722
+Iteration = 24401 / 40223
+Time per iteration: 2.673982789998054
+  [G] G_mse_ade_loss: 2.077
+  [G] G_mse_fde_loss: 4.596
+  [G] G_nll_loss: 179.960
+  [G] G_total_loss: 240.816
+Iteration = 24451 / 40223
+Time per iteration: 2.674304480884398
+  [G] G_mse_ade_loss: 2.113
+  [G] G_mse_fde_loss: 4.562
+  [G] G_nll_loss: 195.216
+  [G] G_total_loss: 259.819
+Iteration = 24501 / 40223
+Time per iteration: 2.6746574298570915
+  [G] G_mse_ade_loss: 2.182
+  [G] G_mse_fde_loss: 4.997
+  [G] G_nll_loss: 208.607
+  [G] G_total_loss: 277.933
+Iteration = 24551 / 40223
+Time per iteration: 2.674958058643873
+  [G] G_mse_ade_loss: 2.123
+  [G] G_mse_fde_loss: 4.614
+  [G] G_nll_loss: 198.036
+  [G] G_total_loss: 263.508
+Starting epoch 62
+Iteration = 24601 / 40223
+Time per iteration: 2.675106801626561
+  [G] G_mse_ade_loss: 2.143
+  [G] G_mse_fde_loss: 4.740
+  [G] G_nll_loss: 188.585
+  [G] G_total_loss: 252.095
+Iteration = 24651 / 40223
+Time per iteration: 2.6752892576179508
+  [G] G_mse_ade_loss: 1.951
+  [G] G_mse_fde_loss: 4.296
+  [G] G_nll_loss: 141.589
+  [G] G_total_loss: 191.827
+Iteration = 24701 / 40223
+Time per iteration: 2.675502938339331
+  [G] G_mse_ade_loss: 2.113
+  [G] G_mse_fde_loss: 4.639
+  [G] G_nll_loss: 199.951
+  [G] G_total_loss: 265.968
+Iteration = 24751 / 40223
+Time per iteration: 2.675737152368939
+  [G] G_mse_ade_loss: 2.087
+  [G] G_mse_fde_loss: 4.511
+  [G] G_nll_loss: 209.971
+  [G] G_total_loss: 278.083
+Iteration = 24801 / 40223
+Time per iteration: 2.6759838391530852
+  [G] G_mse_ade_loss: 2.013
+  [G] G_mse_fde_loss: 4.548
+  [G] G_nll_loss: 156.586
+  [G] G_total_loss: 211.390
+Iteration = 24851 / 40223
+Time per iteration: 2.6761202831766426
+  [G] G_mse_ade_loss: 2.055
+  [G] G_mse_fde_loss: 4.655
+  [G] G_nll_loss: 165.796
+  [G] G_total_loss: 223.264
+Iteration = 24901 / 40223
+Time per iteration: 2.6764366526301333
+  [G] G_mse_ade_loss: 2.097
+  [G] G_mse_fde_loss: 4.654
+  [G] G_nll_loss: 194.421
+  [G] G_total_loss: 259.085
+Iteration = 24951 / 40223
+Time per iteration: 2.6766271089428693
+  [G] G_mse_ade_loss: 2.201
+  [G] G_mse_fde_loss: 4.798
+  [G] G_nll_loss: 227.647
+  [G] G_total_loss: 301.152
+Starting epoch 63
+Iteration = 25001 / 40223
+Time per iteration: 2.6768005354767497
+  [G] G_mse_ade_loss: 2.090
+  [G] G_mse_fde_loss: 4.670
+  [G] G_nll_loss: 167.431
+  [G] G_total_loss: 225.390
+Iteration = 25051 / 40223
+Time per iteration: 2.6769692963846885
+  [G] G_mse_ade_loss: 2.072
+  [G] G_mse_fde_loss: 4.632
+  [G] G_nll_loss: 176.274
+  [G] G_total_loss: 236.310
+Iteration = 25101 / 40223
+Time per iteration: 2.6770748472143455
+  [G] G_mse_ade_loss: 2.197
+  [G] G_mse_fde_loss: 5.013
+  [G] G_nll_loss: 199.523
+  [G] G_total_loss: 266.639
+Iteration = 25151 / 40223
+Time per iteration: 2.6771919265200443
+  [G] G_mse_ade_loss: 2.198
+  [G] G_mse_fde_loss: 4.936
+  [G] G_nll_loss: 226.460
+  [G] G_total_loss: 300.080
+Iteration = 25201 / 40223
+Time per iteration: 2.6772963529465468
+  [G] G_mse_ade_loss: 1.906
+  [G] G_mse_fde_loss: 4.244
+  [G] G_nll_loss: 141.106
+  [G] G_total_loss: 191.022
+Iteration = 25251 / 40223
+Time per iteration: 2.6774030388532255
+  [G] G_mse_ade_loss: 2.097
+  [G] G_mse_fde_loss: 4.620
+  [G] G_nll_loss: 165.361
+  [G] G_total_loss: 222.658
+Iteration = 25301 / 40223
+Time per iteration: 2.6775168503260387
+  [G] G_mse_ade_loss: 2.087
+  [G] G_mse_fde_loss: 4.578
+  [G] G_nll_loss: 163.850
+  [G] G_total_loss: 220.633
+Iteration = 25351 / 40223
+Time per iteration: 2.6776628996567786
+  [G] G_mse_ade_loss: 2.049
+  [G] G_mse_fde_loss: 4.448
+  [G] G_nll_loss: 176.180
+  [G] G_total_loss: 235.619
+Starting epoch 64
+Iteration = 25401 / 40223
+Time per iteration: 2.677739934111049
+  [G] G_mse_ade_loss: 2.094
+  [G] G_mse_fde_loss: 4.632
+  [G] G_nll_loss: 189.484
+  [G] G_total_loss: 252.846
+Iteration = 25451 / 40223
+Time per iteration: 2.6779081632400477
+  [G] G_mse_ade_loss: 2.155
+  [G] G_mse_fde_loss: 4.668
+  [G] G_nll_loss: 176.052
+  [G] G_total_loss: 236.225
+Iteration = 25501 / 40223
+Time per iteration: 2.6780641730039907
+  [G] G_mse_ade_loss: 1.979
+  [G] G_mse_fde_loss: 4.473
+  [G] G_nll_loss: 156.634
+  [G] G_total_loss: 211.190
+Iteration = 25551 / 40223
+Time per iteration: 2.678205762001489
+  [G] G_mse_ade_loss: 2.058
+  [G] G_mse_fde_loss: 4.498
+  [G] G_nll_loss: 167.385
+  [G] G_total_loss: 224.782

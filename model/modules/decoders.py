@@ -112,6 +112,8 @@ class TemporalDecoderLSTM(nn.Module):
                  use_rel_disp=False):
         super().__init__()
 
+        # TODO: How to generate the absolute positions directly without using rel-rel?
+
         self.data_dim = 2 # x,y
         self.pred_len = output_len
         self.h_dim = h_dim
@@ -125,20 +127,12 @@ class TemporalDecoderLSTM(nn.Module):
 
         self.hidden2pos = nn.Linear(self.h_dim, self.data_dim)
 
-        if self.use_rel_disp:
-            self.spatial_embedding = nn.Linear(input_len*2, self.embedding_dim)
-            self.ln1 = nn.LayerNorm(input_len*2)
-            self.ln2 = nn.LayerNorm(self.h_dim)
+        self.spatial_embedding = nn.Linear(input_len*2, self.embedding_dim)
+        self.ln1 = nn.LayerNorm(input_len*2)
+        self.ln2 = nn.LayerNorm(self.h_dim)
 
-            self.decoder = nn.LSTM(self.embedding_dim, self.h_dim, num_layers=num_layers,
-                                dropout=dropout, bidirectional=bidirectional)
-        else:
-            self.spatial_embedding = nn.Linear(input_len*2, self.embedding_dim)
-            self.ln1 = nn.LayerNorm(input_len*2)
-            self.ln2 = nn.LayerNorm(self.h_dim)
-
-            self.decoder = nn.LSTM(self.embedding_dim, self.h_dim, num_layers=num_layers,
-                                dropout=dropout, bidirectional=bidirectional)
+        self.decoder = nn.LSTM(self.embedding_dim, self.h_dim, num_layers=num_layers,
+                               dropout=dropout, bidirectional=bidirectional)
 
     def forward(self, traj_abs, traj_rel, decoder_h):
         """

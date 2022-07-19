@@ -86,6 +86,7 @@ hyperparameters:
 
 model:
     name: "social_lstm_mhsa"
+    adversarial_training: False
     generator:
         use_rel_disp: &use_rel_disp False # If True, use dx/dy (equivalent to velocities) 
                                           # to encode/decode. 
