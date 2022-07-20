@@ -13,7 +13,7 @@ dataset:
     start_from_percentage: 0.0 # By default, 0. If you want to analize a particular bunch of files (e.g. from 25 % to 50 %)
                                # then write here 0.25 and in split_percentage 0.25
     split_percentage: 0.1 # % of the dataset (0-1)
-    shuffle: True # False to check the input data, always set to True (Only for training!)
+    shuffle: False # False to check the input data, always set to True (Only for training!)
     data_augmentation: True # Rotation, Swapping, Dropout, Gaussian noise
     class_balance: 0.5 # % of straight trajectories (considering the AGENT). Remaining % are curved trajectories
                         # (again, considering the AGENT). -1.0 if no class balance is used (get_item takes the corresponding
@@ -94,11 +94,13 @@ model:
     name: "gan_social_lstm_mhsa"
     adversarial_training: True
     generator:
-        use_rel_disp: &use_rel_disp False # If True, use dx/dy (equivalent to velocities) 
+        use_rel_disp: &use_rel_disp True # If True, use dx/dy (equivalent to velocities) 
                                           # to encode/decode. 
                                           # Otherwise, use absolute coordinates
                                           # (around target agent) and apply convolutions
                                           # to model velocity and accelerations
+        use_social_attention: True
+
         encoder_lstm:
             noise_dim: 8
             use_rel_disp: *use_rel_disp

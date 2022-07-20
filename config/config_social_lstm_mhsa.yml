@@ -12,7 +12,7 @@ dataset:
     num_workers: 0
     start_from_percentage: 0.0 # By default, 0. If you want to analize a particular bunch of files (e.g. from 25 % to 50 %)
                                # then write here 0.25 and in split_percentage 0.25
-    split_percentage: 1.0 # % of the dataset (0-1)
+    split_percentage: 0.1 # % of the dataset (0-1)
     shuffle: True # False to check the input data, always set to True (Only for training!)
     data_augmentation: True # Rotation, Swapping, Dropout, Gaussian noise
     class_balance: 0.5 # % of straight trajectories (considering the AGENT). Remaining % are curved trajectories
@@ -42,9 +42,9 @@ hyperparameters:
     num_epochs: 100
     print_every: 50
     checkpoint_name: "0"                      
-    checkpoint_val_percentage: 0.3 # 0.1 # (0 - 1) Check accuracy in validation split every
+    checkpoint_val_percentage: 0.1 # 0.1 # (0 - 1) Check accuracy in validation split every
                                     # checkpoint_val_percentage * total_num_iterations
-    checkpoint_train_percentage: 0.3 # 0.2 # (0 - 1)
+    checkpoint_train_percentage: 0.1 # 0.2 # (0 - 1)
     num_samples_check: 5000 # Check a maximum of num_samples_check in the check_accuracy function
 
     loss_type_g: "mse_w+nll" # (mse|mse_w), nll, (mse|mse_w)+nll, (mse|mse_w)+fa 
@@ -93,6 +93,8 @@ model:
                                           # Otherwise, use absolute coordinates
                                           # (around target agent) and apply convolutions
                                           # to model velocity and accelerations
+        social_attention: False
+
         encoder_lstm:
             use_rel_disp: *use_rel_disp
             conv_filters: 16

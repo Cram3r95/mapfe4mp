@@ -81,6 +81,11 @@ def get_generator(model_path,config):
     device = torch.device(current_cuda if torch.cuda.is_available() else "cpu")
 
     curr_model = model_path.split('/')[2]
+    adversarial_training = False
+    if "gan" in curr_model: 
+        curr_model = '_'.join(curr_model.split('_')[1:])
+        adversarial_training = True
+
     curr_model = f"model.models.{curr_model}"
     curr_model_module = importlib.import_module(curr_model)
     TrajectoryGenerator = getattr(curr_model_module,"TrajectoryGenerator")
@@ -88,14 +93,33 @@ def get_generator(model_path,config):
     generator = TrajectoryGenerator(config_encoder_lstm=config.model.generator.encoder_lstm,
                                     config_decoder_lstm=config.model.generator.decoder_lstm,
                                     config_mhsa=config.model.generator.mhsa,
-                                    current_cuda=current_cuda)
+                                    current_cuda=current_cuda,
+                                    adversarial_training=adversarial_training)
 
     checkpoint = torch.load(model_path, map_location=current_cuda)
     generator.load_state_dict(checkpoint.config_cp['g_best_state'], strict=False)
     generator.to(device)
     generator.eval() # We do not want to train during inference
 
-    return generator 
+    return generator
+
+def get_generator_mp_so(model_path,config):
+    """
+    """
+
+    current_cuda = torch.device(f"cuda:{config.device_gpu}")
+    device = torch.device(current_cuda if torch.cuda.is_available() else "cpu")
+
+    curr_model_module = importlib.import_module("model.models.mp_so")
+    TrajectoryGenerator = getattr(curr_model_module,"TrajectoryGenerator")
+    generator = TrajectoryGenerator(h_dim=256)
+
+    checkpoint = torch.load(model_path, map_location=current_cuda)
+    generator.load_state_dict(checkpoint.config_cp['g_best_state'], strict=False)
+    generator.to(device)
+    generator.eval() # We do not want to train during inference
+
+    return generator  
 
 def get_total_norm(parameters, norm_type=2):
     """

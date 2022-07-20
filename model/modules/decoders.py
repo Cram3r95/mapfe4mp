@@ -197,6 +197,47 @@ class TemporalDecoderLSTM(nn.Module):
             pred_traj_fake = torch.stack(pred_traj_fake, dim=0)
 
             return pred_traj_fake
+
+class Old_TemporalDecoderLSTM(nn.Module):
+
+    def __init__(self, seq_len=30, h_dim=64, embedding_dim=16):
+        super().__init__()
+
+        self.seq_len = seq_len
+        self.h_dim = h_dim
+        self.embedding_dim = embedding_dim
+
+        self.decoder = nn.LSTM(self.embedding_dim, self.h_dim, 1)
+        self.spatial_embedding = nn.Linear(40, self.embedding_dim) # 20 obs * 2 points
+        self.ln1 = nn.LayerNorm(40)
+        self.hidden2pos = nn.Linear(self.h_dim, 2)
+        self.ln2 = nn.LayerNorm(self.h_dim)
+
+    def forward(self, traj_abs, traj_rel, state_tuple):
+        """
+            traj_abs (20, b, 2)
+            traj_rel (20, b, 2)
+            state_tuple: h and c
+                h : c : (1, b, self.h_dim)
+        """
+        npeds = traj_abs.size(1)
+        pred_traj_fake_rel = []
+        decoder_input = F.leaky_relu(self.spatial_embedding(self.ln1(traj_rel.contiguous().view(npeds, -1)))) # bx16
+        decoder_input = decoder_input.contiguous().view(1, npeds, self.embedding_dim) # 1x batchx 16
+
+        for _ in range(self.seq_len):
+            output, state_tuple = self.decoder(decoder_input, state_tuple) # output (1, b, 32)
+            rel_pos = self.hidden2pos(self.ln2(output.contiguous().view(-1, self.h_dim))) # (b, 2)
+            traj_rel = torch.roll(traj_rel, -1, dims=(0))
+            traj_rel[-1] = rel_pos
+
+            decoder_input = F.leaky_relu(self.spatial_embedding(self.ln1(traj_rel.contiguous().view(npeds, -1))))
+            decoder_input = decoder_input.contiguous().view(1, npeds, self.embedding_dim)
+            pred_traj_fake_rel.append(rel_pos.contiguous().view(npeds,-1))
+
+        pred_traj_fake_rel = torch.stack(pred_traj_fake_rel, dim=0)
+        return pred_traj_fake_rel
+
 class MM_DecoderLSTM(nn.Module):
 
     def __init__(self, seq_len=30, h_dim=64, embedding_dim=16, n_samples=3):

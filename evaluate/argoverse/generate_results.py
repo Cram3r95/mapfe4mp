@@ -21,6 +21,7 @@ import pdb
 import time
 import glob
 import csv
+import git
 
 from pathlib import Path
 from prodict import Prodict
@@ -33,13 +34,14 @@ from torch.utils.data import DataLoader
 
 # Custom imports
 
-BASE_DIR = "/home/denso/carlos_vsr_workspace/mapfe4mp"
+repo = git.Repo('.', search_parent_directories=True)
+BASE_DIR = repo.working_tree_dir
 sys.path.append(BASE_DIR)
 
 import model.datasets.argoverse.plot_functions as plot_functions
 from model.datasets.argoverse.dataset import ArgoverseMotionForecastingDataset, seq_collate
 import model.datasets.argoverse.dataset_utils as dataset_utils
-from model.utils.checkpoint_data import get_generator
+from model.utils.checkpoint_data import get_generator, get_generator_mp_so
 from model.trainers.trainer_social_lstm_mhsa import cal_ade, cal_fde
 
 from argoverse.evaluation.competition_util import generate_forecasting_h5
@@ -61,7 +63,7 @@ parser.add_argument("--split", required=True, default="val", type=str)
 
 dist_around = 40
 dist_rasterized_map = [-dist_around, dist_around, -dist_around, dist_around]
-GENERATE_QUALITATIVE_RESULTS = True
+GENERATE_QUALITATIVE_RESULTS = False
 COMPUTE_METRICS = True
 
 def generate_csv(results_path,ade_list,fde_list,num_seq_list,traj_kind_list,sort=False):
@@ -222,8 +224,8 @@ def evaluate(loader, generator, num_modes, split, current_cuda, pred_len):
                                                  rot_angle=-1,obs_len=obs_traj.shape[0],
                                                  smoothen=False,save=True,pred_trajectories_rel=pred_traj_fake_rel,
                                                  ade_metric=ade_,fde_metric=fde_)
-            else:
-                assert 1 == 0
+            # else:
+            #     assert 1 == 0
             pred_traj_fake_rel = pred_traj_fake_rel.unsqueeze(dim=0)
 
             # Get predictions in absolute coordinates 
@@ -315,7 +317,8 @@ def main(args):
     # Get generator
 
     print("Load generator...")
-    generator = get_generator(args.model_path, config)
+    # generator = get_generator(args.model_path, config)
+    generator = get_generator_mp_so(args.model_path, config) # OLD gan
 
     # Evaluate model and get metrics
 
@@ -356,5 +359,11 @@ if __name__ == '__main__':
 """
 python evaluate/argoverse/generate_results.py \
 --model_path "save/argoverse/social_lstm_mhsa/100.0_percent/exp1/argoverse_motion_forecasting_dataset_0_with_model.pt" \
+--num_modes 6 --device_gpu 0 --split "test"
+"""
+
+"""
+python evaluate/argoverse/generate_results.py \
+--model_path "save/argoverse/gan_social_lstm_mhsa/10.0_percent/exp-2022-07-20_00-45/argoverse_motion_forecasting_dataset_0_with_model.pt" \
 --num_modes 6 --device_gpu 0 --split "test"
 """
