@@ -17,8 +17,8 @@ import torch.optim.lr_scheduler as lrs
 from torch.cuda.amp import GradScaler, autocast 
 
 from model.datasets.argoverse.dataset import ArgoverseMotionForecastingDataset, seq_collate
-from model.models.mp_so import TrajectoryGenerator, TrajectoryDiscriminator
-# from model.models.social_lstm_mhsa import TrajectoryGenerator, TrajectoryDiscriminator
+# from model.models.mp_so import TrajectoryGenerator, TrajectoryDiscriminator
+from model.models.social_lstm_mhsa import TrajectoryGenerator, TrajectoryDiscriminator
 from model.modules.losses import gan_g_loss, l2_loss, gan_g_loss_bce, pytorch_neg_multi_log_likelihood_batch, mse_custom, \
                                   gan_d_loss, gan_d_loss_bce
 from model.modules.evaluation_metrics import displacement_error, final_displacement_error
@@ -314,7 +314,7 @@ def model_trainer(config, logger):
                     checkpoint.config_cp["G_losses"][k].append(v)
                 checkpoint.config_cp["losses_ts"].append(t)
 
-            if t > 0 and t % 2000 == 0:
+            if t > 0 and t % 500 == 0:
                 checkpoint.config_cp["counters"]["t"] = t
                 checkpoint.config_cp["counters"]["epoch"] = epoch
                 checkpoint.config_cp["sample_ts"].append(t)

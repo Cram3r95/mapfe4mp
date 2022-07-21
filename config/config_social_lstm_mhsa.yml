@@ -93,7 +93,7 @@ model:
                                           # Otherwise, use absolute coordinates
                                           # (around target agent) and apply convolutions
                                           # to model velocity and accelerations
-        social_attention: False
+        social_attention: True
 
         encoder_lstm:
             use_rel_disp: *use_rel_disp

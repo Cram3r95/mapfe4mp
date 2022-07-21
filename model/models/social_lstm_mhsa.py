@@ -44,7 +44,7 @@ def get_noise(shape,current_cuda):
 
 class TrajectoryGenerator(nn.Module):
     def __init__(self, config_encoder_lstm, config_decoder_lstm, config_mhsa, 
-                       current_cuda="cuda:0", adversarial_training=False, social_attention=False):
+                       current_cuda="cuda:0", adversarial_training=False, social_attention=True):
         super(TrajectoryGenerator, self).__init__() # initialize nn.Module with default parameters
 
         # Aux variables

@@ -72,18 +72,16 @@ if __name__ == "__main__":
 
     # Get configuration for the current architecture
 
-    if not args.from_exp: # Initialize new experiment from your current config file in configs folder
+    if not args.from_exp: # Initialize new experiment from your current 
+                          # config file in configs folder
         config_path = "./config/config_%s.yml" % args.trainer
-    elif os.path.isdir(args.from_exp): # Continue training from previous checkpoint with the 
-                                       # corresponding config file
+    else: # Continue training from previous checkpoint with the 
+          # corresponding config file
+        assert os.path.isdir(args.from_exp), print("Checkpoint not found!")
         config_path = os.path.join(args.from_exp,"config_file.yml")
-    else:
-        assert 1 == 0, "Checkpoint not found!" 
-        
-    print("BASE_DIR: ", BASE_DIR)
 
     now = datetime.now()
-    exp_name = now.strftime("exp-%Y-%m-%d_%H-%M")
+    exp_name = now.strftime("exp-%Y-%m-%d_%Hh") # -%M")
 
     with open(config_path) as config_file:
         config = yaml.safe_load(config_file)
@@ -105,7 +103,9 @@ if __name__ == "__main__":
             model = config["dataset_name"] + "_" + args.num_ckpt + "_with_model.pt"
 
             config["hyperparameters"]["checkpoint_start_from"] = os.path.join(args.from_exp,model)
-
+        else:
+            assert not os.path.exists(config["hyperparameters"]["output_dir"]), print("This path already exists!")
+  
         if not os.path.exists(config["hyperparameters"]["output_dir"]):
             print("Create experiment path: ", config["hyperparameters"]["output_dir"])
             os.makedirs(config["hyperparameters"]["output_dir"]) # makedirs creates intermediate folders

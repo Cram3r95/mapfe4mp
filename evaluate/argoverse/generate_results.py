@@ -317,8 +317,10 @@ def main(args):
     # Get generator
 
     print("Load generator...")
-    # generator = get_generator(args.model_path, config)
-    generator = get_generator_mp_so(args.model_path, config) # OLD gan
+    try:
+        generator = get_generator(args.model_path, config)
+    except:
+        generator = get_generator_mp_so(args.model_path, config) # OLD gan
 
     # Evaluate model and get metrics
 

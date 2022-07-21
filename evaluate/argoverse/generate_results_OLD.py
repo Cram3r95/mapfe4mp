@@ -93,7 +93,7 @@ def evaluate(loader, generator, num_samples, pred_len, split, results_path):
             output_all[key] = np.zeros((num_samples, 30, 2))
 
         # Generate H5 file for Argoverse Motion-Forecasting competition
-        pdb.set_trace()
+
         generate_forecasting_h5(output_all, results_path)
 
     return output_all
@@ -165,7 +165,8 @@ def main(args):
     print("Load generator...")
     # checkpoint = torch.load(args.model_path)
     # generator = get_generator(checkpoint.config_cp, config_file)
-    generator = get_generator_mp_so(args.model_path, config_file) # OLD gan
+    # generator = get_generator_mp_so(args.model_path, config_file) # OLD gan
+    generator = get_generator(args.model_path, config_file)
 
     # Evaluate, store results in .json file and get metrics
 
