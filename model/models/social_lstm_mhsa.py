@@ -33,7 +33,8 @@ def make_mlp(dim_list):
     layers = []
     for dim_in, dim_out in zip(dim_list[:-1], dim_list[1:]):
         layers.append(nn.Linear(dim_in, dim_out))
-        layers.append(nn.LeakyReLU())
+        # layers.append(nn.LeakyReLU())
+        layers.append(nn.Tanh())
     return nn.Sequential(*layers)
 
 def get_noise(shape,current_cuda):
@@ -44,18 +45,21 @@ def get_noise(shape,current_cuda):
 
 class TrajectoryGenerator(nn.Module):
     def __init__(self, config_encoder_lstm, config_decoder_lstm, config_mhsa, 
-                       current_cuda="cuda:0", adversarial_training=False, social_attention=True):
+                       current_cuda="cuda:0", adversarial_training=False, use_social_attention=True,
+                       ):
         super(TrajectoryGenerator, self).__init__() # initialize nn.Module with default parameters
 
         # Aux variables
 
         self.current_cuda = current_cuda
         self.adversarial_training = adversarial_training
-        self.social_attention = social_attention
         
         # Encoder
 
         self.encoder_use_rel_disp = config_encoder_lstm.use_rel_disp
+        self.encoder_use_social_attention = config_encoder_lstm.use_social_attention
+        self.encoder_use_prev_traj_encoded = config_encoder_lstm.use_prev_traj_encoded
+
         if adversarial_training: self.noise_dim = config_encoder_lstm.noise_dim
 
         self.encoder = Encoder(h_dim=config_encoder_lstm.h_dim, # Num units
@@ -77,14 +81,17 @@ class TrajectoryGenerator(nn.Module):
                                         num_heads=config_mhsa.num_heads, 
                                         dropout=config_mhsa.dropout)
 
-        ## Final context (Encoded trajectories + Social Attention)
+        ## Final context
 
         assert config_mhsa.h_dim == config_encoder_lstm.h_dim
         self.context_h_dim = config_mhsa.h_dim
 
-        if self.social_attention: mlp_context_input = config_encoder_lstm.h_dim*2 # Encoded trajectories + social context
-        else: mlp_context_input = config_encoder_lstm.h_dim # Only encoded trajectories
-         
+        if self.encoder_use_social_attention and self.encoder_use_prev_traj_encoded:
+            mlp_context_input = config_encoder_lstm.h_dim*2 # Encoded trajectories + social context
+        else:
+            assert self.encoder_use_social_attention or self.encoder_use_prev_traj_encoded, print("No context provided!")
+            mlp_context_input = config_encoder_lstm.h_dim
+       
         self.lnd = nn.LayerNorm(mlp_context_input) # Layer normalization context decoder
 
         # Decoder
@@ -146,17 +153,18 @@ class TrajectoryGenerator(nn.Module):
             else:
                 curr_obs_traj = obs_traj[:,start:end,:] # 20 x num_agents x 2
                 curr_final_encoder_h = self.encoder(curr_obs_traj) 
+
             curr_final_encoder_h = self.lne(curr_final_encoder_h)
             curr_final_encoder_h = torch.unsqueeze(curr_final_encoder_h, 0) # Required by Attention
 
-            if self.social_attention:
-                curr_social_attn = self.sattn(
-                                              curr_final_encoder_h, # Key
-                                              curr_final_encoder_h, # Query
-                                              curr_final_encoder_h, # Value
-                                              None
-                                             )
+            curr_social_attn = self.sattn(
+                                            curr_final_encoder_h, # Key
+                                            curr_final_encoder_h, # Query
+                                            curr_final_encoder_h, # Value
+                                            None
+                                            )
 
+            if self.encoder_use_social_attention and self.encoder_use_prev_traj_encoded:
                 concat_features = torch.cat(
                     [
                         curr_final_encoder_h.contiguous().view(-1,self.context_h_dim),
@@ -164,8 +172,10 @@ class TrajectoryGenerator(nn.Module):
                     ],
                     dim=1
                 )
-            else: # Use only past trajectories encoding
+            elif self.encoder_use_prev_traj_encoded:
                 concat_features = curr_final_encoder_h.contiguous().view(-1,self.context_h_dim)
+            elif self.encoder_use_social_attention:
+                concat_features = curr_social_attn.contiguous().view(-1,self.context_h_dim)
 
             batch_features.append(concat_features)
 

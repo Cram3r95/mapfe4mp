@@ -155,7 +155,7 @@ class TemporalDecoderLSTM(nn.Module):
             pred_traj_fake_rel = []
             decoder_input = F.leaky_relu(self.spatial_embedding(self.ln1(traj_rel.contiguous().view(num_agents, -1))))
             decoder_input = decoder_input.contiguous().view(1, num_agents, self.embedding_dim)
-            # pdb.set_trace()
+  
             for _ in range(self.pred_len):
                 output, state_tuple = self.decoder(decoder_input, state_tuple)
     
@@ -179,7 +179,6 @@ class TemporalDecoderLSTM(nn.Module):
         else:
             pred_traj_fake = []
 
-            # decoder_input = F.leaky_relu(self.spatial_embedding(self.ln1(traj_abs.contiguous().permute(2,1,0)).permute(2,1,0)))
             decoder_input = F.leaky_relu(self.spatial_embedding(self.ln1(traj_abs.contiguous().view(num_agents, -1))))
             decoder_input = decoder_input.contiguous().view(1, num_agents, self.embedding_dim)
 

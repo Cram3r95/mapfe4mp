@@ -11,11 +11,12 @@ Created on Fri Feb 25 12:19:38 2022
 # General purpose imports
 
 import random
+import math
 import os
 import time
 import operator
-import pdb
 import copy
+import pdb
 
 # DL & Math imports
 
@@ -238,9 +239,8 @@ def seq_collate(data):
 
     return tuple(out)
 
-def process_window_sequence(idx, frame_data, frames, obs_len, pred_len, 
-                            file_id, split, obs_origin, 
-                            rot_angle=None, augs=None):
+def process_window_sequence(idx, frame_data, frames, obs_len, 
+                            pred_len, file_id, split, obs_origin):
     """
     Input:
         idx (int): AV id
@@ -258,7 +258,7 @@ def process_window_sequence(idx, frame_data, frames, obs_len, pred_len,
         split (str: "train", "val", "test") 
     Output:
         num_objs_considered, _non_linear_obj, curr_loss_mask, curr_seq, curr_seq_rel, 
-        id_frame_list, object_class_list, city_id, ego_origin
+        id_frame_list, object_class_list, city_id, map_origin
     """
 
     seq_len = obs_len + pred_len
@@ -307,10 +307,12 @@ def process_window_sequence(idx, frame_data, frames, obs_len, pred_len,
 
         object_class_list[num_objs_considered] = curr_obj_seq[0,2] # 0 == AV, 1 == AGENT, 2 == OTHER
 
-        # Record seqname, frame and ID information
+        # Record timestamp, object ID and file_id information (for each object)
+        # id_frame_list represents a single sequence, so the second dimension indicates the object ID
+        # in that sequence
 
         cache_tmp = np.transpose(curr_obj_seq[:,:2])
-        id_frame_list[num_objs_considered, :2, :] = cache_tmp # whole trajectory (obs + pred)
+        id_frame_list[num_objs_considered, :2, :] = cache_tmp
         id_frame_list[num_objs_considered,  2, :] = file_id
 
         # Get x-y data (w.r.t the map origin, so they are absolute 
@@ -352,14 +354,10 @@ class ArgoverseMotionForecastingDataset(Dataset):
     def __init__(self, dataset_name, root_folder, obs_len=20, pred_len=30, distance_threshold=30,
                  split='train', split_percentage=0.1, start_from_percentage=0.0, 
                  batch_size=16, class_balance=-1.0, obs_origin=1, data_augmentation=False, 
-                 physical_context="dummy", preprocess_data=False, save_data=False):
+                 physical_context="dummy", extra_data_train=-1.0, preprocess_data=False, save_data=False):
         super(ArgoverseMotionForecastingDataset, self).__init__()
 
-        # Initialize self variables
-
-        self.dataset_name = dataset_name
-        self.root_folder = root_folder
-        data_processed_folder = root_folder + split + "/data_processed_" + str(int(split_percentage*100)) + "_percent"
+        # Initialize class variables
 
         self.obs_len, self.pred_len = obs_len, pred_len
         self.seq_len = self.obs_len + self.pred_len
@@ -373,6 +371,23 @@ class ArgoverseMotionForecastingDataset(Dataset):
         self.cont_curved_trajs = 0
         self.data_augmentation = data_augmentation
         self.physical_context = physical_context
+        self.extra_data_train = extra_data_train
+
+        self.dataset_name = dataset_name
+        self.root_folder = root_folder
+        self.data_processed_folder = os.path.join(root_folder,
+                                                  self.split,
+                                                  f"data_processed_{str(int(split_percentage*100))}_percent")
+                                                       
+        if self.extra_data_train != -1.0:
+            if self.split == "train": # Take more data from validation
+                self.extra_data_processed_folder = os.path.join(root_folder,
+                                                                "val",
+                                                                f"data_processed_{str(int(split_percentage*100))}_percent")
+                self.class_balance = -1.0 # TODO: If we merge data from validation and train, then the stored variables
+                                          # to do class balance are useless. Check this
+            elif self.split == "val":
+                self.extra_data_train = 1 - self.extra_data_train # Use remaining files for validation
 
         variable_name_list = ['seq_list','seq_list_rel','loss_mask_list','non_linear_obj',
                               'num_objs_in_seq','seq_id_list','object_class_id_list',
@@ -382,11 +397,11 @@ class ArgoverseMotionForecastingDataset(Dataset):
         # Preprocess data (from raw .csvs to torch Tensors, at least including the 
         # AGENT (most important vehicle) and AV
 
-        assert os.path.isdir(os.path.join(root_folder,split)), "\n\nHey, the folder you want to analyze does not exist!"
+        assert os.path.isdir(os.path.join(root_folder,self.split)), "\n\nHey, the folder you want to analyze does not exist!"
              
-        if (preprocess_data and not os.path.isdir(data_processed_folder)): # This split percentage has not been processed yet
-                                                                           # (in order to avoid unwanted overwriting, just in case ...)
-            folder = root_folder + split + "/data/"
+        if (preprocess_data and not os.path.isdir(self.data_processed_folder)): # This split percentage has not been processed yet
+                                                                                # (in order to avoid unwanted overwriting, just in case ...)
+            folder = os.path.join(root_folder,self.split,"data")
             files, num_files = dataset_utils.load_list_from_folder(folder)
 
             # Sort list and analize a specific percentage/from a specific position
@@ -483,6 +498,7 @@ class ArgoverseMotionForecastingDataset(Dataset):
                         Estimated time to finish ({files_remaining} files): {round(time_per_iteration*files_remaining/60)} min")
 
             print("Dataset time: ", time.time() - t0)
+
             self.num_seq = len(seq_list)
             seq_list = np.concatenate(seq_list, axis=0) # Objects x 2 x seq_len
             seq_list_rel = np.concatenate(seq_list_rel, axis=0)
@@ -497,12 +513,11 @@ class ArgoverseMotionForecastingDataset(Dataset):
             ego_vehicle_origin = np.asarray(ego_vehicle_origin)
             city_ids = np.asarray(city_ids)
 
-            ## normalize abs and relative data
-            abs_norm = (seq_list.min(), seq_list.max())
-            # seq_list = (seq_list - seq_list.min()) / (seq_list.max() - seq_list.min())
+            # Normalize abs and relative data ((your_vale - min) / (max - min))
 
+            abs_norm = (seq_list.min(), seq_list.max())
             rel_norm = (seq_list_rel.min(), seq_list_rel.max())
-            # seq_list_rel = (seq_list_rel - seq_list_rel.min()) / (seq_list_rel.max() - seq_list_rel.min())
+
             norm = (abs_norm, rel_norm)
 
             # Create dictionary with all processed data
@@ -517,19 +532,104 @@ class ArgoverseMotionForecastingDataset(Dataset):
                 # Save numpy objects as npy 
 
                 print("Saving np data structures as .npy files ...")
-                dataset_utils.save_processed_data_as_npy(data_processed_folder, 
+                dataset_utils.save_processed_data_as_npy(self.data_processed_folder, 
                                                          preprocess_data_dict,
                                                          split_percentage)
                 assert 1 == 0 # Uncomment this if you want to stop after preprocessing and save
         else:
             print("Loading .npy files as np data structures ...")
 
-            preprocess_data_dict = dataset_utils.load_processed_files_from_npy(data_processed_folder)
+            preprocess_data_dict = dataset_utils.load_processed_files_from_npy(self.data_processed_folder)
         
             seq_list, seq_list_rel, loss_mask_list, non_linear_obj, num_objs_in_seq, \
             seq_id_list, object_class_id_list, object_id_list, ego_vehicle_origin, num_seq_list, \
             straight_trajectories_list, curved_trajectories_list, city_ids, norm  = \
                 operator.itemgetter(*variable_name_list)(preprocess_data_dict)
+
+            if self.extra_data_train != -1:
+
+                extra_preprocess_data_dict = dataset_utils.load_processed_files_from_npy(self.extra_data_processed_folder)
+        
+                ex_seq_list, ex_seq_list_rel, ex_loss_mask_list, ex_non_linear_obj, ex_num_objs_in_seq, \
+                ex_seq_id_list, ex_object_class_id_list, ex_object_id_list, ex_ego_vehicle_origin, ex_num_seq_list, \
+                ex_straight_trajectories_list, ex_curved_trajectories_list, ex_city_ids, ex_norm  = \
+                    operator.itemgetter(*variable_name_list)(extra_preprocess_data_dict)
+
+                num_val_files = len(ex_num_seq_list)
+                ex_cum_start_idx = [0] + np.cumsum(ex_num_objs_in_seq).tolist()
+                ex_seq_start_end = [(start, end) for start, end in zip(ex_cum_start_idx, ex_cum_start_idx[1:])]
+
+                if self.split == "train":
+                    
+                    # Take a percentage of this validation files
+
+                    num_files = math.floor(self.extra_data_train * num_val_files)
+
+                    start_objs = 0
+                    start_files = 0
+                    end_objs = ex_seq_start_end[num_files][1]
+                    end_files = num_files
+
+                elif self.split == "val":
+
+                    # Take the remaining validation files to validate
+
+                    num_files = math.ceil((1-self.extra_data_train) * num_val_files)
+
+                    start_objs = ex_seq_start_end[num_files][1]
+                    start_files = num_files
+                    end_objs = ex_seq_list.shape[0]
+                    end_files = num_val_files
+                
+                ex_seq_list = ex_seq_list[start_objs:end_objs,:,:]
+                ex_seq_list_rel = ex_seq_list_rel[start_objs:end_objs,:,:]
+                ex_loss_mask_list = ex_loss_mask_list[start_objs:end_objs,:]
+                ex_non_linear_obj = ex_non_linear_obj[start_objs:end_objs]
+                ex_num_objs_in_seq = ex_num_objs_in_seq[start_files:end_files]
+                ex_seq_id_list = ex_seq_id_list[start_objs:end_objs,:,:]
+                ex_object_class_id_list = ex_object_class_id_list[start_objs:end_objs]
+                ex_object_id_list = ex_object_id_list[start_objs:end_objs]
+                ex_ego_vehicle_origin = ex_ego_vehicle_origin[start_files:end_files,:,:]
+                ex_num_seq_list = ex_num_seq_list[start_files:end_files]
+                ex_straight_trajectories_list = ex_straight_trajectories_list[start_files:end_files]
+                ex_curved_trajectories_list = ex_curved_trajectories_list[start_files:end_files]
+                ex_city_ids = ex_city_ids[start_files:end_files]
+                
+                # ex_norm not used at this moment
+
+                if self.split == "train":
+
+                    # Concatenate val info
+
+                    seq_list = np.concatenate([seq_list,ex_seq_list],axis=0)
+                    seq_list_rel = np.concatenate([seq_list_rel,ex_seq_list_rel],axis=0)
+                    loss_mask_list = np.concatenate([loss_mask_list,ex_loss_mask_list],axis=0)
+                    non_linear_obj = np.concatenate([non_linear_obj,ex_non_linear_obj],axis=0)
+                    num_objs_in_seq = np.concatenate([num_objs_in_seq,ex_num_objs_in_seq],axis=0)
+                    seq_id_list = np.concatenate([seq_id_list,ex_seq_id_list],axis=0)
+                    object_class_id_list = np.concatenate([object_class_id_list,ex_object_class_id_list],axis=0)
+                    ego_vehicle_origin = np.concatenate([ego_vehicle_origin,ex_ego_vehicle_origin],axis=0)
+                    num_seq_list = np.concatenate([num_seq_list,ex_num_seq_list],axis=0)
+                    straight_trajectories_list = np.concatenate([straight_trajectories_list,ex_straight_trajectories_list],axis=0)
+                    curved_trajectories_list = np.concatenate([curved_trajectories_list,ex_curved_trajectories_list],axis=0)
+                    city_ids = np.concatenate([city_ids,ex_city_ids],axis=0)
+
+                elif self.split == "val":
+                    
+                    # Overwrite info
+                    
+                    seq_list = ex_seq_list
+                    seq_list_rel = ex_seq_list_rel
+                    loss_mask_list = ex_loss_mask_list
+                    non_linear_obj = ex_non_linear_obj
+                    num_objs_in_seq = ex_num_objs_in_seq
+                    seq_id_list = ex_seq_id_list
+                    object_class_id_list = ex_object_class_id_list
+                    ego_vehicle_origin = ex_ego_vehicle_origin
+                    num_seq_list = ex_num_seq_list
+                    straight_trajectories_list = ex_straight_trajectories_list
+                    curved_trajectories_list = ex_curved_trajectories_list
+                    city_ids = ex_city_ids
 
         ## Create torch data
 
@@ -565,8 +665,10 @@ class ArgoverseMotionForecastingDataset(Dataset):
         regarding the Argoverse 1.1. dataset (e.g. the scene 35.csv may be identified with the index
         32 because maybe there are not 34 csvs before this one)
         """
+
         global data_imgs_folder, APPLY_DATA_AUGMENTATION, PHYSICAL_CONTEXT
-        data_imgs_folder = self.root_folder + self.split + "/data_images/"
+        data_imgs_folder = os.path.join(self.root_folder,self.split,"data_images")
+
         APPLY_DATA_AUGMENTATION = self.data_augmentation
         PHYSICAL_CONTEXT = self.physical_context
 
@@ -601,7 +703,7 @@ class ArgoverseMotionForecastingDataset(Dataset):
                         self.curved_aux_list[torch.where(self.curved_aux_list != aux_index)]
                     
                     ## We run out all curves. Delete variable and re-initialize the list. Doing this
-                    ## we ensure that the training runs over all possible curved trajectories
+                    ## we ensure that the training runs over all possible curved (non-linear) trajectories
 
                     if len(self.curved_aux_list) == 0: 
                         del self.curved_aux_list
@@ -613,8 +715,7 @@ class ArgoverseMotionForecastingDataset(Dataset):
 
         start, end = self.seq_start_end[index]
 
-        # TODO: Generate again the data of train and validation!!!!!!!!!!!! Now the map origin is checked as N x 2, not N x 1 x 2
-        try:
+        try: # Bad done (for train and val) -> origin is N x 1 x 2
             out = [
                     self.obs_traj[start:end, :, :], self.pred_traj_gt[start:end, :, :],
                     self.obs_traj_rel[start:end, :, :], self.pred_traj_gt_rel[start:end, :, :],
@@ -623,7 +724,7 @@ class ArgoverseMotionForecastingDataset(Dataset):
                     self.object_id_list[start:end], self.city_ids[index], self.ego_vehicle_origin[index,:,:],
                     self.num_seq_list[index], self.norm
                 ] 
-        except:
+        except: # Well done (for test) -> origin is N x 2
             out = [
                     self.obs_traj[start:end, :, :], self.pred_traj_gt[start:end, :, :],
                     self.obs_traj_rel[start:end, :, :], self.pred_traj_gt_rel[start:end, :, :],

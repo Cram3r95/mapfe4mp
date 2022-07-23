@@ -104,7 +104,14 @@ if __name__ == "__main__":
 
             config["hyperparameters"]["checkpoint_start_from"] = os.path.join(args.from_exp,model)
         else:
-            assert not os.path.exists(config["hyperparameters"]["output_dir"]), print("This path already exists!")
+            dataset_name = config["dataset_name"]
+            filename = os.path.join(config["hyperparameters"]["output_dir"],f"{dataset_name}_0_with_model.pt")
+            assert not os.path.exists(filename),print("This path already has a checkpoint!")
+
+            # If the dir does not exist, or it does not have a checkpoint, delete
+
+            path_to_remove = config["hyperparameters"]["output_dir"]
+            os.system(f"rm -rf {path_to_remove}")
   
         if not os.path.exists(config["hyperparameters"]["output_dir"]):
             print("Create experiment path: ", config["hyperparameters"]["output_dir"])

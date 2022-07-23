@@ -305,11 +305,12 @@ def relative_to_abs(rel_traj, start_pos):
     Outputs:
     - abs_traj: pytorch tensor of shape (seq_len, batch, 2) (around 0,0, not map coordinates)
     """
-
+    
     rel_traj = rel_traj.permute(1, 0, 2)
     displacement = torch.cumsum(rel_traj, dim=1) # Sum along the seq_len dimension!
     start_pos = torch.unsqueeze(start_pos, dim=1)
     abs_traj = displacement + start_pos
+
     return abs_traj.permute(1, 0, 2)
 
 def relative_to_abs_multimodal(rel_traj, start_pos):

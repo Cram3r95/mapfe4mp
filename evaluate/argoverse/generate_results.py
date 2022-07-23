@@ -48,6 +48,8 @@ from argoverse.evaluation.competition_util import generate_forecasting_h5
 
 #######################################
 
+config = None
+
 parser = argparse.ArgumentParser()
 parser.add_argument('--model_path', required=True, type=str)
 parser.add_argument('--num_modes', required=True, default=6, type=int)
@@ -63,7 +65,7 @@ parser.add_argument("--split", required=True, default="val", type=str)
 
 dist_around = 40
 dist_rasterized_map = [-dist_around, dist_around, -dist_around, dist_around]
-GENERATE_QUALITATIVE_RESULTS = False
+GENERATE_QUALITATIVE_RESULTS = True
 COMPUTE_METRICS = True
 
 def generate_csv(results_path,ade_list,fde_list,num_seq_list,traj_kind_list,sort=False):
@@ -136,11 +138,15 @@ def evaluate(loader, generator, num_modes, split, current_cuda, pred_len):
 
     with torch.no_grad(): # During inference (regardless the split), gradient calculation is not required
         for batch_index, batch in enumerate(loader):
-            if limit != -1 and (batch_index+1 > limit):
-                break
+            if limit != -1: 
+                if batch_index+1 > limit:
+                    break
 
-            if limit != -1: files_remaining = limit - (batch_index+1)
-            else: files_remaining = num_files - (batch_index+1)
+                files_remaining = limit - (batch_index+1)
+                print(f"Evaluating batch {batch_index+1}/{limit}")
+            else: 
+                files_remaining = num_files - (batch_index+1)
+                print(f"Evaluating batch {batch_index+1}/{len(loader)}")
 
             if 'my_seqs' in locals(): # Analyze some specific sequences
                 if batch_index > max(my_seqs):
@@ -149,8 +155,6 @@ def evaluate(loader, generator, num_modes, split, current_cuda, pred_len):
                     continue
             
             start = time.time()
-
-            print(f"Evaluating batch {batch_index+1}/{len(loader)}")
         
             # Load batch in device
 
@@ -167,18 +171,51 @@ def evaluate(loader, generator, num_modes, split, current_cuda, pred_len):
 
             # Get predictions (relative displacements)
 
-            pred_traj_fake_rel = generator(obs_traj, obs_traj_rel, seq_start_end, agent_idx) # pred_len x batch_size x 2
+            pred_traj_fake_rel_list = []
+            pred_traj_fake_list = []
 
-            ## TODO: Avoid repeating the prediction -> Use a multimodal generator!
+            # INCLUDE HERE A FLAG TO KNOW IF THE MODEL RETURNS IN ABSOLUTE OR RELATIVES!!!!!!!!!!!!
+            for _ in range(num_modes):
+                if config.model.generator.decoder_lstm.use_rel_disp:
+                    # Get predictions (rel-rel)
 
-            # pred_traj_fake_rel = pred_traj_fake_rel.unsqueeze(dim=0) # pred_len x batch_size x 2 -> batch_size x pred_len x num_modes x 2
-            # pred_traj_fake_rel = torch.repeat_interleave(pred_traj_fake_rel,num_modes,dim=2) # 1,30,1,2 -> 1,30,6,2
-            pred_traj_fake_rel = torch.repeat_interleave(pred_traj_fake_rel,num_modes,dim=1) # 30,1,2 -> 30,6,2
+                    pred_traj_fake_rel = generator(obs_traj, obs_traj_rel, seq_start_end, agent_idx)
+                    pred_traj_fake_rel_list.append(pred_traj_fake_rel)
+
+                    # Get predictions in absolute -> mappp coordinates
+
+                    pred_traj_fake = dataset_utils.relative_to_abs(pred_traj_fake_rel, obs_traj[-1, agent_idx, :]) + map_origin[0].unsqueeze(0) # 30,1,2
+                    pred_traj_fake_list.append(pred_traj_fake)
+                else:
+                    # Get predictions (abs)
+
+                    pred_traj_fake = generator(obs_traj, obs_traj_rel, seq_start_end, agent_idx)
+
+                    # Get predictions in rel-rel coordinates
+
+                    aux_pred = torch.roll(pred_traj_fake,1,dims=(0))
+                    aux_pred[0,:,:] = obs_traj[-1,agent_idx,:]
+
+                    pred_traj_fake_rel = pred_traj_fake - aux_pred
+                    pred_traj_fake_rel_list.append(pred_traj_fake_rel)
+
+                    # Get predictions in map coordinates
+
+                    pred_traj_fake = pred_traj_fake + map_origin[0].unsqueeze(0) # 30,1,2
+                    pred_traj_fake_list.append(pred_traj_fake)
+
+            # pred_traj_fake_rel = generator(obs_traj, obs_traj_rel, seq_start_end, agent_idx) # pred_len x batch_size x 2
+
+            # # ## TODO: Avoid repeating the prediction -> Use a multimodal generator!
+
+            # # # pred_traj_fake_rel = pred_traj_fake_rel.unsqueeze(dim=0) # pred_len x batch_size x 2 -> batch_size x pred_len x num_modes x 2
+            # # # pred_traj_fake_rel = torch.repeat_interleave(pred_traj_fake_rel,num_modes,dim=2) # 1,30,1,2 -> 1,30,6,2
+            # pred_traj_fake_rel = torch.repeat_interleave(pred_traj_fake_rel,num_modes,dim=1) # 30,1,2 -> 30,6,2
 
             if COMPUTE_METRICS and split != "test": # Metrics must be in absolute coordinates (either around 0,0 or around map origin)
                 agent_pred_gt = pred_traj_gt[:,agent_idx,:]
                 agent_pred_fake_rel = pred_traj_fake_rel[:,0,:].unsqueeze(dim=1) # TODO: At this moment all modes are the same. Compute Multimodal
-                                                                # ADE/FDE evaluation when we have real multimodality
+                                                                                 # ADE/FDE evaluation when we have real multimodality
                 agent_last_obs = obs_traj[-1,agent_idx,:]
                 agent_pred_fake = dataset_utils.relative_to_abs(agent_pred_fake_rel, agent_last_obs) 
                 agent_non_linear_obj = non_linear_obj[agent_idx]
@@ -218,28 +255,32 @@ def evaluate(loader, generator, num_modes, split, current_cuda, pred_len):
                 curr_object_class_id_list = object_cls
 
                 filename = f"data/datasets/argoverse/motion-forecasting/{split}/data_images/{seq_id}.png"
-
+                
+                pred_traj_fake_rel = torch.stack(pred_traj_fake_rel_list, axis=0).view(-1, num_modes, 2) # pred_len x num_modes x 2
+                # pdb.set_trace()
                 plot_functions.plot_trajectories(filename,curr_traj_rel,curr_first_obs,
                                                  curr_map_origin,curr_object_class_id_list,dist_rasterized_map,
                                                  rot_angle=-1,obs_len=obs_traj.shape[0],
                                                  smoothen=False,save=True,pred_trajectories_rel=pred_traj_fake_rel,
                                                  ade_metric=ade_,fde_metric=fde_)
-            # else:
-            #     assert 1 == 0
-            pred_traj_fake_rel = pred_traj_fake_rel.unsqueeze(dim=0)
 
-            # Get predictions in absolute coordinates 
-            # (relative displacements -> absolute coordinates (around 0,0) -> map coordinates)
+            # pred_traj_fake_rel = pred_traj_fake_rel.unsqueeze(dim=0)
 
-            last_obs = obs_traj[-1,agent_idx,:]
-            pred_traj_fake = dataset_utils.relative_to_abs_multimodal(pred_traj_fake_rel,last_obs) + map_origin
+            # # Get predictions in absolute coordinates 
+            # # (relative displacements -> absolute coordinates (around 0,0) -> map coordinates)
+
+            # last_obs = obs_traj[-1,agent_idx,:]
+            # pred_traj_fake = dataset_utils.relative_to_abs_multimodal(pred_traj_fake_rel,last_obs) + map_origin
                                                      
-            # Store predictions in absolute (map) coordinates
+            # # Store predictions in absolute (map) coordinates
 
-            batch_size, pred_len, num_modes, xy = pred_traj_fake.shape
-            pred_traj_fake = pred_traj_fake.view(-1, pred_len, xy) #  (assuming batch_size = 1) num_modes x pred_len x 2 (x,y)
+            # batch_size, pred_len, num_modes, xy = pred_traj_fake.shape
+            # pred_traj_fake = pred_traj_fake.view(-1, pred_len, xy) #  (assuming batch_size = 1) num_modes x pred_len x 2 (x,y)
 
-            output_all[seq_id] = pred_traj_fake.cpu().numpy()
+            # output_all[seq_id] = pred_traj_fake.cpu().numpy()
+            
+            predicted_traj = torch.stack(pred_traj_fake_list, axis=0).view(num_modes,-1,2) # Num_samples x pred_len x 2 (x,y
+            output_all[seq_id] = predicted_traj.cpu().numpy()
             file_list.remove(seq_id)
 
             end = time.time()
@@ -256,8 +297,9 @@ def evaluate(loader, generator, num_modes, split, current_cuda, pred_len):
         except:
             print("All files have been processed")
 
-        for key in file_list:
-            output_all[key] = np.zeros((num_modes, 30, 2))
+        # TODO: This must be
+        # for key in file_list:
+        #     output_all[key] = np.zeros((num_modes, 30, 2))
 
     return output_all, ade_list, fde_list, traj_kind_list, num_seq_list   
 
@@ -270,6 +312,7 @@ def main(args):
     model = args.model_path.split('/')[:-1]
     config_path = os.path.join(BASE_DIR,*model,"config_file.yml")
 
+    global config
     with open(config_path) as config_file:
         config = yaml.safe_load(config_file)
         print(yaml.dump(config, default_flow_style=False))
@@ -317,10 +360,11 @@ def main(args):
     # Get generator
 
     print("Load generator...")
-    try:
-        generator = get_generator(args.model_path, config)
-    except:
-        generator = get_generator_mp_so(args.model_path, config) # OLD gan
+    generator = get_generator(args.model_path, config)
+    # try:
+    #     generator = get_generator(args.model_path, config)
+    # except:
+    #     generator = get_generator_mp_so(args.model_path, config) # OLD gan
 
     # Evaluate model and get metrics
 
@@ -360,12 +404,18 @@ if __name__ == '__main__':
 
 """
 python evaluate/argoverse/generate_results.py \
---model_path "save/argoverse/social_lstm_mhsa/100.0_percent/exp1/argoverse_motion_forecasting_dataset_0_with_model.pt" \
+--model_path "save/argoverse/social_lstm_mhsa/100.0_percent/exp-2022-07-18_06-19/argoverse_motion_forecasting_dataset_0_with_model.pt" \
 --num_modes 6 --device_gpu 0 --split "test"
 """
 
 """
 python evaluate/argoverse/generate_results.py \
---model_path "save/argoverse/gan_social_lstm_mhsa/10.0_percent/exp-2022-07-20_00-45/argoverse_motion_forecasting_dataset_0_with_model.pt" \
+--model_path "save/argoverse/gan_social_lstm_mhsa/100.0_percent/exp-2022-07-20_22-51/argoverse_motion_forecasting_dataset_0_with_model.pt" \
+--num_modes 6 --device_gpu 0 --split "test"
+"""
+
+"""
+python evaluate/argoverse/generate_results.py \
+--model_path "save/argoverse/social_lstm_mhsa/best_models_100.0_percent/1st_best_unimodal/argoverse_motion_forecasting_dataset_0_with_model.pt" \
 --num_modes 6 --device_gpu 0 --split "test"
 """

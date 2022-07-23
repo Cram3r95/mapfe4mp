@@ -16,7 +16,6 @@ import pdb
 
 import torch
 from torch import nn
-from prodict import Prodict
 import torch.nn.functional as F
 
 # Custom imports
@@ -43,11 +42,14 @@ class EncoderLSTM(nn.Module):
         if bidirectional: self.D = 2
         else: self.D = 1
 
-        # TODO: Spatial embedding required?
-        # self.spatial_embedding = nn.Linear(self.data_dim, self.embedding_dim)
+        self.spatial_embedding = nn.Linear(self.data_dim, self.embedding_dim)
         
         if self.use_rel_disp:
-            self.encoder = nn.LSTM(self.data_dim, self.h_dim, num_layers, 
+            self.conv1 = nn.Conv1d(self.data_dim,self.conv_filters,kernel_size=3, # To model velocities
+                               padding=1,padding_mode="reflect")
+            self.conv2 = nn.Conv1d(self.conv_filters,self.conv_filters,kernel_size=3, # To model accelerations
+                                padding=1,padding_mode="reflect")
+            self.encoder = nn.LSTM(self.conv_filters*2+self.data_dim, self.h_dim, num_layers, 
                                    bidirectional=bidirectional, dropout=dropout)
         else:
             self.conv1 = nn.Conv1d(self.data_dim,self.conv_filters,kernel_size=3, # To model velocities
@@ -72,17 +74,21 @@ class EncoderLSTM(nn.Module):
         n_agents = obs_traj.size(1)
         state = self.init_hidden(n_agents)
 
-        # TODO: Spatial embedding required?
-
         # obs_traj_embedding = F.leaky_relu(self.spatial_embedding(obs_traj.contiguous().view(-1, 2)))
         # obs_traj_embedding = obs_traj_embedding.view(-1, n_agents, self.embedding_dim)
-        # output, state = self.encoder(obs_traj_embedding, state)
 
         if self.use_rel_disp: # Relative displacements
-            output, state = self.encoder(obs_traj, state)
+            vel_traj = F.tanh(self.conv1(obs_traj.permute(1,2,0)))
+            acc_traj = F.tanh(self.conv2(vel_traj))
+            kinematic_state = torch.cat([obs_traj,
+                                         vel_traj.permute(2,0,1),
+                                         acc_traj.permute(2,0,1)],dim=2) # 20 x num_agents x (conv_filters·2 + embedding_dim)
+
+            output, state = self.encoder(kinematic_state, state) # In the encoder we provide the latent content (state), not the output
+            
         else: # Absolute positions (around 0,0)
-            vel_traj = torch.tanh(self.conv1(obs_traj.permute(1,2,0)))
-            acc_traj = torch.tanh(self.conv2(vel_traj))
+            vel_traj = F.tanh(self.conv1(obs_traj.permute(1,2,0)))
+            acc_traj = F.tanh(self.conv2(vel_traj))
             kinematic_state = torch.cat([obs_traj,
                                          vel_traj.permute(2,0,1),
                                          acc_traj.permute(2,0,1)],dim=2) # 20 x num_agents x (conv_filters·2 + data_dim)
@@ -97,7 +103,7 @@ class EncoderLSTM(nn.Module):
             final_h = state[0][-1,:,:] # Take the information from the last LSTM layer
 
         final_h = final_h.view(n_agents, self.h_dim)
-        
+
         return final_h
 
 class Old_EncoderLSTM(nn.Module):

@@ -8,14 +8,15 @@ dataset_name: argoverse_motion_forecasting_dataset
 dataset:
     path: data/datasets/argoverse/motion-forecasting/
     split: "train"
-    batch_size: 512
+    batch_size: 1024
     num_workers: 0
     start_from_percentage: 0.0 # By default, 0. If you want to analize a particular bunch of files (e.g. from 25 % to 50 %)
                                # then write here 0.25 and in split_percentage 0.25
-    split_percentage: 0.1 # % of the dataset (0-1)
-    shuffle: True # False to check the input data, always set to True (Only for training!)
+    split_percentage: 1.0 # % of the dataset (0-1)
+    extra_data_train: 0.8 # % (0-1) of the val split is used for training too. Remaining files are used for validation
+    shuffle: True 
     data_augmentation: True # Rotation, Swapping, Dropout, Gaussian noise
-    class_balance: 0.5 # % of straight trajectories (considering the AGENT). Remaining % are curved trajectories
+    class_balance: 0.8 # % of straight trajectories (considering the AGENT). Remaining % are curved trajectories
                         # (again, considering the AGENT). -1.0 if no class balance is used (get_item takes the corresponding
                         # sequence regardless if it is straight or curved)
     preprocess_data: False
@@ -27,6 +28,14 @@ optim_parameters:
     g_learning_rate: 1.0e-3
     g_weight_decay: 0
 hyperparameters:
+    output_single_agent: True
+
+    use_rel_disp: &use_rel_disp True # If True, use dx/dy (equivalent to velocities) 
+                                     # to encode/decode. 
+                                     # Otherwise, use absolute coordinates
+                                     # (around target agent) and apply convolutions
+                                     # to model velocity and accelerations
+
     num_modes: 6 # Multimodality
     obs_origin: 20 # This frame will be the origin, tipically the first observation (1) or last observation 
                    # (obs_len) of the AGENT (object to be predicted in Argoverse 1.0). Note that in the code
@@ -37,8 +46,7 @@ hyperparameters:
     distance_threshold: 40 # It depends on a statistical study (see get_sequences_as_array function), 
                            # where we determine which is the optimal distance for which most agents
                            # are observed for our AGENT
-    output_single_agent: True
-
+    
     num_epochs: 100
     print_every: 50
     checkpoint_name: "0"                      
@@ -47,9 +55,9 @@ hyperparameters:
     checkpoint_train_percentage: 0.1 # 0.2 # (0 - 1)
     num_samples_check: 5000 # Check a maximum of num_samples_check in the check_accuracy function
 
-    loss_type_g: "mse_w+nll" # (mse|mse_w), nll, (mse|mse_w)+nll, (mse|mse_w)+fa 
+    loss_type_g: "mse_w" # (mse|mse_w), nll, (mse|mse_w)+nll, (mse|mse_w)+fa 
     loss_ade_weight: 1 
-    loss_fde_weight: 3
+    loss_fde_weight: 3.0
     loss_nll_weight: 1.25
     loss_fa_weight: 1
 
@@ -64,22 +72,7 @@ hyperparameters:
     exp_name: # If no specific exp_name is used, fill with current day and our
     output_dir: # To be filled in the code (save_root_dir/model_name/split_percentage/exp)
     checkpoint_start_from:
-    exp_description: "100 % dataset (both train and val).
-                      Train with absolute coordinates, not rel-rel (only encoder).
-                      Add conv 1d to encoder (to model velocities and acceleration).
-                      Batch size = 1024.
-                      Include data augmentation (with rotation). 
-                      Ensure all curved trajectories are analyzed.
-                      Encoder/Decoder h_dim 32 -> 256.
-                      MSE (ADE&FDE) + NLL as loss function.
-                      Loss with absolute and only single AGENT.
-                      loss_fde_weight = 1 -> 3
-                      Remove noise (decoder input).
-                      For loop to encode trajectories.
-                      Remove spatial embedding in encoder.
-                      Bidirectional encoder = True.
-                      num_layers encoder 1 -> 2.
-                      Dropout = 0.2 -> 0.5."
+    exp_description: "New architecture -> Without encoded traj in the social context"
     tensorboard_active: True
 
 # Model
@@ -88,19 +81,14 @@ model:
     name: "social_lstm_mhsa"
     adversarial_training: False
     generator:
-        use_rel_disp: &use_rel_disp False # If True, use dx/dy (equivalent to velocities) 
-                                          # to encode/decode. 
-                                          # Otherwise, use absolute coordinates
-                                          # (around target agent) and apply convolutions
-                                          # to model velocity and accelerations
-        social_attention: True
-
         encoder_lstm:
             use_rel_disp: *use_rel_disp
-            conv_filters: 16
+            use_social_attention: True
+            use_prev_traj_encoded: False
+            conv_filters: 8
             input_len: *obs_len # Must match with num observations
-            h_dim: &h_dim 256
-            embedding_dim: 16 # TODO: Required?
+            h_dim: &h_dim 64
+            embedding_dim: 16
             num_layers: 2
             bidirectional: True
             dropout: &dropout 0.5

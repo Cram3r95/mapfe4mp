@@ -96,7 +96,7 @@ def handle_batch(batch, is_single_agent_out):
         pred_traj_gt_rel = pred_traj_gt_rel[:, agent_idx, :]
 
     return (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel, non_linear_obj,
-     loss_mask, seq_start_end, frames, object_cls, obj_id, ego_origin, num_seq_list)
+            loss_mask, seq_start_end, frames, object_cls, obj_id, ego_origin, num_seq_list)
 
 # Aux functions losses
 
@@ -135,20 +135,20 @@ def cal_l2_losses(pred_traj_gt, pred_traj_gt_rel, pred_traj_fake, pred_traj_fake
 
     return g_l2_loss_abs, g_l2_loss_rel
 
-def cal_ade(pred_traj_gt, pred_traj_fake, linear_obj, non_linear_obj, consider_ped):
+def cal_ade(pred_traj_gt, pred_traj_fake, linear_obj, non_linear_obj, consider_obj):
     """
     """
     
-    ade = displacement_error(pred_traj_fake, pred_traj_gt, consider_ped)
+    ade = displacement_error(pred_traj_fake, pred_traj_gt, consider_obj)
     ade_l = displacement_error(pred_traj_fake, pred_traj_gt, linear_obj)
     ade_nl = displacement_error(pred_traj_fake, pred_traj_gt, non_linear_obj)
 
     return ade, ade_l, ade_nl
 
-def cal_fde(pred_traj_gt, pred_traj_fake, linear_obj, non_linear_obj, consider_ped):
+def cal_fde(pred_traj_gt, pred_traj_fake, linear_obj, non_linear_obj, consider_obj):
     """
     """
-    fde = final_displacement_error(pred_traj_fake[-1], pred_traj_gt[-1], consider_ped)
+    fde = final_displacement_error(pred_traj_fake[-1], pred_traj_gt[-1], consider_obj)
     fde_l = final_displacement_error(pred_traj_fake[-1], pred_traj_gt[-1], linear_obj)
     fde_nl = final_displacement_error(pred_traj_fake[-1], pred_traj_gt[-1], non_linear_obj)
 
@@ -164,6 +164,8 @@ def model_trainer(config, logger):
 
     hyperparameters = config.hyperparameters
     optim_parameters = config.optim_parameters
+
+    global use_rel_disp_decoder
     use_rel_disp_decoder = config.model.generator.decoder_lstm.use_rel_disp
 
     ## Set specific device for both data and model
@@ -195,6 +197,7 @@ def model_trainer(config, logger):
                                                    class_balance=config.dataset.class_balance,
                                                    obs_origin=config.hyperparameters.obs_origin,
                                                    data_augmentation=config.dataset.data_augmentation,
+                                                   extra_data_train=config.dataset.extra_data_train,
                                                    preprocess_data=config.dataset.preprocess_data,
                                                    save_data=config.dataset.save_data)
 
@@ -203,7 +206,7 @@ def model_trainer(config, logger):
                               shuffle=config.dataset.shuffle,
                               num_workers=config.dataset.num_workers,
                               collate_fn=seq_collate)
-
+    pdb.set_trace()
     # Initialize validation dataloader
 
     logger.info("Initializing val dataset")
@@ -216,6 +219,7 @@ def model_trainer(config, logger):
                                                  split_percentage=config.dataset.split_percentage,
                                                  class_balance=-1,
                                                  obs_origin=config.hyperparameters.obs_origin,
+                                                 extra_data_train=config.dataset.extra_data_train,
                                                  preprocess_data=config.dataset.preprocess_data,
                                                  save_data=config.dataset.save_data)
                                                  
@@ -230,8 +234,7 @@ def model_trainer(config, logger):
     generator = TrajectoryGenerator(config_encoder_lstm=config.model.generator.encoder_lstm,
                                     config_decoder_lstm=config.model.generator.decoder_lstm,
                                     config_mhsa=config.model.generator.mhsa,
-                                    current_cuda=current_cuda,
-                                    social_attention=config.model.generator.social_attention)
+                                    current_cuda=current_cuda)
     generator.to(device)
     generator.apply(init_weights)
     generator.type(float_dtype).train() # train mode (if you compute metrics -> .eval() mode)
@@ -749,12 +752,17 @@ def check_accuracy(hyperparameters, loader, generator,
             # Forward (If agent_idx != None, model prediction refers only to target agent)
 
             if use_rel_disp_decoder:
-                pred_traj_fake_rel = generator(obs_traj, obs_traj_rel, seq_start_end, agent_idx) 
-                pred_traj_fake = relative_to_abs(pred_traj_fake_rel, obs_traj[-1])
-            else:
-                pred_traj_fake = generator(obs_traj, obs_traj_rel, seq_start_end, agent_idx) 
+                pred_traj_fake_rel = generator(obs_traj, obs_traj_rel, seq_start_end, agent_idx)
 
-            # single agent trajectories
+                if hyperparameters.output_single_agent:
+                    pred_traj_fake = relative_to_abs(pred_traj_fake_rel, obs_traj[-1,agent_idx,:])
+                else:
+                    pred_traj_fake = relative_to_abs(pred_traj_fake_rel, obs_traj[-1])
+            else:
+                pred_traj_fake = generator(obs_traj, obs_traj_rel, seq_start_end, agent_idx)
+
+            # Single agent trajectories
+
             if hyperparameters.output_single_agent:
                 obs_traj = obs_traj[:,agent_idx, :]
                 pred_traj_gt = pred_traj_gt[:,agent_idx, :]
@@ -772,6 +780,8 @@ def check_accuracy(hyperparameters, loader, generator,
             else:
                 g_l2_loss_abs, g_l2_loss_rel = cal_l2_losses(pred_traj_gt, torch.zeros((pred_traj_gt.shape)).cuda(current_cuda), 
                                                              pred_traj_fake, torch.zeros((pred_traj_fake.shape)).cuda(current_cuda), loss_mask)
+
+            # Evaluation metrics
 
             ade, ade_l, ade_nl = cal_ade(pred_traj_gt, pred_traj_fake, linear_obj, non_linear_obj,
                                          mask if not hyperparameters.output_single_agent else None)
@@ -808,8 +818,7 @@ def check_accuracy(hyperparameters, loader, generator,
         metrics[f'{split}_ade_l'] = 0
         metrics[f'{split}_fde_l'] = 0
     if total_traj_nl != 0:
-        metrics[f'{split}_ade_nl'] = sum(disp_error_nl) / (
-            total_traj_nl * hyperparameters.pred_len)
+        metrics[f'{split}_ade_nl'] = sum(disp_error_nl) / (total_traj_nl * hyperparameters.pred_len)
         metrics[f'{split}_fde_nl'] = sum(f_disp_error_nl) / total_traj_nl
     else:
         metrics[f'{split}_ade_nl'] = 0

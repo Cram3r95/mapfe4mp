@@ -39,9 +39,10 @@ COLORS_MM = ["darkviolet", "orange", "chartreuse"]
 
                         # Observation / Prediction (GT) / Prediction (Model)                   
                         # (color, linewidth, type, size, transparency)
-MARKER_DICT = {"AGENT":  (("b",6,"o",12,1.0),("c",6,"*",12,0.5),("darkviolet",6,"D",12,1.0)),
+MARKER_DICT = {"AGENT":  (("b",6,"o",11,1.0),("c",6,"*",11,0.5),("darkviolet",6,"*",11,1.0)),
                "OTHER":  (("g",4,"o",10,1.0),("g",4,"*",10,0.5)),
-               "AV":     (("r",4,"o",10,1.0),("m",4,"*",10,1.0))} 
+               "AV":     (("r",4,"o",10,1.0),("m",4,"*",10,1.0))}
+scatter_size = 10  
 
 ZORDER = {"AGENT": 3, "OTHER": 3, "AV": 3}
 
@@ -203,14 +204,14 @@ def plot_trajectories(filename,traj_rel,first_obs,map_origin,object_class_id_lis
                 colour,linewidth,marker_type,marker_size,transparency = MARKER_DICT[object_type][marker_type_index]
 
                 if smoothen:
+                    if cor_x.device.type != "cpu": cor_x = cor_x.to("cpu")
+                    if cor_y.device.type != "cpu": cor_y = cor_y.to("cpu")
+
                     polyline = np.column_stack((cor_x, cor_y))
                     num_points = cor_x.shape[0] * 3
                     smooth_polyline = interpolate_polyline(polyline, num_points)
 
                     cor_x, cor_y = smooth_polyline[:,0], smooth_polyline[:,1]
-
-                    if cor_x.device.type != "cpu": cor_x = cor_x.to("cpu")
-                    if cor_y.device.type != "cpu": cor_y = cor_y.to("cpu")
 
                     plt.plot(
                         cor_x,
@@ -225,7 +226,7 @@ def plot_trajectories(filename,traj_rel,first_obs,map_origin,object_class_id_lis
                 else:
                     if cor_x.device.type != "cpu": cor_x = cor_x.to("cpu")
                     if cor_y.device.type != "cpu": cor_y = cor_y.to("cpu")
-                    plt.scatter(cor_x, cor_y, c=colour, s=10, alpha=transparency)
+                    plt.scatter(cor_x, cor_y, c=colour, s=scatter_size, alpha=transparency)
 
                 if plot_object_heads:
                     final_pos_x, final_pos_y = cor_x[-1], cor_y[-1]
