@@ -47,7 +47,9 @@ current_cuda = None
 absolute_root_folder = None
 use_rel_disp_decoder = False
 
-CHECK_ACCURACY = True
+USE_SCALER = False
+CHECK_ACCURACY_TRAIN = False
+CHECK_ACCURACY_VAL = True
 MAX_TIME_TO_CHECK_TRAIN = 120 # minutes
 MAX_TIME_TO_CHECK_VAL = 120 # minutes
 MAX_TIME_PATIENCE_LR_SCHEDULER = 120 # 60 # minutes
@@ -206,7 +208,7 @@ def model_trainer(config, logger):
                               shuffle=config.dataset.shuffle,
                               num_workers=config.dataset.num_workers,
                               collate_fn=seq_collate)
-    pdb.set_trace()
+
     # Initialize validation dataloader
 
     logger.info("Initializing val dataset")
@@ -222,7 +224,7 @@ def model_trainer(config, logger):
                                                  extra_data_train=config.dataset.extra_data_train,
                                                  preprocess_data=config.dataset.preprocess_data,
                                                  save_data=config.dataset.save_data)
-                                                 
+                                     
     val_loader = DataLoader(data_val,
                             batch_size=config.dataset.batch_size,
                             shuffle=False,
@@ -409,7 +411,9 @@ def model_trainer(config, logger):
 
             # Check training metrics
 
-            if CHECK_ACCURACY and current_iteration > 0 and current_iteration % hyperparameters.checkpoint_train_every == 0:
+            if (CHECK_ACCURACY_TRAIN and current_iteration > 0 
+               and current_iteration % hyperparameters.checkpoint_train_every == 0):
+
                 logger.info('Checking stats on train ...')
                 split = "train"
 
@@ -427,7 +431,9 @@ def model_trainer(config, logger):
 
             # Check validation metrics
 
-            if CHECK_ACCURACY and current_iteration > 0 and current_iteration % hyperparameters.checkpoint_val_every == 0:
+            if (CHECK_ACCURACY_VAL and current_iteration > 0 
+               and current_iteration % hyperparameters.checkpoint_val_every == 0):
+
                 logger.info('Checking stats on val ...')
                 split = "val"
 
@@ -694,14 +700,18 @@ def generator_step(hyperparameters, batch, generator, optimizer_g,
         
         losses[f"G_total_loss"] = loss.item()
 
-    scaler.scale(loss).backward()
-
     if hyperparameters.clipping_threshold_g > 0:
         nn.utils.clip_grad_norm_(
             generator.parameters(), hyperparameters.clipping_threshold_g
         )
-    scaler.step(optimizer_g)
-    scaler.update()
+
+    if USE_SCALER:
+        scaler.scale(loss).backward()
+        scaler.step(optimizer_g)
+        scaler.update()
+    else:
+        loss.backward()
+        optimizer_g.step()
 
     return losses
 

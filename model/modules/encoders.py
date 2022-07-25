@@ -51,6 +51,13 @@ class EncoderLSTM(nn.Module):
                                 padding=1,padding_mode="reflect")
             self.encoder = nn.LSTM(self.conv_filters*2+self.data_dim, self.h_dim, num_layers, 
                                    bidirectional=bidirectional, dropout=dropout)
+
+            # self.conv1 = nn.Conv1d(self.data_dim,self.conv_filters,kernel_size=3, # To model velocities
+            #                    padding=1,padding_mode="reflect")
+            # self.conv2 = nn.Conv1d(self.conv_filters,self.conv_filters,kernel_size=3, # To model accelerations
+            #                     padding=1,padding_mode="reflect")
+            # self.encoder = nn.LSTM(self.data_dim, self.h_dim, num_layers, 
+            #                        bidirectional=bidirectional, dropout=dropout)
         else:
             self.conv1 = nn.Conv1d(self.data_dim,self.conv_filters,kernel_size=3, # To model velocities
                                padding=1,padding_mode="reflect")
@@ -84,6 +91,7 @@ class EncoderLSTM(nn.Module):
                                          vel_traj.permute(2,0,1),
                                          acc_traj.permute(2,0,1)],dim=2) # 20 x num_agents x (conv_filters·2 + embedding_dim)
 
+            # kinematic_state = obs_traj
             output, state = self.encoder(kinematic_state, state) # In the encoder we provide the latent content (state), not the output
             
         else: # Absolute positions (around 0,0)

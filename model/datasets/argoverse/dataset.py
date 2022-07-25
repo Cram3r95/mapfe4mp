@@ -380,13 +380,13 @@ class ArgoverseMotionForecastingDataset(Dataset):
                                                   f"data_processed_{str(int(split_percentage*100))}_percent")
                                                        
         if self.extra_data_train != -1.0:
-            if self.split == "train": # Take more data from validation
-                self.extra_data_processed_folder = os.path.join(root_folder,
-                                                                "val",
-                                                                f"data_processed_{str(int(split_percentage*100))}_percent")
-                self.class_balance = -1.0 # TODO: If we merge data from validation and train, then the stored variables
-                                          # to do class balance are useless. Check this
-            elif self.split == "val":
+            self.extra_data_processed_folder = os.path.join(root_folder,
+                                                            "val",
+                                                            f"data_processed_{str(int(split_percentage*100))}_percent")
+            self.class_balance = -1.0 # TODO: If we merge data from validation and train, then the stored variables
+                                        # to do class balance are useless. Check this
+                                        #  
+            if self.split == "val":
                 self.extra_data_train = 1 - self.extra_data_train # Use remaining files for validation
 
         variable_name_list = ['seq_list','seq_list_rel','loss_mask_list','non_linear_obj',
@@ -547,7 +547,6 @@ class ArgoverseMotionForecastingDataset(Dataset):
                 operator.itemgetter(*variable_name_list)(preprocess_data_dict)
 
             if self.extra_data_train != -1:
-
                 extra_preprocess_data_dict = dataset_utils.load_processed_files_from_npy(self.extra_data_processed_folder)
         
                 ex_seq_list, ex_seq_list_rel, ex_loss_mask_list, ex_non_linear_obj, ex_num_objs_in_seq, \

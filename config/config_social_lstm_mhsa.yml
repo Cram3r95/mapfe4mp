@@ -16,7 +16,7 @@ dataset:
     extra_data_train: 0.8 # % (0-1) of the val split is used for training too. Remaining files are used for validation
     shuffle: True 
     data_augmentation: True # Rotation, Swapping, Dropout, Gaussian noise
-    class_balance: 0.8 # % of straight trajectories (considering the AGENT). Remaining % are curved trajectories
+    class_balance: -1.0 # % of straight trajectories (considering the AGENT). Remaining % are curved trajectories
                         # (again, considering the AGENT). -1.0 if no class balance is used (get_item takes the corresponding
                         # sequence regardless if it is straight or curved)
     preprocess_data: False
@@ -69,10 +69,11 @@ hyperparameters:
     clipping_threshold_g: 1.1
     
     save_root_dir: "save/argoverse"
-    exp_name: # If no specific exp_name is used, fill with current day and our
+    exp_name: "without convolutions" # If no specific exp_name is used, fill with current day and hour
     output_dir: # To be filled in the code (save_root_dir/model_name/split_percentage/exp)
     checkpoint_start_from:
-    exp_description: "New architecture -> Without encoded traj in the social context"
+    exp_description: "New architecture -> Without encoded traj in the social context.
+                      Without convolutions"
     tensorboard_active: True
 
 # Model
@@ -87,7 +88,7 @@ model:
             use_prev_traj_encoded: False
             conv_filters: 8
             input_len: *obs_len # Must match with num observations
-            h_dim: &h_dim 64
+            h_dim: &h_dim 256
             embedding_dim: 16
             num_layers: 2
             bidirectional: True

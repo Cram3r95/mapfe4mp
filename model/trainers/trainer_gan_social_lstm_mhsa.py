@@ -34,8 +34,6 @@ current_cuda = None
 absolute_root_folder = None
 use_rel_disp_decoder = False
 
-# single agent False -> does not work
-
 def get_lr(optimizer):
     for param_group in optimizer.param_groups:
         return param_group['lr']
