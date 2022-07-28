@@ -82,7 +82,7 @@ def change_bg_color(img):
 
 # Main plot function
 
-def plot_trajectories(filename,traj_rel,first_obs,map_origin,object_class_id_list,dist_rasterized_map,
+def plot_trajectories(filename,results_path,traj_rel,first_obs,map_origin,object_class_id_list,dist_rasterized_map,
                       rot_angle=-1,obs_len=20,smoothen=False,save=False,data_aug=False,
                       pred_trajectories_rel=torch.zeros((0)),ade_metric=None,fde_metric=None):
     """
@@ -287,17 +287,18 @@ def plot_trajectories(filename,traj_rel,first_obs,map_origin,object_class_id_lis
     if save:
         curr_seq = filename.split('/')[-1].split('.')[0]
 
-        trajs_folder = os.path.join(*filename.split('/')[:-2],"data_images_trajs/")
-        if not os.path.exists(trajs_folder):
-            print("Create trajs folder: ", trajs_folder)
-            os.makedirs(trajs_folder) # makedirs creates intermediate folders
-
+        output_dir = os.path.join(results_path,"data_images_trajs/")
+        # results_path = os.path.join(*filename.split('/')[:-2],"data_images_trajs/")
+        if not os.path.exists(output_dir):
+            print("Create trajs folder: ", output_dir)
+            os.makedirs(output_dir) # makedirs creates intermediate folders
+ 
         if data_aug:
-            filename2 = trajs_folder + curr_seq + "_" + str(rot_angle) + "_aug" + ".png"
+            filename2 = output_dir + curr_seq + "_" + str(rot_angle) + "_aug" + ".png"
         elif len(pred_trajectories_rel) != 1:
-            filename2 = trajs_folder + curr_seq + f"_qualitative_{mode}" + ".png"
+            filename2 = output_dir + curr_seq + f"_qualitative_{mode}" + ".png"
         else:
-            filename2 = trajs_folder + curr_seq + "_original" + ".png"
+            filename2 = output_dir + curr_seq + "_original" + ".png"
 
         cv2.imwrite(filename2,full_img_cv)
 

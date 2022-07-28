@@ -90,11 +90,14 @@ def get_generator(model_path,config):
     curr_model_module = importlib.import_module(curr_model)
     TrajectoryGenerator = getattr(curr_model_module,"TrajectoryGenerator")
 
-    generator = TrajectoryGenerator(config_encoder_lstm=config.model.generator.encoder_lstm,
-                                    config_decoder_lstm=config.model.generator.decoder_lstm,
-                                    config_mhsa=config.model.generator.mhsa,
-                                    current_cuda=current_cuda,
-                                    adversarial_training=adversarial_training)
+    try:
+        generator = TrajectoryGenerator(config_encoder_lstm=config.model.generator.encoder_lstm,
+                                        config_decoder_lstm=config.model.generator.decoder_lstm,
+                                        config_mhsa=config.model.generator.mhsa,
+                                        current_cuda=current_cuda,
+                                        adversarial_training=adversarial_training)
+    except:
+        generator = TrajectoryGenerator()
 
     checkpoint = torch.load(model_path, map_location=current_cuda)
     generator.load_state_dict(checkpoint.config_cp['g_best_state'], strict=False)
