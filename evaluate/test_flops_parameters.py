@@ -31,7 +31,7 @@ sys.path.append(BASE_DIR)
 
 import model.utils.utils as utils
 
-from model.models.social_lstm_mhsa import TrajectoryGenerator as TG_So_LSTM_MHSA
+from model.models.social_lstm_mhsa_old import TrajectoryGenerator as TG_So_LSTM_MHSA
 from model.models.social_set_transformer_mm import TrajectoryGenerator as TG_So_SET_Trans_MM
 
 #######################################

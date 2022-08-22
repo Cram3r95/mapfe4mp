@@ -25,7 +25,7 @@ from pthflops import count_ops
 BASE_DIR = "/home/denso/carlos_vsr_workspace/efficient-goals-motion-prediction"
 sys.path.append(BASE_DIR)
 
-from model.models.social_lstm_mhsa import TrajectoryGenerator
+from model.models.social_lstm_mhsa_old import TrajectoryGenerator
 from model.utils.utils import load_weights
 
 def test_load_weights():

@@ -21,7 +21,7 @@ import pdb
 # Variation of the PV_LSTM network with position decoder
 class TrajectoryGenerator(nn.Module):
     def __init__(self, data_dim=2, hidden_dim=256, pred_len=30, 
-                       dropout=0.2, concat_features=True, current_cuda='cuda:0'):
+                       dropout=0.2, concat_features=False, current_cuda='cuda:0'):
         self.data_dim = data_dim
         self.hidden_dim = hidden_dim
         self.pred_len = pred_len

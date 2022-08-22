@@ -1,4 +1,4 @@
-# <span style="font-size:0.8em;">**[CVPRW 2022] Exploring Map-based Features for Efficient Attention-based Vehicle Vehicle Motion Prediction**</span>
+# <span style="font-size:0.8em;">**[CVPRW 2022] Exploring Map-based Features for Efficient Attention-based Vehicle Motion Prediction**</span>
 
 [Carlos Gómez-Huélamo](https://scholar.google.com/citations?view_op=list_works&hl=es&hl=es&user=OWwoG6EAAAAJ), [Marcos V. Conde](https://scholar.google.com/citations?user=NtB1kjYAAAAJ&hl=en), Miguel Ortiz. 
 

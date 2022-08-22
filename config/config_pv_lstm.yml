@@ -65,7 +65,7 @@ hyperparameters:
     clipping_threshold_g: 1.1
     
     save_root_dir: "save/argoverse"
-    exp_name: "no concat features" # If no specific exp_name is used, fill with current day and hour
+    exp_name: # If no specific exp_name is used, fill with current day and hour
     output_dir: # To be filled in the code (save_root_dir/model_name/split_percentage/exp)
     checkpoint_start_from:
     exp_description: "Test motion prediction using position-velocity encoding"

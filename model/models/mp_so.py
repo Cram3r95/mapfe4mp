@@ -7,7 +7,7 @@ import math
 import torchvision.transforms.functional as TF
 
 from model.modules.attention import MultiHeadAttention
-from model.modules.encoders import Old_EncoderLSTM as Encoder
+from model.modules.encoders_old import Old_EncoderLSTM as Encoder
 from model.modules.decoders import Old_TemporalDecoderLSTM as TemporalDecoder
 
 MAX_PEDS = 32

@@ -42,7 +42,7 @@ import model.datasets.argoverse.plot_functions as plot_functions
 from model.datasets.argoverse.dataset import ArgoverseMotionForecastingDataset, seq_collate
 import model.datasets.argoverse.dataset_utils as dataset_utils
 from model.utils.checkpoint_data import get_generator, get_generator_mp_so
-from model.trainers.trainer_social_lstm_mhsa import cal_ade, cal_fde
+from model.trainers.trainer_pv_lstm import cal_ade, cal_fde
 
 from argoverse.evaluation.competition_util import generate_forecasting_h5
 
@@ -185,14 +185,19 @@ def evaluate(loader, generator, num_modes, split, current_cuda, pred_len, result
 
                 pred_traj_fake, pred_traj_fake_rel_aux  = generator(obs_traj, obs_traj_rel, seq_start_end, agent_idx)
 
-                # Get predictions in rel-rel coordinates
+                # pdb.set_trace()
+                # # Get predictions in rel-rel coordinates
 
-                aux_pred = torch.roll(pred_traj_fake,1,dims=(0))
-                aux_pred[0,:,:] = obs_traj[-1]
+                # aux_pred = torch.roll(pred_traj_fake,1,dims=(0))
+                # aux_pred[0,:,:] = obs_traj[-1]
 
-                pred_traj_fake_rel = pred_traj_fake - aux_pred
+                # pred_traj_fake_rel = pred_traj_fake - aux_pred
+                
 
-                pred_traj_fake_rel_list.append(pred_traj_fake_rel)
+                # pred_traj_fake_rel_list.append(pred_traj_fake_rel)
+
+                pred_traj_fake_rel = pred_traj_fake_rel_aux
+                pred_traj_fake_rel_list.append(pred_traj_fake_rel_aux)
 
                 # Get predictions in map coordinates
 
@@ -247,12 +252,16 @@ def evaluate(loader, generator, num_modes, split, current_cuda, pred_len, result
                     curr_traj_rel = torch.cat((obs_traj_rel,
                                                pred_traj_gt_rel),dim=0)
                 curr_first_obs = obs_traj[0,:,:] 
-                curr_object_class_id_list = object_cls
+                if curr_traj_rel.shape[1] == 1:
+                    curr_object_class_id_list = torch.tensor([1]).to(pred_traj_fake.device) # Only the target agent
+                else: # All agents
+                    curr_object_class_id_list = object_cls
 
                 filename = f"data/datasets/argoverse/motion-forecasting/{split}/data_images/{seq_id}.png"
                 
                 pred_traj_fake_rel = torch.stack(pred_traj_fake_rel_list, axis=0).view(-1, num_modes, 2) # pred_len x num_modes x 2
-                pdb.set_trace()
+                
+                # pdb.set_trace()
                 plot_functions.plot_trajectories(filename,results_path,curr_traj_rel,curr_first_obs,
                                                  curr_map_origin,curr_object_class_id_list,dist_rasterized_map,
                                                  rot_angle=-1,obs_len=obs_traj.shape[0],
@@ -399,6 +408,12 @@ if __name__ == '__main__':
 
 """
 python evaluate/argoverse/generate_results_pv_lstm.py \
---model_path "save/argoverse/pv_lstm/100.0_percent/concat_features/argoverse_motion_forecasting_dataset_0_with_model.pt" \
---num_modes 6 --device_gpu 0 --split "val"
+--model_path "save/argoverse/pv_lstm/100.0_percent/no_concat_features/argoverse_motion_forecasting_dataset_0_with_model.pt" \
+--num_modes 1 --device_gpu 0 --split "train"
+"""
+
+"""
+python evaluate/argoverse/generate_results_pv_lstm.py \
+--model_path "save/argoverse/pv_lstm/100.0_percent/exp-2022-08-16_04h/argoverse_motion_forecasting_dataset_0_with_model.pt" \
+--num_modes 1 --device_gpu 0 --split "val"
 """

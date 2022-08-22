@@ -31,7 +31,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 from model.datasets.argoverse.dataset import ArgoverseMotionForecastingDataset, seq_collate
 from model.models.pv_lstm import TrajectoryGenerator
-from model.modules.losses import l2_loss, mse_custom, pytorch_neg_multi_log_likelihood_batch, evaluate_feasible_area_prediction
+from model.modules.losses import l2_loss, mse, pytorch_neg_multi_log_likelihood_batch, evaluate_feasible_area_prediction
 from model.modules.evaluation_metrics import displacement_error, final_displacement_error
 from model.datasets.argoverse.dataset_utils import relative_to_abs
 from model.utils.checkpoint_data import Checkpoint, get_total_norm
@@ -101,14 +101,14 @@ def handle_batch(batch, is_single_agent_out):
 
 # Aux functions losses
 
-def calculate_mse_loss(gt, pred, loss_f):
+def calculate_mse_loss(gt, pred, loss_f, w_loss=None):
     """
     MSE = Mean Square Error (it is used by both ADE and FDE)
     gt,pred: (batch_size,pred_len,2)
     """
 
-    loss_ade = loss_f(pred, gt)
-    loss_fde = loss_f(pred[-1].unsqueeze(0), gt[-1].unsqueeze(0))
+    loss_ade = loss_f(pred, gt, w_loss)
+    loss_fde = loss_f(pred[-1].unsqueeze(0), gt[-1].unsqueeze(0), w_loss)
     return loss_ade, loss_fde
 
 def calculate_nll_loss(gt, pred, loss_f):    
@@ -291,17 +291,17 @@ def model_trainer(config, logger):
                                             patience=lr_scheduler_patience)
 
     if hyperparameters.loss_type_g == "mse" or hyperparameters.loss_type_g == "mse_w":
-        loss_f = mse_custom
+        loss_f = mse
     elif hyperparameters.loss_type_g == "nll":
         loss_f = pytorch_neg_multi_log_likelihood_batch
     elif hyperparameters.loss_type_g == "mse+fa" or hyperparameters.loss_type_g == "mse_w+fa":
         loss_f = {
-            "mse": mse_custom,
+            "mse": mse,
             "fa": evaluate_feasible_area_prediction
         }
     elif hyperparameters.loss_type_g == "mse+nll" or hyperparameters.loss_type_g == "mse_w+nll":
         loss_f = {
-            "mse": mse_custom,
+            "mse": mse,
             "nll": pytorch_neg_multi_log_likelihood_batch
         }
     else:
@@ -627,7 +627,7 @@ def generator_step(hyperparameters, batch, generator, optimizer_g,
         # Forward (If agent_idx != None, model prediction refers only to target agent)
 
         abs_pos_output, rel_pos_output = generator(obs_traj, obs_traj_rel)
-        pdb.set_trace()
+
         pred_traj_fake = abs_pos_output
         pred_traj_fake_rel = rel_pos_output
 
@@ -638,9 +638,14 @@ def generator_step(hyperparameters, batch, generator, optimizer_g,
 
         if hyperparameters.loss_type_g == "mse" or hyperparameters.loss_type_g == "mse_w":
             _,b,_ = pred_traj_gt_rel.shape
-            w_loss = w_loss[:b, :]
-            loss_ade_rel, loss_fde_rel = calculate_mse_loss(pred_traj_gt_rel, pred_traj_fake_rel, loss_f)
-            loss_ade, loss_fde = calculate_mse_loss(pred_traj_gt, pred_traj_fake, loss_f)
+
+            if hyperparameters.loss_type_g == "mse_w":
+                w_loss = w_loss[:b, :]
+                loss_ade_rel, loss_fde_rel = calculate_mse_loss(pred_traj_gt_rel, pred_traj_fake_rel, loss_f, w_loss)
+                loss_ade, loss_fde = calculate_mse_loss(pred_traj_gt, pred_traj_fake, loss_f, w_loss)
+            else:
+                loss_ade_rel, loss_fde_rel = calculate_mse_loss(pred_traj_gt_rel, pred_traj_fake_rel, loss_f)
+                loss_ade, loss_fde = calculate_mse_loss(pred_traj_gt, pred_traj_fake, loss_f)
 
             loss = hyperparameters.loss_ade_weight*loss_ade + \
                    hyperparameters.loss_fde_weight*loss_fde + \

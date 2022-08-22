@@ -1,4 +1,5 @@
 ## ignore python compiled files
+
 __pycache__
 *.pyc
 
@@ -31,5 +32,10 @@ save/*.pt
 save/argoverse/*
 
 # Results file to submit to the Leaderboard
+
 results/**/*.h5
 evaluate/**/*.h5 
+
+# Qualitative resuts for each model
+
+results/**/*.png

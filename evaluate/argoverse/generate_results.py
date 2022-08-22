@@ -42,7 +42,7 @@ import model.datasets.argoverse.plot_functions as plot_functions
 from model.datasets.argoverse.dataset import ArgoverseMotionForecastingDataset, seq_collate
 import model.datasets.argoverse.dataset_utils as dataset_utils
 from model.utils.checkpoint_data import get_generator, get_generator_mp_so
-from model.trainers.trainer_social_lstm_mhsa import cal_ade, cal_fde
+from model.trainers.trainer_social_lstm_mhsa_wrong import cal_ade, cal_fde
 
 from argoverse.evaluation.competition_util import generate_forecasting_h5
 
@@ -107,7 +107,7 @@ def generate_csv(results_path,ade_list,fde_list,num_seq_list,traj_kind_list,sort
         csv_writer.writerow(['-','-','-','-','-'])
         csv_writer.writerow(['-','-','Mean',mean_ade,mean_fde])
 
-def evaluate(loader, generator, num_modes, split, current_cuda, pred_len):
+def evaluate(loader, generator, num_modes, split, current_cuda, pred_len, results_path):
     """
     """
     assert loader.batch_size == 1
@@ -258,7 +258,7 @@ def evaluate(loader, generator, num_modes, split, current_cuda, pred_len):
                 
                 pred_traj_fake_rel = torch.stack(pred_traj_fake_rel_list, axis=0).view(-1, num_modes, 2) # pred_len x num_modes x 2
                 # pdb.set_trace()
-                plot_functions.plot_trajectories(filename,curr_traj_rel,curr_first_obs,
+                plot_functions.plot_trajectories(filename,results_path,curr_traj_rel,curr_first_obs,
                                                  curr_map_origin,curr_object_class_id_list,dist_rasterized_map,
                                                  rot_angle=-1,obs_len=obs_traj.shape[0],
                                                  smoothen=False,save=True,pred_trajectories_rel=pred_traj_fake_rel,
@@ -373,14 +373,18 @@ def main(args):
     exp_name = os.path.join(*args.model_path.split('/')[-4:-1]) # model_type/split_percentage/exp_name 
                                                                 # (e.g. social_lstm_mhsa/100.0_percent/exp1)
 
-    print(f"Evaluate model in {config.dataset.split} split")
-    output_all, ade_list, fde_list, traj_kind_list, num_seq_list = \
-        evaluate(split_loader, generator, args.num_modes, 
-                 config.dataset.split, current_cuda, config.hyperparameters.pred_len)
-
     ## Create results folder if does not exist
 
     results_path = os.path.join(config.base_dir,"results",exp_name,config.dataset.split)
+
+    if not os.path.exists(results_path):
+        print("Create results path folder: ", results_path)
+        os.makedirs(results_path) # os.makedirs create intermediate directories. os.mkdir only the last one
+
+    print(f"Evaluate model in {config.dataset.split} split")
+    output_all, ade_list, fde_list, traj_kind_list, num_seq_list = \
+        evaluate(split_loader, generator, args.num_modes, 
+                 config.dataset.split, current_cuda, config.hyperparameters.pred_len, results_path)
 
     if not os.path.exists(results_path):
         print("Create results path folder: ", results_path)
@@ -416,6 +420,12 @@ python evaluate/argoverse/generate_results.py \
 
 """
 python evaluate/argoverse/generate_results.py \
+--model_path "save/argoverse/social_lstm_mhsa/100.0_percent/without_convolutions/argoverse_motion_forecasting_dataset_0_with_model.pt" \
+--num_modes 6 --device_gpu 0 --split "val"
+"""
+
+"""
+python evaluate/argoverse/generate_results.py \
 --model_path "save/argoverse/social_lstm_mhsa/best_models_100.0_percent/1st_best_unimodal/argoverse_motion_forecasting_dataset_0_with_model.pt" \
---num_modes 6 --device_gpu 0 --split "test"
+--num_modes 6 --device_gpu 0 --split "val"
 """
