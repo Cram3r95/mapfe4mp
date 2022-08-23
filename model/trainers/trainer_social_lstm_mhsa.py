@@ -31,7 +31,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 from model.datasets.argoverse.dataset import ArgoverseMotionForecastingDataset, seq_collate
 from model.models.social_lstm_mhsa import TrajectoryGenerator
-from model.modules.losses import l2_loss, mse_custom, pytorch_neg_multi_log_likelihood_batch, evaluate_feasible_area_prediction
+from model.modules.losses import l2_loss, mse, mse_custom, pytorch_neg_multi_log_likelihood_batch, evaluate_feasible_area_prediction
 from model.modules.evaluation_metrics import displacement_error, final_displacement_error
 from model.datasets.argoverse.dataset_utils import relative_to_abs
 from model.utils.checkpoint_data import Checkpoint, get_total_norm
@@ -47,7 +47,7 @@ current_cuda = None
 absolute_root_folder = None
 use_rel_disp_decoder = False
 
-USE_SCALER = False
+USE_SCALER = True
 CHECK_ACCURACY_TRAIN = False
 CHECK_ACCURACY_VAL = True
 MAX_TIME_TO_CHECK_TRAIN = 120 # minutes
@@ -102,14 +102,14 @@ def handle_batch(batch, is_single_agent_out):
 
 # Aux functions losses
 
-def calculate_mse_loss(gt, pred, loss_f):
+def calculate_mse_loss(gt, pred, loss_f, w_loss=None):
     """
     MSE = Mean Square Error (it is used by both ADE and FDE)
     gt,pred: (batch_size,pred_len,2)
     """
 
-    loss_ade = loss_f(pred, gt)
-    loss_fde = loss_f(pred[-1].unsqueeze(0), gt[-1].unsqueeze(0))
+    loss_ade = loss_f(pred, gt, w_loss)
+    loss_fde = loss_f(pred[-1].unsqueeze(0), gt[-1].unsqueeze(0), w_loss)
     return loss_ade, loss_fde
 
 def calculate_nll_loss(gt, pred, loss_f):    
@@ -297,7 +297,7 @@ def model_trainer(config, logger):
                                             patience=lr_scheduler_patience)
 
     if hyperparameters.loss_type_g == "mse" or hyperparameters.loss_type_g == "mse_w":
-        loss_f = mse_custom
+        loss_f = mse
     elif hyperparameters.loss_type_g == "nll":
         loss_f = pytorch_neg_multi_log_likelihood_batch
     elif hyperparameters.loss_type_g == "mse+fa" or hyperparameters.loss_type_g == "mse_w+fa":
@@ -654,13 +654,16 @@ def generator_step(hyperparameters, batch, generator, optimizer_g,
 
         if hyperparameters.loss_type_g == "mse" or hyperparameters.loss_type_g == "mse_w":
             _,b,_ = pred_traj_gt_rel.shape
-            w_loss = w_loss[:b, :]
-            # loss_ade, loss_fde = calculate_mse_loss(pred_traj_gt_rel, pred_traj_fake_rel, 
-            loss_ade, loss_fde = calculate_mse_loss(pred_traj_gt, pred_traj_fake,
-                                                    loss_f)
+
+            if hyperparameters.loss_type_g == "mse_w":
+                w_loss = w_loss[:b, :]
+                loss_ade, loss_fde = calculate_mse_loss(pred_traj_gt, pred_traj_fake, loss_f, w_loss)
+            else:
+                loss_ade, loss_fde = calculate_mse_loss(pred_traj_gt, pred_traj_fake, loss_f)
 
             loss = hyperparameters.loss_ade_weight*loss_ade + \
                    hyperparameters.loss_fde_weight*loss_fde
+
             losses["G_mse_ade_loss"] = loss_ade.item()
             losses["G_mse_fde_loss"] = loss_fde.item()
 

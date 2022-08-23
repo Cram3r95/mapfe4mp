@@ -168,11 +168,13 @@ def get_origin_and_city(seq,obs_window):
         frame_data.append(seq[frame == seq[:, 0], :]) # save info for each frame
 
     obs_frame = frame_data[obs_window-1]
-    # pdb.set_trace()
+
     try:
-        origin = obs_frame[obs_frame[:,2] == 1][:,3:5] # Get x|y of the AGENT (object_class = 1) in the obs window
+        # Get [x,y] of the AGENT (object_class = 1) in the obs window
+        origin = obs_frame[obs_frame[:,2] == 1][:,3:5].reshape(-1).tolist() 
     except:
         pdb.set_trace()
+
     city_id = round(obs_frame[0,-1])
     if city_id == 0:
         city_name = "PIT"

@@ -8,11 +8,11 @@ dataset_name: argoverse_motion_forecasting_dataset
 dataset:
     path: data/datasets/argoverse/motion-forecasting/
     split: "train"
-    batch_size: 64
+    batch_size: 1024
     num_workers: 0
     start_from_percentage: 0.0 # By default, 0. If you want to analize a particular bunch of files (e.g. from 25 % to 50 %)
                                # then write here 0.25 and in split_percentage 0.25
-    split_percentage: 0.01 # % of the dataset (0-1)
+    split_percentage: 0.1 # % of the dataset (0-1)
     extra_data_train: -1.0 # % (0-1) of the val split is used for training too. Remaining files are used for validation
                           # -1.0 if not used
     shuffle: True 
@@ -48,7 +48,7 @@ hyperparameters:
                            # where we determine which is the optimal distance for which most agents
                            # are observed for our AGENT
     
-    num_epochs: 100
+    num_epochs: 200
     print_every: 50
     checkpoint_name: "0"                      
     checkpoint_val_percentage: 0.1 # 0.1 # (0 - 1) Check accuracy in validation split every
@@ -70,7 +70,7 @@ hyperparameters:
     clipping_threshold_g: 1.1
     
     save_root_dir: "save/argoverse"
-    exp_name: # If no specific exp_name is used, fill with current day and hour
+    exp_name: "use_scaler true" # If no specific exp_name is used, fill with current day and hour
     output_dir: # To be filled in the code (save_root_dir/model_name/split_percentage/exp)
     checkpoint_start_from:
     exp_description: "New architecture -> Without encoded traj in the social context.

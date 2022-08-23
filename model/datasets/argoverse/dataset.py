@@ -302,6 +302,8 @@ def process_window_sequence(idx, frame_data, frames, obs_len,
         pad_front = frames.index(curr_obj_seq[0, 0]) - idx
         pad_end = frames.index(curr_obj_seq[-1, 0]) - idx + 1
 
+        # print("ID: ", curr_obj_seq[0,2])
+        # print("Front End: ", pad_front, pad_end)
         if ((pad_end - pad_front != tensors_len) or (curr_obj_seq.shape[0] != tensors_len)):
             continue
 

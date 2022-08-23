@@ -82,22 +82,22 @@ with open(config_path) as config:
 
 past_observations = config.hyperparameters.obs_len
 
-config.dataset.split = "test"
-config.dataset.split_percentage = 1.0 #To generate the final results, must be 1 (whole split test)
+config.dataset.split = "val"
+config.dataset.split_percentage = 1.0 # To generate the final results, must be 1 (whole split test)
 config.dataset.start_from_percentage = 0.0
-config.dataset.batch_size = 1 # Better to build the h5 results file
+config.dataset.batch_size = 1 
 config.dataset.num_workers = 0
-config.dataset.class_balance = -1.0 # Do not consider class balance in the split val
+config.dataset.class_balance = -1.0 # Do not consider this to preprocess the map
 config.dataset.shuffle = False
 config.dataset.data_augmentation = False
 
 config.hyperparameters.pred_len = 30 # In test, we do not have the gt (prediction points)
 
-data_images_folder = BASE_DIR + "/" + config.dataset.path + config.dataset.split + "/data_images"
+data_images_folder = BASE_DIR + "/" + config.dataset.path + config.dataset.split + "/data_images_200mx200m"
 
 MAP_GENERATION = True
 
-dist_around = 40
+dist_around = 100
 dist_rasterized_map = [-dist_around, dist_around, -dist_around, dist_around]
 
 if MAP_GENERATION:
