@@ -70,6 +70,7 @@ def map_generator(curr_num_seq,
                   dist_rasterized_map,
                   avm,
                   city_name,
+                  centerlines_colour="gray",
                   show: bool = False,
                   root_folder = "data/datasets/argoverse/motion-forecasting/train/data_images") -> None:
     """
@@ -155,7 +156,7 @@ def map_generator(curr_num_seq,
         lane_polygon = centerline_to_polygon(lane_cl[:, :2])
                                                                           #"black"  
         ax.fill(lane_polygon[:, 0], lane_polygon[:, 1], "white", edgecolor='white', fill=True)
-        ax.plot(lane_cl[:, 0], lane_cl[:, 1], "-", color="grey", linewidth=1.5, alpha=1.0, zorder=2)
+        ax.plot(lane_cl[:, 0], lane_cl[:, 1], "-", color=centerlines_colour, linewidth=1.5, alpha=1.0, zorder=2)
         # N.B. zorder must be 2 (Line2D) in order to represent the whole line, with 1 (Path) there are some problems
 
     # print("Time consumed by plot drivable area and lane centerlines: ", time.time()-t0)

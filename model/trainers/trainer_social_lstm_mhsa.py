@@ -302,12 +302,12 @@ def model_trainer(config, logger):
         loss_f = pytorch_neg_multi_log_likelihood_batch
     elif hyperparameters.loss_type_g == "mse+fa" or hyperparameters.loss_type_g == "mse_w+fa":
         loss_f = {
-            "mse": mse_custom,
+            "mse": mse,
             "fa": evaluate_feasible_area_prediction
         }
     elif hyperparameters.loss_type_g == "mse+nll" or hyperparameters.loss_type_g == "mse_w+nll":
         loss_f = {
-            "mse": mse_custom,
+            "mse": mse,
             "nll": pytorch_neg_multi_log_likelihood_batch
         }
     else:

@@ -93,7 +93,8 @@ config.dataset.data_augmentation = False
 
 config.hyperparameters.pred_len = 30 # In test, we do not have the gt (prediction points)
 
-data_images_folder = BASE_DIR + "/" + config.dataset.path + config.dataset.split + "/data_images_200mx200m"
+data_images_folder = BASE_DIR + "/" + config.dataset.path + config.dataset.split + "/data_images"
+# data_images_folder = BASE_DIR + "/" + config.dataset.path + config.dataset.split + "/data_images_200mx200m"
 
 MAP_GENERATION = True
 
@@ -144,6 +145,7 @@ if MAP_GENERATION:
                                     dist_rasterized_map,
                                     avm,
                                     city_name,
+                                    centerlines_colour="red",
                                     show=False,
                                     root_folder=data_images_folder)
         end = time.time()

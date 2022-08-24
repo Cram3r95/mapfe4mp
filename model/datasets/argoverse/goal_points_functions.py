@@ -69,67 +69,50 @@ def get_points(img, car_px, scale_x, rad=100, color=255, N=1024, sample_car=True
                   
     return px_y, px_x
 
-# def change_bg_color(img):
-#     img_aux = copy.deepcopy(img)
-#     for i in range(img_aux.shape[0]):    
-#        for j in range(img_aux.shape[1]):  
-#            if (img_aux[i,j] == [0,0,0]).all():
-#                img_aux[i,j] = [255,255,255]
-#     return img_aux
-
 def change_bg_color(img):
     img[np.all(img == (0, 0, 0), axis=-1)] = (255,255,255)
 
     return img
 
-# N.B. In PLT, points must be specified as standard cartesian frames (x from left to right, y from bottom to top)
-def plot_fepoints(img, filename, seq_px_x, seq_px_y, last_obs_px, obs_origin, 
-                  goals_px_x=None, goals_px_y=None, label=None,
-                  radius=None, change_bg=False, show_pred_gt=False, show=False, save_fig=False, final_clusters=False):
-    assert len(img.shape) == 3
-    
-    img_aux = copy.deepcopy(img)
-    fig, ax = plt.subplots(figsize=(8, 8))
+def get_agent_acceleration(obs_seq, period=0.1):
+    """
+    """
 
-    obs_px_x, obs_px_y = seq_px_x[:obs_origin], seq_px_y[:obs_origin]
+    vel = np.zeros((obs_seq.shape[1]-1))
 
-    if show_pred_gt:
-        plt.scatter(seq_px_x[obs_origin:], seq_px_y[obs_origin:], c="cyan", marker=6, s=50) # GT future trajectory
-        
-    plt.scatter(obs_px_x, obs_px_y, c="blue", marker=".", s=50) # Past trajectory
-    plt.scatter(last_obs_px[0], last_obs_px[1], c="blue", marker="*", s=100) # Last observation point
-    
-    if goals_px_x is not None:
-        if label is not None:
-            u_labels = np.unique(label) # get unique labels
-            for i in u_labels:
-                if final_clusters: goal_size=80
-                else: goal_size = 10
-                plt.scatter(goals_px_x[label == i] , goals_px_y[label == i] , 
-                            label = i, marker="8", s=goal_size) # Goal points clustered
-        else:
-            plt.scatter(goals_px_x, goals_px_y, color="purple", marker="8", s=10) # Goal points
+    for i in range(1,obs_seq.shape[1]):
+        x_pre, y_pre = obs_seq[:,i-1]
+        x_curr, y_curr = obs_seq[:,i]
 
-    plt.imshow(img_aux)
+        dist = math.sqrt(pow(x_curr-x_pre,2)+pow(y_curr-y_pre,2))
 
-    if radius:
-      circ_car = plt.Circle((last_obs_px[0], last_obs_px[1]), radius, color="purple", fill=False)
-      ax.add_patch(circ_car)
+        curr_vel = dist / period
+        vel[i-1] = curr_vel
 
-    plt.axis("off")
+    print("vel: ", vel)
+    print("Vel: ", vel.mean())
+    d = vel.mean() * 3
+    print("m using CTRV: ", d)
 
-    if show:
-        plt.title(filename) 
-        plt.show()
+    acc = np.zeros((len(vel)-1))
 
-    if change_bg:
-        img_aux = change_bg_color(img)
+    for i in range(1,len(vel)):
+        vel_pre = vel[i-1]
+        vel_curr = vel[i]
 
-    if save_fig:
-        plt.savefig(filename, bbox_inches='tight', facecolor=fig.get_facecolor(), 
-                    edgecolor='none', pad_inches=0)
+        delta_vel = vel_curr - vel_pre
 
-    plt.close('all')
+        curr_acc = delta_vel / period
+        acc[i-1] = curr_acc
+
+    cte_acc = acc.mean()
+
+    d = vel[-1]*3 + 1/2*cte_acc*3**2
+    print("accs: ", acc)
+    print("ACC: ", cte_acc)
+    print("m using CTRA: ", d)
+
+    return cte_acc
 
 def get_agent_velocity(obs_seq, num_obs=5, period=0.1):
     """
@@ -373,3 +356,52 @@ def get_goal_points(filename, obs_seq, origin_pos, real_world_offset, NUM_GOAL_P
     rw_points = transform_px2real_world(final_samples_px, origin_pos, real_world_offset, img_size)
     # pdb.set_trace()
     return rw_points
+
+# N.B. In PLT, points must be specified as standard cartesian frames (x from left to right, y from bottom to top)
+def plot_fepoints(img, filename, seq_px_x, seq_px_y, last_obs_px, obs_origin, 
+                  goals_px_x=None, goals_px_y=None, label=None,
+                  radius=None, change_bg=False, show_pred_gt=False, show=False, save_fig=False, final_clusters=False):
+    assert len(img.shape) == 3
+    
+    img_aux = copy.deepcopy(img)
+    fig, ax = plt.subplots(figsize=(8, 8))
+
+    obs_px_x, obs_px_y = seq_px_x[:obs_origin], seq_px_y[:obs_origin]
+
+    if show_pred_gt:
+        plt.scatter(seq_px_x[obs_origin:], seq_px_y[obs_origin:], c="cyan", marker=6, s=50) # GT future trajectory
+        
+    plt.scatter(obs_px_x, obs_px_y, c="blue", marker=".", s=50) # Past trajectory
+    plt.scatter(last_obs_px[0], last_obs_px[1], c="blue", marker="*", s=100) # Last observation point
+    
+    if goals_px_x is not None:
+        if label is not None:
+            u_labels = np.unique(label) # get unique labels
+            for i in u_labels:
+                if final_clusters: goal_size=80
+                else: goal_size = 10
+                plt.scatter(goals_px_x[label == i] , goals_px_y[label == i] , 
+                            label = i, marker="8", s=goal_size) # Goal points clustered
+        else:
+            plt.scatter(goals_px_x, goals_px_y, color="purple", marker="8", s=10) # Goal points
+
+    plt.imshow(img_aux)
+
+    if radius:
+      circ_car = plt.Circle((last_obs_px[0], last_obs_px[1]), radius, color="purple", fill=False)
+      ax.add_patch(circ_car)
+
+    plt.axis("off")
+
+    if show:
+        plt.title(filename) 
+        plt.show()
+
+    if change_bg:
+        img_aux = change_bg_color(img)
+
+    if save_fig:
+        plt.savefig(filename, bbox_inches='tight', facecolor=fig.get_facecolor(), 
+                    edgecolor='none', pad_inches=0)
+
+    plt.close('all')

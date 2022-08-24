@@ -26,6 +26,7 @@ import torchvision.transforms.functional as TF
 from model.modules.encoders import EncoderLSTM as Encoder
 from model.modules.attention import MultiHeadAttention
 from model.modules.decoders import TemporalDecoderLSTM as TemporalDecoder
+from model.modules.decoders import MM_DecoderLSTM as MM_Decoder
 
 # Aux functions
 
@@ -109,13 +110,24 @@ class TrajectoryGenerator(nn.Module):
         ## Final prediction
         
         self.decoder_use_rel_disp = config_decoder_lstm.use_rel_disp
-        self.decoder = TemporalDecoder(h_dim=config_decoder_lstm.h_dim,
-                                       embedding_dim=config_decoder_lstm.embedding_dim,
-                                       num_layers=config_decoder_lstm.num_layers,
-                                       bidirectional=config_decoder_lstm.bidirectional,
-                                       dropout=config_decoder_lstm.dropout,
-                                       current_cuda=self.current_cuda,
-                                       use_rel_disp=config_decoder_lstm.use_rel_disp)
+
+        if config_decoder_lstm.num_modes == 1:
+            self.decoder = TemporalDecoder(h_dim=config_decoder_lstm.h_dim,
+                                        embedding_dim=config_decoder_lstm.embedding_dim,
+                                        num_layers=config_decoder_lstm.num_layers,
+                                        bidirectional=config_decoder_lstm.bidirectional,
+                                        dropout=config_decoder_lstm.dropout,
+                                        current_cuda=self.current_cuda,
+                                        use_rel_disp=config_decoder_lstm.use_rel_disp)
+        else:
+            self.decoder = MM_Decoder(h_dim=config_decoder_lstm.h_dim,
+                                        embedding_dim=config_decoder_lstm.embedding_dim,
+                                        num_modes=config_decoder_lstm.num_modes,
+                                        num_layers=config_decoder_lstm.num_layers,
+                                        bidirectional=config_decoder_lstm.bidirectional,
+                                        dropout=config_decoder_lstm.dropout,
+                                        current_cuda=self.current_cuda,
+                                        use_rel_disp=config_decoder_lstm.use_rel_disp)
 
     def add_noise(self, _input):
         """
@@ -157,26 +169,26 @@ class TrajectoryGenerator(nn.Module):
             curr_final_encoder_h = self.lne(curr_final_encoder_h)
             curr_final_encoder_h = torch.unsqueeze(curr_final_encoder_h, 0) # Required by Attention
 
-            curr_social_attn = self.sattn(
+            if self.encoder_use_social_attention:
+                curr_social_attn = self.sattn(
                                             curr_final_encoder_h, # Key
                                             curr_final_encoder_h, # Query
                                             curr_final_encoder_h, # Value
                                             None
                                             )
-
-            if self.encoder_use_social_attention and self.encoder_use_prev_traj_encoded:
-                concat_features = torch.cat(
-                    [
-                        curr_final_encoder_h.contiguous().view(-1,self.context_h_dim),
-                        curr_social_attn.contiguous().view(-1,self.context_h_dim)
-                    ],
-                    dim=1
-                )
+                if self.encoder_use_prev_traj_encoded:
+                    concat_features = torch.cat(
+                        [
+                            curr_final_encoder_h.contiguous().view(-1,self.context_h_dim),
+                            curr_social_attn.contiguous().view(-1,self.context_h_dim)
+                        ],
+                        dim=1
+                    )
+                else:
+                    concat_features = curr_social_attn.contiguous().view(-1,self.context_h_dim)
             elif self.encoder_use_prev_traj_encoded:
                 concat_features = curr_final_encoder_h.contiguous().view(-1,self.context_h_dim)
-            elif self.encoder_use_social_attention:
-                concat_features = curr_social_attn.contiguous().view(-1,self.context_h_dim)
-
+    
             batch_features.append(concat_features)
 
         # Here num_inputs_decoder refers to the number of sources of information. If we are computing

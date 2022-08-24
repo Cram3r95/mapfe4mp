@@ -35,7 +35,8 @@ TRAINER_LIST = [
                 "social_set_transformer",
                 "social_set_transformer_mm",
                 "gan_social_lstm_mhsa",
-                "pv_lstm"
+                "pv_lstm",
+                "sophie"
                ]
 
 def create_logger(file_path):

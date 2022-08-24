@@ -99,8 +99,6 @@ def seq_collate(data):
 
     curr_split = data_imgs_folder.split('/')[-3]
 
-    APPLY_DATA_AUGMENTATION = True
-
     if APPLY_DATA_AUGMENTATION and curr_split == "train":
         aug_obs_traj = torch.zeros((obs_traj.shape))
         aug_obs_traj_rel = torch.zeros((obs_traj_rel.shape))
@@ -131,17 +129,20 @@ def seq_collate(data):
             apply_gaussian_noise = np.random.choice(decision,num_obstacles,p=gaussian_noise_prob) # For each obstacle of the sequence
             apply_rotation = np.random.choice(decision,1,p=rotation_prob) # To the whole sequence
      
-            if np.any(apply_dropout): # Not apply if all elements are 0
-                aug_curr_obs_traj = data_augmentation_functions.dropout_points(aug_curr_obs_traj,
-                                                                               apply_dropout,
-                                                                               num_obs=obs_len,
-                                                                               percentage=0.3)
-            if np.any(apply_gaussian_noise): # Not apply if all elements are 0
-                aug_curr_obs_traj = data_augmentation_functions.add_gaussian_noise(aug_curr_obs_traj,
-                                                                                   apply_gaussian_noise,
-                                                                                   num_obstacles,
-                                                                                   num_obs=obs_len,
-                                                                                   mu=0,sigma=0.5)
+            # TODO: Dropout and gaussian noise required in Argoverse? The input data is already quite noisy
+            # in some samples
+            
+            # if np.any(apply_dropout): # Not apply if all elements are 0
+            #     aug_curr_obs_traj = data_augmentation_functions.dropout_points(aug_curr_obs_traj,
+            #                                                                    apply_dropout,
+            #                                                                    num_obs=obs_len,
+            #                                                                    percentage=0.3)
+            # if np.any(apply_gaussian_noise): # Not apply if all elements are 0
+            #     aug_curr_obs_traj = data_augmentation_functions.add_gaussian_noise(aug_curr_obs_traj,
+            #                                                                        apply_gaussian_noise,
+            #                                                                        num_obstacles,
+            #                                                                        num_obs=obs_len,
+            #                                                                        mu=0,sigma=0.5)
 
             ## N.B. If you apply rotation as data augmentation, the groundtruth must be rotated too!
             

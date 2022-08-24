@@ -11,13 +11,17 @@ Created on Fri Feb 25 12:19:38 2022
 # General purpose imports
 
 import pdb
+from typing import Optional, Tuple
 
 # DL & Math imports
 
+import numpy as np
 import torch
-from torch import nn
 import torch.nn.functional as F
 import math
+
+from torch import nn
+from torch import Tensor
 
 # Custom imports
 
@@ -176,7 +180,7 @@ class DotProductAttention(nn.Module):
     Scaled dot product attention
         a(q,k) = q*k/sqrt(d)
         Computationally more effient than Additive. This attention requires "d" to keep the variance
-        in q and k. Means its not modified.
+        in q and k. Means is not modified.
     """
 
     def __init__(self, dropout, **kwargs):
@@ -196,6 +200,36 @@ class DotProductAttention(nn.Module):
         self.attention_weights = masked_softmax(scores, valid_lens)
         return torch.bmm(self.dropout(self.attention_weights), values)
 
+class ScaledDotProductAttention(nn.Module):
+    """
+    Scaled Dot-Product Attention proposed in "Attention Is All You Need"
+    Compute the dot products of the query with all keys, divide each by sqrt(dim),
+    and apply a softmax function to obtain the weights on the values
+    Args: dim, mask
+        dim (int): dimention of attention
+        mask (torch.Tensor): tensor containing indices to be masked
+    Inputs: query, key, value, mask
+        - **query** (batch, q_len, d_model): tensor containing projection vector for decoder.
+        - **key** (batch, k_len, d_model): tensor containing projection vector for encoder.
+        - **value** (batch, v_len, d_model): tensor containing features of the encoded input sequence.
+        - **mask** (-): tensor containing indices to be masked
+    Returns: context, attn
+        - **context**: tensor containing the context vector from attention mechanism.
+        - **attn**: tensor containing the attention (alignment) from the encoder outputs.
+    """
+    def __init__(self, dim: int):
+        super(ScaledDotProductAttention, self).__init__()
+        self.sqrt_dim = np.sqrt(dim)
+
+    def forward(self, query: Tensor, key: Tensor, value: Tensor, mask: Optional[Tensor] = None) -> Tuple[Tensor, Tensor]:
+        score = torch.bmm(query, key.transpose(1, 2)) / self.sqrt_dim
+
+        if mask is not None:
+            score.masked_fill_(mask.view(score.size()), -float('Inf'))
+
+        attn = F.softmax(score, -1)
+        context = torch.bmm(attn, value)
+        return context, attn
 
 class MultiHeadAttention(nn.Module):
     """
@@ -207,8 +241,10 @@ class MultiHeadAttention(nn.Module):
     def __init__(self, key_size, query_size, value_size, num_hiddens, num_heads, dropout, bias=False, **kwargs):
         super().__init__()
         self.num_heads = num_heads
-        #TODO select attention mechanism: additive or dotproduct
+        # TODO select attention mechanism: additive or dotproduct
+
         self.attention = DotProductAttention(dropout)
+        # self.attention = ScaledDotProductAttention(dropout)
         self.W_q = nn.Linear(query_size, num_hiddens, bias=bias)
         self.W_k = nn.Linear(key_size, num_hiddens, bias=bias)
         self.W_v = nn.Linear(value_size, num_hiddens, bias=bias)
@@ -236,6 +272,91 @@ class MultiHeadAttention(nn.Module):
         output_concat = transpose_output(output, self.num_heads)
         return self.W_o(output_concat)
 
+class RelativeMultiHeadAttention(nn.Module):
+    """
+    Multi-head attention with relative positional encoding.
+    This concept was proposed in the "Transformer-XL: Attentive Language Models Beyond a Fixed-Length Context"
+    Args:
+        d_model (int): The dimension of model
+        num_heads (int): The number of attention heads.
+        dropout_p (float): probability of dropout
+    Inputs: query, key, value, pos_embedding, mask
+        - **query** (batch, time, dim): Tensor containing query vector
+        - **key** (batch, time, dim): Tensor containing key vector
+        - **value** (batch, time, dim): Tensor containing value vector
+        - **pos_embedding** (batch, time, dim): Positional embedding tensor
+        - **mask** (batch, 1, time2) or (batch, time1, time2): Tensor containing indices to be masked
+    Returns:
+        - **outputs**: Tensor produces by relative multi head attention module.
+    """
+    def __init__(
+            self,
+            d_model: int = 512,
+            num_heads: int = 16,
+            dropout_p: float = 0.1,
+    ):
+        super(RelativeMultiHeadAttention, self).__init__()
+        assert d_model % num_heads == 0, "d_model % num_heads should be zero."
+        self.d_model = d_model
+        self.d_head = int(d_model / num_heads)
+        self.num_heads = num_heads
+        self.sqrt_dim = math.sqrt(d_model)
+
+        self.query_proj = nn.Linear(d_model, d_model)
+        self.key_proj = nn.Linear(d_model, d_model)
+        self.value_proj = nn.Linear(d_model, d_model)
+        self.pos_proj = nn.Linear(d_model, d_model, bias=False)
+
+        self.dropout = nn.Dropout(p=dropout_p)
+        self.u_bias = nn.Parameter(torch.Tensor(self.num_heads, self.d_head))
+        self.v_bias = nn.Parameter(torch.Tensor(self.num_heads, self.d_head))
+        torch.nn.init.xavier_uniform_(self.u_bias)
+        torch.nn.init.xavier_uniform_(self.v_bias)
+
+        self.out_proj = nn.Linear(d_model, d_model)
+
+    def forward(
+            self,
+            query: Tensor,
+            key: Tensor,
+            value: Tensor,
+            pos_embedding: Tensor,
+            mask: Optional[Tensor] = None,
+    ) -> Tensor:
+        batch_size = value.size(0)
+
+        query = self.query_proj(query).view(batch_size, -1, self.num_heads, self.d_head)
+        key = self.key_proj(key).view(batch_size, -1, self.num_heads, self.d_head).permute(0, 2, 1, 3)
+        value = self.value_proj(value).view(batch_size, -1, self.num_heads, self.d_head).permute(0, 2, 1, 3)
+        pos_embedding = self.pos_proj(pos_embedding).view(batch_size, -1, self.num_heads, self.d_head)
+
+        content_score = torch.matmul((query + self.u_bias).transpose(1, 2), key.transpose(2, 3))
+        pos_score = torch.matmul((query + self.v_bias).transpose(1, 2), pos_embedding.permute(0, 2, 3, 1))
+        pos_score = self._compute_relative_positional_encoding(pos_score)
+
+        score = (content_score + pos_score) / self.sqrt_dim
+
+        if mask is not None:
+            mask = mask.unsqueeze(1)
+            score.masked_fill_(mask, -1e9)
+
+        attn = F.softmax(score, -1)
+        attn = self.dropout(attn)
+
+        context = torch.matmul(attn, value).transpose(1, 2)
+        context = context.contiguous().view(batch_size, -1, self.d_model)
+
+        return self.out_proj(context)
+
+    def _compute_relative_positional_encoding(self, pos_score: Tensor) -> Tensor:
+        batch_size, num_heads, seq_length1, seq_length2 = pos_score.size()
+        zeros = pos_score.new_zeros(batch_size, num_heads, seq_length1, 1)
+        padded_pos_score = torch.cat([zeros, pos_score], dim=-1)
+
+        padded_pos_score = padded_pos_score.view(batch_size, num_heads, seq_length2 + 1, seq_length1)
+        pos_score = padded_pos_score[:, :, 1:].view_as(pos_score)
+
+        return pos_score
 
 class AddNorm(nn.Module):
     """"

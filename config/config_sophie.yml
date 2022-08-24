@@ -17,7 +17,7 @@ dataset:
                           # -1.0 if not used
     shuffle: True 
     data_augmentation: True # Rotation, Swapping, Dropout, Gaussian noise
-    class_balance: 0.8 # % of straight trajectories (considering the AGENT). Remaining % are curved trajectories
+    class_balance: -1.0 # % of straight trajectories (considering the AGENT). Remaining % are curved trajectories
                         # (again, considering the AGENT). -1.0 if no class balance is used (get_item takes the corresponding
                         # sequence regardless if it is straight or curved)
     preprocess_data: False
@@ -73,40 +73,12 @@ hyperparameters:
     exp_name: # If no specific exp_name is used, fill with current day and hour
     output_dir: # To be filled in the code (save_root_dir/model_name/split_percentage/exp)
     checkpoint_start_from:
-    exp_description: "Without attention"
+    exp_description: "Without dropout and gaussian noise in data augmentation"
     tensorboard_active: True
 
 # Model
 
 model:
-    name: "social_lstm_mhsa"
-    adversarial_training: False
-    generator:
-        encoder_lstm:
-            use_rel_disp: *use_rel_disp
-            use_social_attention: False
-            use_prev_traj_encoded: True
-            conv_filters: 8
-            input_len: *obs_len # Must match with num observations
-            h_dim: &h_dim 256
-            embedding_dim: 16
-            num_layers: 2
-            bidirectional: True
-            dropout: &dropout 0.2
-        mhsa:
-            h_dim: *h_dim
-            num_heads: 4
-            dropout: *dropout
-        decoder_lstm:
-            use_rel_disp: *use_rel_disp
-            input_len: *obs_len # Must match with num observations 
-            output_len: *pred_len # Must match with num predictions
-            h_dim: *h_dim
-            embedding_dim: 16
-            num_layers: 1
-            bidirectional: False
-            mlp_dim: [64] # Always in list format, even if it is a single number
-            dropout: *dropout
-            num_modes: *num_modes
+    name: "sophie"
 
 

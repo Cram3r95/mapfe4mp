@@ -30,7 +30,7 @@ from torch.utils.tensorboard import SummaryWriter
 # Custom imports
 
 from model.datasets.argoverse.dataset import ArgoverseMotionForecastingDataset, seq_collate
-from model.models.social_lstm_mhsa_old import TrajectoryGenerator
+from model.models.sophie import TrajectoryGenerator
 from model.modules.losses import l2_loss, mse, mse_custom, pytorch_neg_multi_log_likelihood_batch, evaluate_feasible_area_prediction
 from model.modules.evaluation_metrics import displacement_error, final_displacement_error
 from model.datasets.argoverse.dataset_utils import relative_to_abs
@@ -45,9 +45,8 @@ torch.backends.cudnn.benchmark = True
 scaler = GradScaler()
 current_cuda = None
 absolute_root_folder = None
-use_rel_disp_decoder = False
 
-USE_SCALER = False
+USE_SCALER = True
 CHECK_ACCURACY_TRAIN = False
 CHECK_ACCURACY_VAL = True
 MAX_TIME_TO_CHECK_TRAIN = 120 # minutes
@@ -167,9 +166,6 @@ def model_trainer(config, logger):
     hyperparameters = config.hyperparameters
     optim_parameters = config.optim_parameters
 
-    global use_rel_disp_decoder
-    use_rel_disp_decoder = config.model.generator.decoder_lstm.use_rel_disp
-
     ## Set specific device for both data and model
 
     global current_cuda
@@ -233,10 +229,7 @@ def model_trainer(config, logger):
 
     # Initialize motion prediction generator and optimizer
 
-    generator = TrajectoryGenerator(config_encoder_lstm=config.model.generator.encoder_lstm,
-                                    config_decoder_lstm=config.model.generator.decoder_lstm,
-                                    config_mhsa=config.model.generator.mhsa,
-                                    current_cuda=current_cuda)
+    generator = TrajectoryGenerator()
     generator.to(device)
     generator.apply(init_weights)
     generator.type(float_dtype).train() # train mode (if you compute metrics -> .eval() mode)
@@ -297,8 +290,7 @@ def model_trainer(config, logger):
                                             patience=lr_scheduler_patience)
 
     if hyperparameters.loss_type_g == "mse" or hyperparameters.loss_type_g == "mse_w":
-        # loss_f = mse
-        loss_f = mse_custom
+        loss_f = mse
     elif hyperparameters.loss_type_g == "nll":
         loss_f = pytorch_neg_multi_log_likelihood_batch
     elif hyperparameters.loss_type_g == "mse+fa" or hyperparameters.loss_type_g == "mse_w+fa":
@@ -630,16 +622,13 @@ def generator_step(hyperparameters, batch, generator, optimizer_g,
 
     with autocast():
         # Forward (If agent_idx != None, model prediction refers only to target agent)
-        
-        if use_rel_disp_decoder:
-            pred_traj_fake_rel = generator(obs_traj, obs_traj_rel, seq_start_end, agent_idx)
 
-            if hyperparameters.output_single_agent:
-                pred_traj_fake = relative_to_abs(pred_traj_fake_rel, obs_traj[-1,agent_idx,:])
-            else:
-                pred_traj_fake = relative_to_abs(pred_traj_fake_rel, obs_traj[-1])
+        pred_traj_fake_rel = generator(obs_traj, obs_traj_rel, seq_start_end, agent_idx)
+
+        if hyperparameters.output_single_agent:
+            pred_traj_fake = relative_to_abs(pred_traj_fake_rel, obs_traj[-1,agent_idx,:])
         else:
-            pred_traj_fake = generator(obs_traj, obs_traj_rel, seq_start_end, agent_idx)
+            pred_traj_fake = relative_to_abs(pred_traj_fake_rel, obs_traj[-1])
 
         # Take (if specified) data of only the AGENT of interest
 
@@ -765,15 +754,12 @@ def check_accuracy(hyperparameters, loader, generator,
 
             # Forward (If agent_idx != None, model prediction refers only to target agent)
 
-            if use_rel_disp_decoder:
-                pred_traj_fake_rel = generator(obs_traj, obs_traj_rel, seq_start_end, agent_idx)
+            pred_traj_fake_rel = generator(obs_traj, obs_traj_rel, seq_start_end, agent_idx)
 
-                if hyperparameters.output_single_agent:
-                    pred_traj_fake = relative_to_abs(pred_traj_fake_rel, obs_traj[-1,agent_idx,:])
-                else:
-                    pred_traj_fake = relative_to_abs(pred_traj_fake_rel, obs_traj[-1])
+            if hyperparameters.output_single_agent:
+                pred_traj_fake = relative_to_abs(pred_traj_fake_rel, obs_traj[-1,agent_idx,:])
             else:
-                pred_traj_fake = generator(obs_traj, obs_traj_rel, seq_start_end, agent_idx)
+                pred_traj_fake = relative_to_abs(pred_traj_fake_rel, obs_traj[-1])
 
             # Single agent trajectories
 
@@ -788,12 +774,8 @@ def check_accuracy(hyperparameters, loader, generator,
 
             # L2 loss
 
-            if use_rel_disp_decoder:
-                g_l2_loss_abs, g_l2_loss_rel = cal_l2_losses(pred_traj_gt, pred_traj_gt_rel, 
-                                                             pred_traj_fake, pred_traj_fake_rel, loss_mask)
-            else:
-                g_l2_loss_abs, g_l2_loss_rel = cal_l2_losses(pred_traj_gt, torch.zeros((pred_traj_gt.shape)).cuda(current_cuda), 
-                                                             pred_traj_fake, torch.zeros((pred_traj_fake.shape)).cuda(current_cuda), loss_mask)
+            g_l2_loss_abs, g_l2_loss_rel = cal_l2_losses(pred_traj_gt, pred_traj_gt_rel, 
+                                                            pred_traj_fake, pred_traj_fake_rel, loss_mask)
 
             # Evaluation metrics
 
