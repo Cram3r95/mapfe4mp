@@ -11,15 +11,20 @@ import torch.nn.functional as F
 
 # Constants
 
+NUM_MODES = 6
+
 OBS_LEN = 20
 PRED_LEN = 30
 
 MLP_DIM = 64
-H_DIM = 256
+H_DIM = 64
 EMBEDDING_DIM = 16
+BOTTLENECK_DIM = 32
 
 NUM_HEADS = 4
-DROPOUT = 0.3
+DROPOUT = 0.2
+
+MAX_PEDS = 64
 
 def make_mlp(dim_list):
     layers = []
@@ -30,25 +35,13 @@ def make_mlp(dim_list):
     return nn.Sequential(*layers)
 
 class Encoder(nn.Module):
-    def __init__(self, model_dynamic=True):
+    def __init__(self):
         super(Encoder, self).__init__()
 
-        self.conv_filters = 8
-        self.data_dim = 2
-        self.model_dynamic = model_dynamic
         self.h_dim = H_DIM
         self.embedding_dim = EMBEDDING_DIM
 
-        if self.model_dynamic:
-            self.conv1 = nn.Conv1d(self.data_dim,self.conv_filters,kernel_size=3, # To model velocities
-                                   padding=1,padding_mode="reflect")
-            self.conv2 = nn.Conv1d(self.conv_filters,self.conv_filters,kernel_size=3, # To model accelerations
-                                   padding=1,padding_mode="reflect")
-            self.encoder = nn.LSTM(self.conv_filters*2+self.data_dim, self.h_dim, 
-                                   dropout=DROPOUT)
-        else:
-            self.encoder = nn.LSTM(self.embedding_dim, self.h_dim, 1)
-
+        self.encoder = nn.LSTM(self.embedding_dim, self.h_dim, 1)
         self.spatial_embedding = nn.Linear(2, self.embedding_dim)
 
     def init_hidden(self, batch, current_cuda):
@@ -57,28 +50,19 @@ class Encoder(nn.Module):
         return (h, c)
 
     def forward(self, obs_traj):
+        padded = len(obs_traj.shape) == 4
         npeds = obs_traj.size(1)
-        state = self.init_hidden(npeds, current_cuda=obs_traj.device)
+        total = npeds * (MAX_PEDS if padded else 1)
 
-        if self.model_dynamic:
-            vel_traj = F.tanh(self.conv1(obs_traj.permute(1,2,0)))
-            acc_traj = F.tanh(self.conv2(vel_traj))
-            kinematic_state = torch.cat([obs_traj,
-                                         vel_traj.permute(2,0,1),
-                                         acc_traj.permute(2,0,1)],dim=2) # 20 x num_agents x (conv_filters·2 + embedding_dim)
-
-            # kinematic_state = obs_traj
-            output, state = self.encoder(kinematic_state, state) # In the encoder we provide the latent content (state), not the output
-            
-        else:
-            obs_traj_embedding = self.spatial_embedding(obs_traj.contiguous().view(-1, 2))
-            obs_traj_embedding = obs_traj_embedding.view(-1, npeds, self.embedding_dim)
-  
-            output, state = self.encoder(obs_traj_embedding, state)
-
+        obs_traj_embedding = self.spatial_embedding(obs_traj.contiguous().view(-1, 2))
+        obs_traj_embedding = obs_traj_embedding.view(-1, total, self.embedding_dim)
+        state = self.init_hidden(total, current_cuda=obs_traj.device)
+        output, state = self.encoder(obs_traj_embedding, state)
         final_h = state[0]
-        final_h = final_h.view(npeds, self.h_dim)
-
+        if padded:
+            final_h = final_h.view(npeds, MAX_PEDS, self.h_dim)
+        else:
+            final_h = final_h.view(npeds, self.h_dim)
         return final_h
 
 class Decoder(nn.Module):
@@ -113,6 +97,59 @@ class Decoder(nn.Module):
         pred_traj_fake_rel = torch.stack(pred_traj_fake_rel, dim=0)
         return pred_traj_fake_rel
 
+class MMDecoderLSTM(nn.Module):
+    def __init__(self, pred_len=30, h_dim=64, embedding_dim=16, num_modes=3):
+        super().__init__()
+
+        self.pred_len = pred_len
+        self.h_dim = h_dim
+        self.embedding_dim = embedding_dim
+        self.num_modes = num_modes
+
+        traj_points = self.num_modes*2
+        self.spatial_embedding = nn.Linear(traj_points, self.embedding_dim)
+        
+        self.decoder = nn.LSTM(self.embedding_dim, self.h_dim, 1)
+        
+        self.hidden2pos = nn.Linear(self.h_dim, traj_points)
+        self.confidences = nn.Linear(self.h_dim, self.num_modes)
+
+    def forward(self, last_obs, last_obs_rel, state_tuple):
+        """
+        last_obs (1, b, 2)
+        last_obs_rel (1, b, 2)
+        state_tuple: h and c
+            h : c : (1, b, self.h_dim)
+        """
+
+        # pdb.set_trace()
+
+        batch_size, data_dim = last_obs.shape
+        last_obs_rel = last_obs_rel.view(1,batch_size,1,data_dim)
+        last_obs_rel = last_obs_rel.repeat_interleave(self.num_modes, dim=2)
+        last_obs_rel = last_obs_rel.view(1, batch_size, -1)
+
+        pred_traj_fake_rel = []
+        decoder_input = F.leaky_relu(self.spatial_embedding(last_obs_rel.contiguous().view(batch_size, -1))) 
+        decoder_input = decoder_input.contiguous().view(1, batch_size, self.embedding_dim)
+
+        for _ in range(self.pred_len):
+            output, state_tuple = self.decoder(decoder_input, state_tuple) 
+
+            rel_pos = self.hidden2pos(state_tuple[0].contiguous().view(-1, self.h_dim))
+
+            decoder_input = F.leaky_relu(self.spatial_embedding(rel_pos.contiguous().view(batch_size, -1)))
+            decoder_input = decoder_input.contiguous().view(1, batch_size, self.embedding_dim)
+            pred_traj_fake_rel.append(rel_pos.contiguous().view(batch_size,-1))
+
+        pred_traj_fake_rel = torch.stack(pred_traj_fake_rel, dim=0)
+        pred_traj_fake_rel = pred_traj_fake_rel.view(self.pred_len, batch_size, self.num_modes, -1)
+        pred_traj_fake_rel = pred_traj_fake_rel.permute(1,2,0,3) # batch_size, num_modes, pred_len, data_dim
+        conf = self.confidences(state_tuple[0].contiguous().view(-1, self.h_dim))
+        conf = torch.softmax(conf, dim=1) # batch_size, num_modes
+
+        return pred_traj_fake_rel, conf
+
 class TrajectoryGenerator(nn.Module):
     def __init__(self):
         super(TrajectoryGenerator, self).__init__()
@@ -122,8 +159,10 @@ class TrajectoryGenerator(nn.Module):
         self.mlp_dim = MLP_DIM
         self.h_dim = H_DIM
         self.embedding_dim = EMBEDDING_DIM
+        self.bottleneck_dim = BOTTLENECK_DIM
 
         self.encoder = Encoder()
+
         # self.sattn = SocialAttention()
         self.sattn = MultiHeadAttention(key_size=self.h_dim, 
                                         query_size=self.h_dim, 
@@ -131,7 +170,8 @@ class TrajectoryGenerator(nn.Module):
                                         num_hiddens=self.h_dim, 
                                         num_heads=NUM_HEADS, 
                                         dropout=DROPOUT)
-        self.decoder = Decoder()
+        # self.decoder = Decoder()
+        self.decoder = MMDecoderLSTM(num_modes=NUM_MODES)
 
         mlp_context_input_dim = self.h_dim*2 # Encoded trajectories + social context = config_encoder_lstm.h_dim*2 # Encoded trajectories + social context
         mlp_decoder_context_dims = [mlp_context_input_dim, self.mlp_dim, self.h_dim]

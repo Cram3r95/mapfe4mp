@@ -37,7 +37,7 @@ hyperparameters:
                                      # (around target agent) and apply convolutions
                                      # to model velocity and accelerations
 
-    num_modes: 6 # Multimodality
+    num_modes: &num_modes 6 # Multimodality
     obs_origin: 20 # This frame will be the origin, tipically the first observation (1) or last observation 
                    # (obs_len) of the AGENT (object to be predicted in Argoverse 1.0). Note that in the code
                    # it will be 0 and 19 respectively

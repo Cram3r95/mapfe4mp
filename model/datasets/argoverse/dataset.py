@@ -132,17 +132,17 @@ def seq_collate(data):
             # TODO: Dropout and gaussian noise required in Argoverse? The input data is already quite noisy
             # in some samples
             
-            # if np.any(apply_dropout): # Not apply if all elements are 0
-            #     aug_curr_obs_traj = data_augmentation_functions.dropout_points(aug_curr_obs_traj,
-            #                                                                    apply_dropout,
-            #                                                                    num_obs=obs_len,
-            #                                                                    percentage=0.3)
-            # if np.any(apply_gaussian_noise): # Not apply if all elements are 0
-            #     aug_curr_obs_traj = data_augmentation_functions.add_gaussian_noise(aug_curr_obs_traj,
-            #                                                                        apply_gaussian_noise,
-            #                                                                        num_obstacles,
-            #                                                                        num_obs=obs_len,
-            #                                                                        mu=0,sigma=0.5)
+            if np.any(apply_dropout): # Not apply if all elements are 0
+                aug_curr_obs_traj = data_augmentation_functions.dropout_points(aug_curr_obs_traj,
+                                                                               apply_dropout,
+                                                                               num_obs=obs_len,
+                                                                               percentage=0.3)
+            if np.any(apply_gaussian_noise): # Not apply if all elements are 0
+                aug_curr_obs_traj = data_augmentation_functions.add_gaussian_noise(aug_curr_obs_traj,
+                                                                                   apply_gaussian_noise,
+                                                                                   num_obstacles,
+                                                                                   num_obs=obs_len,
+                                                                                   mu=0,sigma=0.5)
 
             ## N.B. If you apply rotation as data augmentation, the groundtruth must be rotated too!
             

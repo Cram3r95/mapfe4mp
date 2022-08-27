@@ -77,32 +77,13 @@ def l2_loss_multimodal(pred_traj, pred_traj_gt, random=0, mode='average'):
         return torch.sum(loss)
     elif mode == 'raw':
         return loss.sum(dim=2).sum(dim=1)
-
-def mse_custom(gt, pred, w_loss=None):
-    """
-        With t = predicted points
-        gt: (t, b, 2)
-        pred: (t, b, 2)
-        weights: (b, t)
-    """
-    try:
-        l2 = gt.permute(1, 0, 2) - pred.permute(1, 0, 2) # b,t,2
-        l2 = l2**2 # b, t, 2
-        l2 = torch.sum(l2, axis=2) # b, t
-        l2 = torch.sqrt(l2) # b, t
-        l2 = torch.mean(l2, axis=1) # b
-        l2 = torch.mean(l2) # single value
-    except Exception as e:
-        print(e)
-        pdb.set_trace()
-    return l2
-    
-def mse(gt, pred, weights=None):
+   
+def mse(gt, pred, w_loss=None):
     """
     With t = predicted points (pred_len)
     gt: (t, b, 2)
     pred: (t, b, 2)
-    weights: (b, t)
+    w_loss: (b, t)
     """
     try:
         l2 = gt.permute(1, 0, 2) - pred.permute(1, 0, 2) # b,t,2
@@ -110,7 +91,8 @@ def mse(gt, pred, weights=None):
         l2 = torch.sum(l2, axis=2) # b, t
         l2 = torch.sqrt(l2) # b, t
         
-        l2 = l2 * weights # b, t
+        if torch.is_tensor(w_loss):
+            l2 = l2 * w_loss # b, t
 
         l2 = torch.mean(l2, axis=1) # b
         l2 = torch.mean(l2) # single value

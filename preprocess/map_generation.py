@@ -82,7 +82,7 @@ with open(config_path) as config:
 
 past_observations = config.hyperparameters.obs_len
 
-config.dataset.split = "val"
+config.dataset.split = "train"
 config.dataset.split_percentage = 1.0 # To generate the final results, must be 1 (whole split test)
 config.dataset.start_from_percentage = 0.0
 config.dataset.batch_size = 1 
@@ -93,66 +93,63 @@ config.dataset.data_augmentation = False
 
 config.hyperparameters.pred_len = 30 # In test, we do not have the gt (prediction points)
 
-data_images_folder = BASE_DIR + "/" + config.dataset.path + config.dataset.split + "/data_images"
-# data_images_folder = BASE_DIR + "/" + config.dataset.path + config.dataset.split + "/data_images_200mx200m"
-
-MAP_GENERATION = True
-
-dist_around = 100
+dist_around = 75
 dist_rasterized_map = [-dist_around, dist_around, -dist_around, dist_around]
 
-if MAP_GENERATION:
-    # Only load the city and x|y center to generate the background
+# data_images_folder = BASE_DIR + "/" + config.dataset.path + config.dataset.split + "/data_images"
+data_images_folder = BASE_DIR + "/" + config.dataset.path + config.dataset.split + f"/data_images_{dist_around*2}mx{dist_around*2}m"
 
-    obs_window = 20
+# Only load the city and x|y center to generate the background
 
-    folder = BASE_DIR + "/" + config.dataset.path + config.dataset.split + "/data/"
-    files, num_files = load_list_from_folder(folder)
+obs_window = 20
 
-    file_id_list = []
-    root_file_name = None
-    for file_name in files:
-        if not root_file_name:
-            root_file_name = os.path.dirname(os.path.abspath(file_name))
-        file_id = int(os.path.normpath(file_name).split('/')[-1].split('.')[0])
-        file_id_list.append(file_id)
-    file_id_list.sort()
-    print("Num files: ", num_files)
+folder = BASE_DIR + "/" + config.dataset.path + config.dataset.split + "/data/"
+files, num_files = load_list_from_folder(folder)
 
-    start_from = int(config.dataset.start_from_percentage*num_files)
-    n_files = int(config.dataset.split_percentage*num_files)
+file_id_list = []
+root_file_name = None
+for file_name in files:
+    if not root_file_name:
+        root_file_name = os.path.dirname(os.path.abspath(file_name))
+    file_id = int(os.path.normpath(file_name).split('/')[-1].split('.')[0])
+    file_id_list.append(file_id)
+file_id_list.sort()
+print("Num files: ", num_files)
 
-    if (start_from + n_files) >= num_files:
-        file_id_list = file_id_list[start_from:]
-    else:
-        file_id_list = file_id_list[start_from:start_from+n_files]
+start_from = int(config.dataset.start_from_percentage*num_files)
+n_files = int(config.dataset.split_percentage*num_files)
 
-    time_per_iteration = float(0)
-    aux_time = float(0)
+if (start_from + n_files) >= num_files:
+    file_id_list = file_id_list[start_from:]
+else:
+    file_id_list = file_id_list[start_from:start_from+n_files]
 
-    for i, file_id in enumerate(file_id_list):
-        print(f"File {file_id} -> {i+1}/{len(file_id_list)}")
-        files_remaining = len(file_id_list) - (i+1)
-        path = os.path.join(root_file_name,str(file_id)+".csv")
-        data = read_file(path) 
+time_per_iteration = float(0)
+aux_time = float(0)
 
-        origin_pos, city_name = get_origin_and_city(data,config.hyperparameters.obs_origin)
-        origin_pos = origin_pos.tolist() # np.array -> list
+for i, file_id in enumerate(file_id_list):
+    print(f"File {file_id} -> {i+1}/{len(file_id_list)}")
+    files_remaining = len(file_id_list) - (i+1)
+    path = os.path.join(root_file_name,str(file_id)+".csv")
+    data = read_file(path) 
 
-        start = time.time()
-        map_functions.map_generator(file_id,
-                                    origin_pos,
-                                    dist_rasterized_map,
-                                    avm,
-                                    city_name,
-                                    centerlines_colour="red",
-                                    show=False,
-                                    root_folder=data_images_folder)
-        end = time.time()
-        aux_time += (end-start)
-        time_per_iteration = aux_time/(i+1)
+    origin_pos, city_name = get_origin_and_city(data,config.hyperparameters.obs_origin)
+    origin_pos = origin_pos.tolist() # np.array -> list
 
-        print(f"Time per iteration: {time_per_iteration} s. \n \
-                Estimated time to finish ({files_remaining} files): {round(time_per_iteration*files_remaining/60)} min")
+    start = time.time()
+    map_functions.map_generator(file_id,
+                                origin_pos,
+                                dist_rasterized_map,
+                                avm,
+                                city_name,
+                                centerlines_colour="red",
+                                show=False,
+                                root_folder=data_images_folder)
+    end = time.time()
+    aux_time += (end-start)
+    time_per_iteration = aux_time/(i+1)
 
-        plt.close("all")
+    print(f"Time per iteration: {time_per_iteration} s. \n \
+            Estimated time to finish ({files_remaining} files): {round(time_per_iteration*files_remaining/60)} min")
+
+    plt.close("all")

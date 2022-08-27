@@ -8,7 +8,7 @@
 
 """
 Created on Fri Feb 25 12:19:38 2022
-@author: Carlos Gómez-Huélamo and Miguel Eduardo Ortiz Huamaní
+@author: Carlos Gómez-Huélamo
 """
 
 # General purpose imports
@@ -39,10 +39,11 @@ BASE_DIR = repo.working_tree_dir
 sys.path.append(BASE_DIR)
 
 import model.datasets.argoverse.plot_functions as plot_functions
-from model.datasets.argoverse.dataset import ArgoverseMotionForecastingDataset, seq_collate
 import model.datasets.argoverse.dataset_utils as dataset_utils
-from model.utils.checkpoint_data import get_generator, get_generator_mp_so
-from model.trainers.trainer_social_lstm_mhsa_wrong import cal_ade, cal_fde
+
+from model.datasets.argoverse.dataset import ArgoverseMotionForecastingDataset, seq_collate
+from model.utils.checkpoint_data import get_generator
+from model.trainers.trainer_sophie_mm import cal_ade_multimodal, cal_fde_multimodal
 
 from argoverse.evaluation.competition_util import generate_forecasting_h5
 
@@ -52,7 +53,6 @@ config = None
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--model_path', required=True, type=str)
-parser.add_argument('--num_modes', required=True, default=6, type=int)
 parser.add_argument("--device_gpu", required=True, default=0, type=int)
 parser.add_argument("--split", required=True, default="val", type=str)
 
@@ -63,9 +63,12 @@ parser.add_argument("--split", required=True, default="val", type=str)
 # 
 # full_img_cv = cv2.add(img1_bg,img2_fg) -> full_img_cv = img_lanes
 
+PRED_LEN = 30
+ARGOVERSE_NUM_MODES = 6
+
 dist_around = 40
 dist_rasterized_map = [-dist_around, dist_around, -dist_around, dist_around]
-GENERATE_QUALITATIVE_RESULTS = True
+GENERATE_QUALITATIVE_RESULTS = False
 COMPUTE_METRICS = True
 
 def generate_csv(results_path,ade_list,fde_list,num_seq_list,traj_kind_list,sort=False):
@@ -107,7 +110,7 @@ def generate_csv(results_path,ade_list,fde_list,num_seq_list,traj_kind_list,sort
         csv_writer.writerow(['-','-','-','-','-'])
         csv_writer.writerow(['-','-','Mean',mean_ade,mean_fde])
 
-def evaluate(loader, generator, num_modes, split, current_cuda, pred_len, results_path):
+def evaluate(loader, generator, config, split, current_cuda, pred_len, results_path):
     """
     """
     assert loader.batch_size == 1
@@ -169,55 +172,46 @@ def evaluate(loader, generator, num_modes, split, current_cuda, pred_len, result
 
             agent_idx = torch.where(object_cls==1)[0].cpu().numpy()
 
-            # Get predictions (relative displacements)
+            # Get predictions
 
-            pred_traj_fake_rel_list = []
-            pred_traj_fake_list = []
+            if config.hyperparameters.num_modes == 1: # The model is unimodal
 
-            # INCLUDE HERE A FLAG TO KNOW IF THE MODEL RETURNS IN ABSOLUTE OR RELATIVES!!!!!!!!!!!!
-            for _ in range(num_modes):
-                if config.model.generator.decoder_lstm.use_rel_disp:
-                    # Get predictions (rel-rel)
+                pred_traj_fake_rel_list = []
+                pred_traj_fake_list = []
+
+                for _ in range(ARGOVERSE_NUM_MODES):
+                    ## Get predictions (relative displacements)
 
                     pred_traj_fake_rel = generator(obs_traj, obs_traj_rel, seq_start_end, agent_idx)
                     pred_traj_fake_rel_list.append(pred_traj_fake_rel)
 
-                    # Get predictions in absolute -> mappp coordinates
+                    ## Get predictions in absolute -> map coordinates
 
-                    pred_traj_fake = dataset_utils.relative_to_abs(pred_traj_fake_rel, obs_traj[-1, agent_idx, :]) + map_origin[0].unsqueeze(0) # 30,1,2
-                    pred_traj_fake_list.append(pred_traj_fake)
-                else:
-                    # Get predictions (abs)
-
-                    pred_traj_fake = generator(obs_traj, obs_traj_rel, seq_start_end, agent_idx)
-
-                    # Get predictions in rel-rel coordinates
-
-                    aux_pred = torch.roll(pred_traj_fake,1,dims=(0))
-                    aux_pred[0,:,:] = obs_traj[-1,agent_idx,:]
-
-                    pred_traj_fake_rel = pred_traj_fake - aux_pred
-                    pred_traj_fake_rel_list.append(pred_traj_fake_rel)
-
-                    # Get predictions in map coordinates
-
-                    pred_traj_fake = pred_traj_fake + map_origin[0].unsqueeze(0) # 30,1,2
+                    pred_traj_fake = dataset_utils.relative_to_abs(pred_traj_fake_rel, obs_traj[-1, agent_idx, :])
                     pred_traj_fake_list.append(pred_traj_fake)
 
-            # pred_traj_fake_rel = generator(obs_traj, obs_traj_rel, seq_start_end, agent_idx) # pred_len x batch_size x 2
+                pred_traj_fake_rel = torch.stack(pred_traj_fake_rel_list, axis=0).view(-1, ARGOVERSE_NUM_MODES, 2) # pred_len x num_modes x data_dim
+                pred_traj_fake_global = torch.stack(pred_traj_fake_list + map_origin, axis=0).view(ARGOVERSE_NUM_MODES,-1,2) # num_modes x pred_len x data_dim
+            
+            else: # The model is multimodal
+                assert config.hyperparameters.num_modes == ARGOVERSE_NUM_MODES
 
-            # # ## TODO: Avoid repeating the prediction -> Use a multimodal generator!
+                ## Get predictions (relative displacements)
 
-            # # # pred_traj_fake_rel = pred_traj_fake_rel.unsqueeze(dim=0) # pred_len x batch_size x 2 -> batch_size x pred_len x num_modes x 2
-            # # # pred_traj_fake_rel = torch.repeat_interleave(pred_traj_fake_rel,num_modes,dim=2) # 1,30,1,2 -> 1,30,6,2
-            # pred_traj_fake_rel = torch.repeat_interleave(pred_traj_fake_rel,num_modes,dim=1) # 30,1,2 -> 30,6,2
+                pred_traj_fake_rel, conf = generator(obs_traj, obs_traj_rel, seq_start_end, agent_idx)
 
-            if COMPUTE_METRICS and split != "test": # Metrics must be in absolute coordinates (either around 0,0 or around map origin)
-                agent_pred_gt = pred_traj_gt[:,agent_idx,:]
-                agent_pred_fake_rel = pred_traj_fake_rel[:,0,:].unsqueeze(dim=1) # TODO: At this moment all modes are the same. Compute Multimodal
-                                                                                 # ADE/FDE evaluation when we have real multimodality
-                agent_last_obs = obs_traj[-1,agent_idx,:]
-                agent_pred_fake = dataset_utils.relative_to_abs(agent_pred_fake_rel, agent_last_obs) 
+                ## Get predictions in absolute -> map coordinates
+
+                pred_traj_fake = dataset_utils.relative_to_abs_multimodal(pred_traj_fake_rel, obs_traj[-1,agent_idx,:])
+                pred_traj_fake_global = pred_traj_fake + map_origin
+
+            # Hereafter, we have multimodality (either by iterating the same model K modes or returning K modes in the
+            # same forward)
+
+            if COMPUTE_METRICS and split != "test":
+                agent_pred_gt = pred_traj_gt[:,agent_idx,:] # pred_len (30) x 1 (agent) x data_dim (2) -> "Abs" coordinates (around 0,0)
+                agent_pred_fake = pred_traj_fake
+
                 agent_non_linear_obj = non_linear_obj[agent_idx]
                 agent_linear_obj = 1 - agent_non_linear_obj
 
@@ -225,19 +219,19 @@ def evaluate(loader, generator, num_modes, split, current_cuda, pred_len, result
                 agent_mask = np.where(agent_obj_id.cpu() == -1, 0, 1)
                 agent_mask = torch.tensor(agent_mask, device=agent_obj_id.device).reshape(-1)
                 
-                ade_, ade_l_, ade_nl_ = cal_ade(agent_pred_gt, agent_pred_fake, agent_linear_obj, agent_non_linear_obj, agent_mask)
+                ade, ade_min = cal_ade_multimodal(agent_pred_gt, agent_pred_fake, agent_linear_obj, agent_non_linear_obj, agent_mask)
+                fde, fde_min = cal_fde_multimodal(agent_pred_gt, agent_pred_fake, agent_linear_obj, agent_non_linear_obj, agent_mask)
 
-                fde_, fde_l_, fde_nl_ = cal_fde(agent_pred_gt, agent_pred_fake, agent_linear_obj, agent_non_linear_obj, agent_mask)
+                ade_min = ade_min.item() / pred_len
+                fde_min = fde_min.item()
 
-                ade_ = ade_.item() / pred_len
-                fde_ = fde_.item()
-
-                ade_list.append(ade_)
-                fde_list.append(fde_)
+                ade_list.append(ade_min)
+                fde_list.append(fde_min)
                 num_seq_list.append(seq_id)
-                print("ADE, FDE: ", ade_, fde_)
+                print(f"k = {ARGOVERSE_NUM_MODES} -> ADE min, FDE min: ", ade_min, fde_min)
 
                 # If the agent conducts a curve (these trajectories are suppossed to be harder -> Higher ADE and FDE)
+
                 if agent_non_linear_obj.item(): traj_kind_list.append(1) # Curved trajectory
                 else: traj_kind_list.append(0) # The agent conducts a curve
 
@@ -255,32 +249,17 @@ def evaluate(loader, generator, num_modes, split, current_cuda, pred_len, result
                 curr_object_class_id_list = object_cls
 
                 filename = f"data/datasets/argoverse/motion-forecasting/{split}/data_images/{seq_id}.png"
-                
-                pred_traj_fake_rel = torch.stack(pred_traj_fake_rel_list, axis=0).view(-1, num_modes, 2) # pred_len x num_modes x 2
-                # pdb.set_trace()
+
+                pred_traj_fake_rel_aux = pred_traj_fake_rel.squeeze(0).contiguous().view(-1, ARGOVERSE_NUM_MODES, 2) # pred_len x num_modes x data_dim
+
                 plot_functions.plot_trajectories(filename,results_path,curr_traj_rel,curr_first_obs,
                                                  curr_map_origin,curr_object_class_id_list,dist_rasterized_map,
                                                  rot_angle=-1,obs_len=obs_traj.shape[0],
-                                                 smoothen=False,save=True,pred_trajectories_rel=pred_traj_fake_rel,
-                                                 ade_metric=ade_,fde_metric=fde_)
+                                                 smoothen=False,save=True,pred_trajectories_rel=pred_traj_fake_rel_aux,
+                                                 ade_metric=ade_min,fde_metric=fde_min)
 
-            # pred_traj_fake_rel = pred_traj_fake_rel.unsqueeze(dim=0)
-
-            # # Get predictions in absolute coordinates 
-            # # (relative displacements -> absolute coordinates (around 0,0) -> map coordinates)
-
-            # last_obs = obs_traj[-1,agent_idx,:]
-            # pred_traj_fake = dataset_utils.relative_to_abs_multimodal(pred_traj_fake_rel,last_obs) + map_origin
-                                                     
-            # # Store predictions in absolute (map) coordinates
-
-            # batch_size, pred_len, num_modes, xy = pred_traj_fake.shape
-            # pred_traj_fake = pred_traj_fake.view(-1, pred_len, xy) #  (assuming batch_size = 1) num_modes x pred_len x 2 (x,y)
-
-            # output_all[seq_id] = pred_traj_fake.cpu().numpy()
-            
-            predicted_traj = torch.stack(pred_traj_fake_list, axis=0).view(num_modes,-1,2) # Num_samples x pred_len x 2 (x,y
-            output_all[seq_id] = predicted_traj.cpu().numpy()
+            pred_traj_fake_global_aux = pred_traj_fake_global.squeeze(0).view(ARGOVERSE_NUM_MODES, PRED_LEN, 2)
+            output_all[seq_id] = pred_traj_fake_global_aux.cpu().numpy()
             file_list.remove(seq_id)
 
             end = time.time()
@@ -296,10 +275,6 @@ def evaluate(loader, generator, num_modes, split, current_cuda, pred_len, result
             print("No processed files: {}".format(len(file_list)))
         except:
             print("All files have been processed")
-
-        # TODO: This must be
-        # for key in file_list:
-        #     output_all[key] = np.zeros((num_modes, 30, 2))
 
     return output_all, ade_list, fde_list, traj_kind_list, num_seq_list   
 
@@ -361,10 +336,6 @@ def main(args):
 
     print("Load generator...")
     generator = get_generator(args.model_path, config)
-    # try:
-    #     generator = get_generator(args.model_path, config)
-    # except:
-    #     generator = get_generator_mp_so(args.model_path, config) # OLD gan
 
     # Evaluate model and get metrics
 
@@ -383,7 +354,7 @@ def main(args):
 
     print(f"Evaluate model in {config.dataset.split} split")
     output_all, ade_list, fde_list, traj_kind_list, num_seq_list = \
-        evaluate(split_loader, generator, args.num_modes, 
+        evaluate(split_loader, generator, config, 
                  config.dataset.split, current_cuda, config.hyperparameters.pred_len, results_path)
 
     if not os.path.exists(results_path):
@@ -391,7 +362,7 @@ def main(args):
         os.makedirs(results_path) # os.makedirs create intermediate directories. os.mkdir only the last one
 
     if config.dataset.split == "test":
-        # Generate H5 file for Argoverse Motion-Forecasting competition (only test split)   
+        # Generate h5 file for Argoverse Motion-Forecasting competition (only test split)   
 
         generate_forecasting_h5(output_all, results_path)
 
@@ -406,26 +377,9 @@ if __name__ == '__main__':
     args = parser.parse_args()
     main(args)
 
-"""
-python evaluate/argoverse/generate_results.py \
---model_path "save/argoverse/social_lstm_mhsa/100.0_percent/exp-2022-07-18_06-19/argoverse_motion_forecasting_dataset_0_with_model.pt" \
---num_modes 6 --device_gpu 0 --split "test"
-"""
 
 """
-python evaluate/argoverse/generate_results.py \
---model_path "save/argoverse/gan_social_lstm_mhsa/100.0_percent/exp-2022-07-20_22-51/argoverse_motion_forecasting_dataset_0_with_model.pt" \
---num_modes 6 --device_gpu 0 --split "test"
-"""
-
-"""
-python evaluate/argoverse/generate_results.py \
---model_path "save/argoverse/social_lstm_mhsa/100.0_percent/without_convolutions/argoverse_motion_forecasting_dataset_0_with_model.pt" \
---num_modes 6 --device_gpu 0 --split "val"
-"""
-
-"""
-python evaluate/argoverse/generate_results.py \
---model_path "save/argoverse/social_lstm_mhsa/best_models_100.0_percent/1st_best_unimodal/argoverse_motion_forecasting_dataset_0_with_model.pt" \
---num_modes 6 --device_gpu 0 --split "val"
+python evaluate/argoverse/generate_results_rel-rel.py \
+--model_path "save/argoverse/sophie_mm/100.0_percent/exp-2022-08-26_06h/argoverse_motion_forecasting_dataset_0_with_model.pt" \
+--device_gpu 0 --split "test"
 """

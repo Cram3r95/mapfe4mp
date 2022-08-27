@@ -26,6 +26,7 @@ split = "train"
 split_folder = BASE_DIR + "/" + dataset_path + split
 data_folder = BASE_DIR + "/" + dataset_path + split + "/data/"
 data_images_folder = BASE_DIR + "/" + dataset_path + split + "/data_images"
+# data_images_folder = BASE_DIR + "/" + dataset_path + split + "/data_images_150mx150m"
 goal_points_folder = split_folder + "/goal_points_test"
 
 files, num_files = dataset_utils.load_list_from_folder(data_folder)
@@ -39,7 +40,7 @@ for file_name in files:
     file_id_list.append(file_id)
 file_id_list.sort()
 
-limit = 10000
+limit = 1000
 if limit != -1:
     file_id_list = file_id_list[:limit]
 
@@ -128,7 +129,7 @@ for t,file_id in enumerate(file_id_list):
 
     # 3.1. Determine AGENT's acceleration
 
-    goal_points_functions.get_agent_acceleration(torch.transpose(agent_obs_seq_global,0,1))
+    # goal_points_functions.get_agent_acceleration(torch.transpose(agent_obs_seq_global,0,1))
 
     # 3.1. Filter using AGENT estimated velocity in the last observation frame
 
@@ -231,7 +232,10 @@ for t,file_id in enumerate(file_id_list):
     closest_gp_dist = 50000
 
     for rw_point in rw_points:
-        dist = np.linalg.norm(rw_point - end_point_gt_map)
+        try:
+            dist = np.linalg.norm(rw_point - end_point_gt_map)
+        except:
+            dist = np.linalg.norm(rw_point - end_point_gt_map.cpu().detach().numpy())
 
         if dist < closest_gp_dist:
             closest_gp_dist = dist

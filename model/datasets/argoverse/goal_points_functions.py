@@ -385,23 +385,22 @@ def plot_fepoints(img, filename, seq_px_x, seq_px_y, last_obs_px, obs_origin,
         else:
             plt.scatter(goals_px_x, goals_px_y, color="purple", marker="8", s=10) # Goal points
 
-    plt.imshow(img_aux)
-
     if radius:
       circ_car = plt.Circle((last_obs_px[0], last_obs_px[1]), radius, color="purple", fill=False)
       ax.add_patch(circ_car)
 
+    if change_bg:
+        img_aux = change_bg_color(img)
+
+    plt.imshow(img_aux)
     plt.axis("off")
+    
+    if save_fig:
+        plt.savefig(filename, bbox_inches='tight', facecolor=fig.get_facecolor(), 
+                    edgecolor='none', pad_inches=0)
 
     if show:
         plt.title(filename) 
         plt.show()
-
-    if change_bg:
-        img_aux = change_bg_color(img)
-
-    if save_fig:
-        plt.savefig(filename, bbox_inches='tight', facecolor=fig.get_facecolor(), 
-                    edgecolor='none', pad_inches=0)
 
     plt.close('all')

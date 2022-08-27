@@ -37,7 +37,7 @@ hyperparameters:
                                      # (around target agent) and apply convolutions
                                      # to model velocity and accelerations
 
-    num_modes: 1 # Unimodality
+    num_modes: 6 # Multimodality
     obs_origin: 20 # This frame will be the origin, tipically the first observation (1) or last observation 
                    # (obs_len) of the AGENT (object to be predicted in Argoverse 1.0). Note that in the code
                    # it will be 0 and 19 respectively
@@ -56,7 +56,7 @@ hyperparameters:
     checkpoint_train_percentage: 0.1 # 0.2 # (0 - 1)
     num_samples_check: 5000 # Check a maximum of num_samples_check in the check_accuracy function
 
-    loss_type_g: "mse_w" # (mse|mse_w), nll, (mse|mse_w)+nll, (mse|mse_w)+fa 
+    loss_type_g: "mse_w+nll" # (mse|mse_w), nll, (mse|mse_w)+nll, (mse|mse_w)+fa 
     loss_ade_weight: 1 
     loss_fde_weight: 3.0
     loss_nll_weight: 1.25
@@ -70,15 +70,15 @@ hyperparameters:
     clipping_threshold_g: 1.1
     
     save_root_dir: "save/argoverse"
-    exp_name: "apply_convolutions" # If no specific exp_name is used, fill with current day and hour
+    exp_name: # If no specific exp_name is used, fill with current day and hour
     output_dir: # To be filled in the code (save_root_dir/model_name/split_percentage/exp)
     checkpoint_start_from:
-    exp_description: "Apply convolutions"
+    exp_description: "Without dropout and gaussian noise in data augmentation"
     tensorboard_active: True
 
 # Model
 
 model:
-    name: "sophie"
+    name: "sophie_mm"
 
 
