@@ -68,7 +68,7 @@ ARGOVERSE_NUM_MODES = 6
 
 dist_around = 40
 dist_rasterized_map = [-dist_around, dist_around, -dist_around, dist_around]
-GENERATE_QUALITATIVE_RESULTS = False
+GENERATE_QUALITATIVE_RESULTS = True
 COMPUTE_METRICS = True
 
 def generate_csv(results_path,ade_list,fde_list,num_seq_list,traj_kind_list,sort=False):
@@ -174,7 +174,7 @@ def evaluate(loader, generator, config, split, current_cuda, pred_len, results_p
 
             # Get predictions
 
-            if config.hyperparameters.num_modes == 1: # The model is unimodal
+            if config.hyperparameters.num_modes == 1: # The model is unimodal # TODO: -> conf here is 1/6
 
                 pred_traj_fake_rel_list = []
                 pred_traj_fake_list = []
@@ -252,11 +252,17 @@ def evaluate(loader, generator, config, split, current_cuda, pred_len, results_p
 
                 pred_traj_fake_rel_aux = pred_traj_fake_rel.squeeze(0).contiguous().view(-1, ARGOVERSE_NUM_MODES, 2) # pred_len x num_modes x data_dim
 
-                plot_functions.plot_trajectories(filename,results_path,curr_traj_rel,curr_first_obs,
+                plot_functions.plot_trajectories_old(filename,results_path,curr_traj_rel,curr_first_obs,
                                                  curr_map_origin,curr_object_class_id_list,dist_rasterized_map,
                                                  rot_angle=-1,obs_len=obs_traj.shape[0],
                                                  smoothen=False,save=True,pred_trajectories_rel=pred_traj_fake_rel_aux,
                                                  ade_metric=ade_min,fde_metric=fde_min)
+
+                # plot_functions.plot_trajectories(filename,results_path,curr_traj_rel,curr_first_obs,
+                #                                  curr_map_origin,curr_object_class_id_list,dist_rasterized_map,
+                #                                  rot_angle=-1,obs_len=obs_traj.shape[0],
+                #                                  smoothen=False,save=True,pred_trajectories_rel=pred_traj_fake_rel_aux,
+                #                                  ade_metric=ade_min,fde_metric=fde_min)
 
             pred_traj_fake_global_aux = pred_traj_fake_global.squeeze(0).view(ARGOVERSE_NUM_MODES, PRED_LEN, 2)
             output_all[seq_id] = pred_traj_fake_global_aux.cpu().numpy()
@@ -381,5 +387,5 @@ if __name__ == '__main__':
 """
 python evaluate/argoverse/generate_results_rel-rel.py \
 --model_path "save/argoverse/sophie_mm/100.0_percent/exp-2022-08-26_06h/argoverse_motion_forecasting_dataset_0_with_model.pt" \
---device_gpu 0 --split "test"
+--device_gpu 0 --split "val"
 """
