@@ -270,16 +270,14 @@ def evaluate(loader, generator, config, split, current_cuda, pred_len, results_p
 
                 filename = f"data/datasets/argoverse/motion-forecasting/{split}/data_images/{seq_id}.png"
 
-                # pred_traj_fake_aux = pred_traj_fake.squeeze(0).contiguous().view(-1, ARGOVERSE_NUM_MODES, 2) # pred_len x num_modes x data_dim
-
                 # Custom plot
-
+                # TODO: Compute the optimal distance for each seq (only qualitative results)
                 plot_functions.plot_trajectories_custom(filename,
                                                         results_path,
                                                         curr_traj,
                                                         curr_map_origin,
                                                         curr_object_class_id_list,
-                                                        dist_rasterized_map,
+                                                        dist_rasterized_map, 
                                                         obs_len=obs_traj.shape[0],
                                                         smoothen=False,
                                                         save=True,
@@ -288,16 +286,18 @@ def evaluate(loader, generator, config, split, current_cuda, pred_len, results_p
                                                         fde_metric=fde_min, 
                                                         change_bg=True)
 
-                # Argoverse standard plot (at this moment, only visualize the agent)
+                # Argoverse standard plot
 
-                plot_functions.viz_predictions(seq_id,
+                plot_functions.viz_predictions_all(seq_id,
                                                results_path,
-                                               obs_traj[:,agent_idx,:].permute(1,0,2).cpu().numpy(),
-                                               pred_traj_fake.squeeze(0).cpu().numpy(),
-                                               pred_traj_gt[:,agent_idx,:].permute(1,0,2).cpu().numpy(),
-                                               np.array(city_name).reshape(-1),
+                                               obs_traj.permute(1,0,2).cpu().numpy(), # All obstacles
+                                               pred_traj_fake.squeeze(0).cpu().numpy(), # Only AGENT (MM prediction)
+                                               pred_traj_gt.permute(1,0,2).cpu().numpy(), # All obstacles
+                                               curr_object_class_id_list.cpu().numpy(),
+                                               city_name,
                                                curr_map_origin.cpu().numpy(),
                                                avm,
+                                               dist_rasterized_map=50,
                                                show=False,
                                                save=True,
                                                ade_metric=ade_min,
@@ -312,7 +312,7 @@ def evaluate(loader, generator, config, split, current_cuda, pred_len, results_p
             end = time.time()
             aux_time += (end-start)
             time_per_iteration = aux_time/(batch_index+1)
-            pdb.set_trace()
+
             print(f"Time per iteration: {time_per_iteration} s. \n \
                     Estimated time to finish ({files_remaining} files): {round(time_per_iteration*files_remaining/60)} min")
 

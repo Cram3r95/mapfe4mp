@@ -453,7 +453,7 @@ def viz_predictions(
                     city_names[i],
                     query_search_range_manhattan=2.5,
                 )
-
+        # Identify lanes using input data
         for j in range(obs_len):
             lane_ids = avm.get_lane_ids_in_xy_bbox(
                 input_[i, j, 0],
@@ -461,7 +461,9 @@ def viz_predictions(
                 city_names[i],
                 query_search_range_manhattan=query_search_range_manhattan_,
             )
+            # Paint lanes
             [avm.draw_lane(lane_id, city_names[i]) for lane_id in lane_ids]
+        # Identify lanes using prediction data
         for j in range(pred_len):
             lane_ids = avm.get_lane_ids_in_xy_bbox(
                 target[i, j, 0],
@@ -469,6 +471,7 @@ def viz_predictions(
                 city_names[i],
                 query_search_range_manhattan=query_search_range_manhattan_,
             )
+            # Paint lanes
             [avm.draw_lane(lane_id, city_names[i]) for lane_id in lane_ids]
 
         plt.axis("equal")
@@ -485,3 +488,212 @@ def viz_predictions(
 
         plt.cla()
         plt.close('all')
+
+def viz_predictions_all(
+        seq_id: int,
+        results_path: str,
+        input_abs: np.ndarray, # Around 0,0
+        output_abs: np.ndarray, # Around 0,0
+        target_abs: np.ndarray, # Around 0,0
+        object_class_list: np.ndarray,
+        city_name: str,
+        map_origin,
+        avm,
+        dist_rasterized_map: int = None,
+        centerlines: np.ndarray = np.array([]),
+        show: bool = False,
+        save: bool = False,
+        ade_metric: float = None,
+        fde_metric: float = None,
+) -> None:
+    """Visualize predicted trjectories.
+    Args:
+        OBS: Track = Sequence
+
+        input_ (numpy array): Input Trajectory with shape (num_tracks x obs_len x 2)
+        output (numpy array): Top-k predicted trajectories, each with shape (num_tracks x pred_len x 2)
+        target (numpy array): Ground Truth Trajectory with shape (num_tracks x pred_len x 2)
+        centerlines (numpy array of list of centerlines): Centerlines (Oracle/Top-k) for each trajectory
+        city_names (numpy array): city names for each trajectory
+        show (bool): if True, show
+    """
+
+    # https://www.computerhope.com/htmcolor.htm#color-codes
+    color_dict_obs = {"AGENT": "#ECA154", "OTHER": "#413839", "AV": "#0000A5"}
+    color_dict_pred_gt = {"AGENT": "#d33e4c", "OTHER": "#686A6C", "AV": "#157DEC"}
+
+    query_search_range_manhattan_ = 2.5
+
+    num_agents = input_abs.shape[0]
+    obs_len = input_abs.shape[1]
+    pred_len = target_abs.shape[1]
+
+    # Transform to global coordinates
+
+    input_ = input_abs + map_origin
+    output = output_abs + map_origin
+    target = target_abs + map_origin
+
+    fig = plt.figure(0, figsize=(8,8))
+
+    x_min = map_origin[0] - dist_rasterized_map
+    x_max = map_origin[0] + dist_rasterized_map
+    y_min = map_origin[1] - dist_rasterized_map
+    y_max = map_origin[1] + dist_rasterized_map
+
+    plt.axis("off")
+
+    if ade_metric and fde_metric:
+        font = {
+                'family': 'serif',
+                'color':  'blue',
+                'weight': 'normal',
+                'size': 16,
+               }
+        plt.title(f"minADE: {round(ade_metric,3)} ; minFDE: {round(fde_metric,3)}", \
+                  fontdict=font, backgroundcolor= 'silver')
+
+    for i in range(num_agents): # Sequences (.csv)
+        object_type = translate_object_type(int(object_class_list[i]))
+        print("obj: ", object_type)
+        # Observation
+        plt.plot(
+            input_[i, :, 0],
+            input_[i, :, 1],
+            color=color_dict_obs[object_type],
+            label="Observed",
+            alpha=1,
+            linewidth=3,
+            zorder=15,
+        )
+        # Last observation
+        plt.plot(
+            input_[i, -1, 0],
+            input_[i, -1, 1],
+            "o",
+            color=color_dict_obs[object_type],
+            label="Observed",
+            alpha=1,
+            linewidth=3,
+            zorder=15,
+            markersize=9,
+        )
+        # Groundtruth prediction
+        plt.plot(
+            target[i, :, 0],
+            target[i, :, 1],
+            color=color_dict_pred_gt[object_type],
+            label="Target",
+            alpha=1,
+            linewidth=3,
+            zorder=20,
+        )
+        # Groundtruth end-point
+        plt.plot(
+            target[i, -1, 0],
+            target[i, -1, 1],
+            "D",
+            color=color_dict_pred_gt[object_type],
+            label="Target",
+            alpha=1,
+            linewidth=3,
+            zorder=20,
+            markersize=9,
+        )
+        # Centerlines (Optional)
+        if len(centerlines) > 0:
+            for j in range(len(centerlines[i])):
+                plt.plot(
+                    centerlines[i][j][:, 0],
+                    centerlines[i][j][:, 1],
+                    "--",
+                    color="grey",
+                    alpha=1,
+                    linewidth=1,
+                    zorder=0,
+                )
+        if object_type == "AGENT":
+            # Multimodal prediction (only AGENT of interest)
+            for num_mode in range(output.shape[0]):
+                # Prediction
+                plt.plot(
+                    output[num_mode, :, 0],
+                    output[num_mode, :, 1],
+                    color="#007672",
+                    label="Predicted",
+                    alpha=1,
+                    linewidth=3,
+                    zorder=15,
+                )
+                # Prediction endpoint
+                plt.plot(
+                    output[num_mode, -1, 0],
+                    output[num_mode, -1, 1],
+                    "*",
+                    color="#007672",
+                    label="Predicted",
+                    alpha=1,
+                    linewidth=3,
+                    zorder=15,
+                    markersize=9,
+                )
+                # for k in range(pred_len):
+                #     lane_ids = avm.get_lane_ids_in_xy_bbox(
+                #         output[num_mode, k, 0],
+                #         output[num_mode, k, 1],
+                #         city_name,
+                #         query_search_range_manhattan=query_search_range_manhattan_,
+                #     )
+                #     # Paint lanes
+                #     [avm.draw_lane(lane_id, city_name) for lane_id in lane_ids]
+        # Identify lanes using input data
+        # for j in range(obs_len):
+        #     lane_ids = avm.get_lane_ids_in_xy_bbox(
+        #         input_[i, j, 0],
+        #         input_[i, j, 1],
+        #         city_name,
+        #         query_search_range_manhattan=query_search_range_manhattan_,
+        #     )
+        #     # Paint lanes
+        #     [avm.draw_lane(lane_id, city_name) for lane_id in lane_ids]
+        # Identify lanes using prediction data
+        # for j in range(pred_len):
+        #     lane_ids = avm.get_lane_ids_in_xy_bbox(
+        #         target[i, j, 0],
+        #         target[i, j, 1],
+        #         city_name,
+        #         query_search_range_manhattan=query_search_range_manhattan_,
+        #     )
+        #     # Paint lanes
+        #     [avm.draw_lane(lane_id, city_name) for lane_id in lane_ids]
+
+    seq_lane_props = avm.city_lane_centerlines_dict[city_name]
+
+    ### Get lane centerlines which lie within the range of trajectories
+
+    for lane_id, lane_props in seq_lane_props.items():
+
+        lane_cl = lane_props.centerline
+
+        if (np.min(lane_cl[:, 0]) < x_max
+            and np.min(lane_cl[:, 1]) < y_max
+            and np.max(lane_cl[:, 0]) > x_min
+            and np.max(lane_cl[:, 1]) > y_min):
+
+            avm.draw_lane(lane_id, city_name)
+
+    plt.xlim(x_min, x_max)
+    plt.ylim(y_min, y_max)
+    # plt.axis("equal")
+
+    handles, labels = plt.gca().get_legend_handles_labels()
+    by_label = OrderedDict(zip(labels, handles))
+    if show:
+        plt.show()
+
+    if save:
+        filename = os.path.join(results_path,"data_images_trajs",str(seq_id)+".png")
+        plt.savefig(filename, bbox_inches='tight', facecolor=fig.get_facecolor(), edgecolor='none', pad_inches=0)
+
+    plt.cla()
+    plt.close('all')
