@@ -318,8 +318,8 @@ def relative_to_abs(rel_traj, start_pos):
 def relative_to_abs_multimodal(rel_traj, start_pos):
     """
     Inputs:
-    - rel_traj: pytorch tensor of shape (b, num_modes, seq_len, 2)
-    - start_pos: pytorch tensor of shape (batch, 2)
+    - rel_traj: pytorch tensor of shape (batch_size, num_modes, seq_len, 2)
+    - start_pos: pytorch tensor of shape (batch_size, 2)
       N.B. If you only have the predictions, this must be the last observation.
            If you have the whole trajectory (obs+pred), this must be the first observation,
            since you must reconstruct the relative displacements from this position 
@@ -330,5 +330,7 @@ def relative_to_abs_multimodal(rel_traj, start_pos):
     displacement = torch.cumsum(rel_traj, dim=1) # Sum along the seq_len dimension!
     start_pos = torch.unsqueeze(torch.unsqueeze(start_pos, dim=1), dim=1) # batch, 1 (only one position) x 1 (same for all modes) x 2
     abs_traj = displacement + start_pos
+
+    # pdb.set_trace()
 
     return abs_traj

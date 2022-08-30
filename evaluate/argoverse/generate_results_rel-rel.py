@@ -46,6 +46,7 @@ from model.utils.checkpoint_data import get_generator
 from model.trainers.trainer_sophie_mm import cal_ade_multimodal, cal_fde_multimodal
 
 from argoverse.evaluation.competition_util import generate_forecasting_h5
+from argoverse.map_representation.map_api import ArgoverseMap
 
 #######################################
 
@@ -63,6 +64,9 @@ parser.add_argument("--split", required=True, default="val", type=str)
 # 
 # full_img_cv = cv2.add(img1_bg,img2_fg) -> full_img_cv = img_lanes
 
+avm = ArgoverseMap()
+
+OBS_ORIGIN = 20
 PRED_LEN = 30
 ARGOVERSE_NUM_MODES = 6
 
@@ -115,7 +119,8 @@ def evaluate(loader, generator, config, split, current_cuda, pred_len, results_p
     """
     assert loader.batch_size == 1
 
-    output_all = {}
+    output_predictions = {}
+    output_probabilities = {}
     ade_list = []
     fde_list = []
     traj_kind_list = []
@@ -167,6 +172,13 @@ def evaluate(loader, generator, config, split, current_cuda, pred_len, results_p
              loss_mask, seq_start_end, frames, object_cls, obj_id, map_origin, num_seq, norm) = batch
 
             seq_id = num_seq.cpu().item()
+            print(f"{seq_id}.csv")
+
+            # Get city for this sequence
+
+            path = os.path.join(data_folder,str(seq_id)+".csv")
+            data = dataset_utils.read_file(path) 
+            _, city_name = dataset_utils.get_origin_and_city(data,OBS_ORIGIN)
 
             ## Get AGENT (most interesting obstacle) id
 
@@ -193,6 +205,8 @@ def evaluate(loader, generator, config, split, current_cuda, pred_len, results_p
                 pred_traj_fake_rel = torch.stack(pred_traj_fake_rel_list, axis=0).view(-1, ARGOVERSE_NUM_MODES, 2) # pred_len x num_modes x data_dim
                 pred_traj_fake_global = torch.stack(pred_traj_fake_list + map_origin, axis=0).view(ARGOVERSE_NUM_MODES,-1,2) # num_modes x pred_len x data_dim
             
+                conf_array = np.ones([ARGOVERSE_NUM_MODES])/ARGOVERSE_NUM_MODES
+
             else: # The model is multimodal
                 assert config.hyperparameters.num_modes == ARGOVERSE_NUM_MODES
 
@@ -205,8 +219,12 @@ def evaluate(loader, generator, config, split, current_cuda, pred_len, results_p
                 pred_traj_fake = dataset_utils.relative_to_abs_multimodal(pred_traj_fake_rel, obs_traj[-1,agent_idx,:])
                 pred_traj_fake_global = pred_traj_fake + map_origin
 
+                conf_array = conf.cpu().numpy().reshape(-1)
+                
             # Hereafter, we have multimodality (either by iterating the same model K modes or returning K modes in the
             # same forward)
+
+            ade_min, fde_min = None, None
 
             if COMPUTE_METRICS and split != "test":
                 agent_pred_gt = pred_traj_gt[:,agent_idx,:] # pred_len (30) x 1 (agent) x data_dim (2) -> "Abs" coordinates (around 0,0)
@@ -238,40 +256,63 @@ def evaluate(loader, generator, config, split, current_cuda, pred_len, results_p
             ## (Optional) Plot results
 
             if GENERATE_QUALITATIVE_RESULTS and seq_id < 150:
+                # Custom plot
+
                 if split == "test":
                     curr_map_origin = map_origin[0]
-                    curr_traj_rel = obs_traj_rel
+                    curr_traj = obs_traj
                 else:
                     curr_map_origin = map_origin[0][0] # TODO: Generate again val and train data without [[]] in the map!
-                    curr_traj_rel = torch.cat((obs_traj_rel,
-                                               pred_traj_gt_rel),dim=0)
-                curr_first_obs = obs_traj[0,:,:] 
+                    curr_traj = torch.cat((obs_traj,
+                                               pred_traj_gt),dim=0)
+
                 curr_object_class_id_list = object_cls
 
                 filename = f"data/datasets/argoverse/motion-forecasting/{split}/data_images/{seq_id}.png"
 
-                pred_traj_fake_rel_aux = pred_traj_fake_rel.squeeze(0).contiguous().view(-1, ARGOVERSE_NUM_MODES, 2) # pred_len x num_modes x data_dim
+                # pred_traj_fake_aux = pred_traj_fake.squeeze(0).contiguous().view(-1, ARGOVERSE_NUM_MODES, 2) # pred_len x num_modes x data_dim
 
-                plot_functions.plot_trajectories_old(filename,results_path,curr_traj_rel,curr_first_obs,
-                                                 curr_map_origin,curr_object_class_id_list,dist_rasterized_map,
-                                                 rot_angle=-1,obs_len=obs_traj.shape[0],
-                                                 smoothen=False,save=True,pred_trajectories_rel=pred_traj_fake_rel_aux,
-                                                 ade_metric=ade_min,fde_metric=fde_min)
+                # Custom plot
 
-                # plot_functions.plot_trajectories(filename,results_path,curr_traj_rel,curr_first_obs,
-                #                                  curr_map_origin,curr_object_class_id_list,dist_rasterized_map,
-                #                                  rot_angle=-1,obs_len=obs_traj.shape[0],
-                #                                  smoothen=False,save=True,pred_trajectories_rel=pred_traj_fake_rel_aux,
-                #                                  ade_metric=ade_min,fde_metric=fde_min)
+                plot_functions.plot_trajectories_custom(filename,
+                                                        results_path,
+                                                        curr_traj,
+                                                        curr_map_origin,
+                                                        curr_object_class_id_list,
+                                                        dist_rasterized_map,
+                                                        obs_len=obs_traj.shape[0],
+                                                        smoothen=False,
+                                                        save=True,
+                                                        pred_trajectories=pred_traj_fake.squeeze(0).permute(1,0,2),
+                                                        ade_metric=ade_min,
+                                                        fde_metric=fde_min, 
+                                                        change_bg=True)
+
+                # Argoverse standard plot (at this moment, only visualize the agent)
+
+                plot_functions.viz_predictions(seq_id,
+                                               results_path,
+                                               obs_traj[:,agent_idx,:].permute(1,0,2).cpu().numpy(),
+                                               pred_traj_fake.squeeze(0).cpu().numpy(),
+                                               pred_traj_gt[:,agent_idx,:].permute(1,0,2).cpu().numpy(),
+                                               np.array(city_name).reshape(-1),
+                                               curr_map_origin.cpu().numpy(),
+                                               avm,
+                                               show=False,
+                                               save=True,
+                                               ade_metric=ade_min,
+                                               fde_metric=fde_min)
 
             pred_traj_fake_global_aux = pred_traj_fake_global.squeeze(0).view(ARGOVERSE_NUM_MODES, PRED_LEN, 2)
-            output_all[seq_id] = pred_traj_fake_global_aux.cpu().numpy()
+            output_predictions[seq_id] = pred_traj_fake_global_aux.cpu().numpy()
+            output_probabilities[seq_id] = conf_array
+
             file_list.remove(seq_id)
 
             end = time.time()
             aux_time += (end-start)
             time_per_iteration = aux_time/(batch_index+1)
-
+            pdb.set_trace()
             print(f"Time per iteration: {time_per_iteration} s. \n \
                     Estimated time to finish ({files_remaining} files): {round(time_per_iteration*files_remaining/60)} min")
 
@@ -282,7 +323,7 @@ def evaluate(loader, generator, config, split, current_cuda, pred_len, results_p
         except:
             print("All files have been processed")
 
-    return output_all, ade_list, fde_list, traj_kind_list, num_seq_list   
+    return output_predictions, output_probabilities, ade_list, fde_list, traj_kind_list, num_seq_list   
 
 def main(args):
     """
@@ -359,7 +400,7 @@ def main(args):
         os.makedirs(results_path) # os.makedirs create intermediate directories. os.mkdir only the last one
 
     print(f"Evaluate model in {config.dataset.split} split")
-    output_all, ade_list, fde_list, traj_kind_list, num_seq_list = \
+    output_predictions, output_probabilities, ade_list, fde_list, traj_kind_list, num_seq_list = \
         evaluate(split_loader, generator, config, 
                  config.dataset.split, current_cuda, config.hyperparameters.pred_len, results_path)
 
@@ -370,7 +411,7 @@ def main(args):
     if config.dataset.split == "test":
         # Generate h5 file for Argoverse Motion-Forecasting competition (only test split)   
 
-        generate_forecasting_h5(output_all, results_path)
+        generate_forecasting_h5(output_predictions, results_path, probabilities=output_probabilities)
 
     elif COMPUTE_METRICS: # val or train
 
@@ -388,4 +429,10 @@ if __name__ == '__main__':
 python evaluate/argoverse/generate_results_rel-rel.py \
 --model_path "save/argoverse/sophie_mm/100.0_percent/exp-2022-08-26_06h/argoverse_motion_forecasting_dataset_0_with_model.pt" \
 --device_gpu 0 --split "val"
+"""
+
+"""
+python evaluate/argoverse/generate_results_rel-rel.py \
+--model_path "save/argoverse/sophie_mm/100.0_percent/exp-2022-08-26_06h/argoverse_motion_forecasting_dataset_0_with_model.pt" \
+--device_gpu 0 --split "test"
 """

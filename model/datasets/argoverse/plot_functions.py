@@ -13,7 +13,7 @@ Created on Sun Mar 06 23:47:19 2022
 import pdb
 import os
 import time
-from collections import defaultdict
+from collections import defaultdict, OrderedDict
 from typing import Dict
 
 # DL & Math imports
@@ -42,7 +42,7 @@ COLORS_MM = ["darkviolet", "orange", "chartreuse"]
 MARKER_DICT = {"AGENT":  (("b",6,"o",11,1.0),("c",6,"*",11,0.5),("darkviolet",6,"*",11,1.0)),
                "OTHER":  (("g",4,"o",10,1.0),("g",4,"*",10,0.5)),
                "AV":     (("r",4,"o",10,1.0),("m",4,"*",10,1.0))}
-scatter_size = 10  
+scatter_size = 2  
 
 ZORDER = {"AGENT": 3, "OTHER": 3, "AV": 3}
 
@@ -82,9 +82,9 @@ def change_bg_color(img):
 
 # Main plot function
 
-def plot_trajectories(filename,results_path,traj_rel,first_obs,map_origin,object_class_id_list,dist_rasterized_map,
+def plot_trajectories_custom(filename,results_path,obs_traj,map_origin,object_class_id_list,dist_rasterized_map,
                       rot_angle=-1,obs_len=20,smoothen=False,save=False,data_aug=False,
-                      pred_trajectories_rel=torch.zeros((0)),ade_metric=None,fde_metric=None):
+                      pred_trajectories=torch.zeros((0)),ade_metric=None,fde_metric=None,change_bg=False):
     """
     N.B. All inputs must be torch tensors in CPU, not GPU (in order to plot the trajectories)!
 
@@ -94,20 +94,20 @@ def plot_trajectories(filename,results_path,traj_rel,first_obs,map_origin,object
     must distinguish between observation (color with a marker) and prediction (same color with another marker)
     """
 
-    mode = "k1" # unimodal
+    mode = "k1" # unimodal (by default)
 
-    seq_len = traj_rel.shape[0]
+    seq_len = obs_traj.shape[0]
     if seq_len == obs_len:
         plot_len = 1
     elif seq_len > obs_len:
         plot_len = 2
 
-    if len(pred_trajectories_rel.shape) > 1: # != torch.zeros((0))
-        if pred_trajectories_rel.shape[1] == 1: # Output from our model (pred_len x 1 x 2 -> Unimodal)
+    if len(pred_trajectories.shape) > 1: # != torch.zeros((0))
+        if pred_trajectories.shape[1] == 1: # Output from our model (pred_len x 1 x 2 -> Unimodal)
             plot_len = 3
         else: # Output from our model (pred_len x N x 2 -> Multimodal)
-            plot_len = plot_len + pred_trajectories_rel.shape[1] 
-            mode = f"k{pred_trajectories_rel.shape[1]}"
+            plot_len = plot_len + pred_trajectories.shape[1] 
+            mode = f"k{pred_trajectories.shape[1]}"
 
     xcenter, ycenter = map_origin[0].item(), map_origin[1].item()
 
@@ -130,7 +130,7 @@ def plot_trajectories(filename,results_path,traj_rel,first_obs,map_origin,object
                 'weight': 'normal',
                 'size': 16,
                }
-        plt.title(f"ADE: {round(ade_metric,3)} ; FDE: {round(fde_metric,3)}", \
+        plt.title(f"minADE: {round(ade_metric,3)} ; minFDE: {round(fde_metric,3)}", \
                   fontdict=font, backgroundcolor= 'silver')
     t0 = time.time()
 
@@ -139,32 +139,27 @@ def plot_trajectories(filename,results_path,traj_rel,first_obs,map_origin,object
     seq_list = []
 
     for i in range(len(object_class_id_list)):
-        traj_rel_ = traj_rel[:,i,:].view(-1,2).unsqueeze(dim=1) # obs_len/seq_len x 1 (emulating batch) x 2 (rel-rel)
-        curr_first_obs = first_obs[i,:].unsqueeze(dim=0) # 1 x 2
-
-        abs_traj_ = dataset_utils.relative_to_abs(traj_rel_, curr_first_obs).view(-1,2) # "abs" (around 0)
+        abs_traj_ = obs_traj[:,i,:].view(-1,2).unsqueeze(dim=1) # obs_len/seq_len x 1 (emulating batch) x 2 (rel-rel)
         obj_id = object_class_id_list[i]
         seq_list.append([obj_id,abs_traj_])
 
         if obj_id == 1: # Agent
             if seq_len == obs_len:
-                obs_rel_ = traj_rel_
+                obs_ = abs_traj_
             elif seq_len > obs_len:
-                obs_rel_ = traj_rel_[:obs_len,:,:]
+                obs_ = abs_traj_[:obs_len,:,:]
 
-            if len(pred_trajectories_rel.shape) > 1: # != torch.zeros((0))
-                if pred_trajectories_rel.shape[1] == 1: # Output from our model (pred_len x 1 x 2 -> Unimodal
-                    agent_traj_with_pred_rel = torch.cat((obs_rel_,pred_trajectories_rel),dim=0)
-                    agent_traj_with_pred_abs = dataset_utils.relative_to_abs(agent_traj_with_pred_rel, curr_first_obs).view(-1,2)
-                    agent_pred_abs = agent_traj_with_pred_abs[obs_len:,:]
+            if len(pred_trajectories.shape) > 1: # != torch.zeros((0))
+                if pred_trajectories.shape[1] == 1: # Output from our model (pred_len x 1 x 2 -> Unimodal
+                    agent_traj_with_pred = torch.cat((obs_,pred_trajectories),dim=0)
+                    agent_pred_abs = agent_traj_with_pred[obs_len:,:]
                 else: # Output from our model (pred_len x N x 2 -> Multimodal)
                     agent_pred_abs = []
 
-                    for t in range(pred_trajectories_rel.shape[1]): # num_modes
-                        pred_traj_rel_ = pred_trajectories_rel[:,t,:].unsqueeze(dim=1) # 30 x 1 x 2 (each mode)
-                        agent_traj_with_pred_rel = torch.cat((obs_rel_,pred_traj_rel_),dim=0)
-                        agent_traj_with_pred_abs = dataset_utils.relative_to_abs(agent_traj_with_pred_rel, curr_first_obs).view(-1,2)
-                        agent_pred_abs_ = agent_traj_with_pred_abs[obs_len:,:]
+                    for t in range(pred_trajectories.shape[1]): # num_modes
+                        pred_traj_ = pred_trajectories[:,t,:].unsqueeze(dim=1) # 30 x 1 x 2 (each mode)
+                        agent_traj_with_pred = torch.cat((obs_,pred_traj_),dim=0)
+                        agent_pred_abs_ = agent_traj_with_pred[obs_len:,:]
 
                         agent_pred_abs.append(agent_pred_abs_)
 
@@ -175,10 +170,10 @@ def plot_trajectories(filename,results_path,traj_rel,first_obs,map_origin,object
         seq_abs = seq_id[1]
 
         if seq_len > obs_len:
-            obs_x, obs_y = seq_abs[:obs_len,0] + xcenter, seq_abs[:obs_len,1] + ycenter
-            pred_gt_x, pred_gt_y = seq_abs[obs_len:,0] + xcenter, seq_abs[obs_len:,1] + ycenter
+            obs_x, obs_y = seq_abs[:obs_len,0,0] + xcenter, seq_abs[:obs_len,0,1] + ycenter
+            pred_gt_x, pred_gt_y = seq_abs[obs_len:,0,0] + xcenter, seq_abs[obs_len:,0,1] + ycenter
         elif seq_len == obs_len:
-            obs_x, obs_y = seq_abs[:,0] + xcenter, seq_abs[:,1] + ycenter
+            obs_x, obs_y = seq_abs[:,0,0] + xcenter, seq_abs[:,0,1] + ycenter
 
         i_mm = 0
 
@@ -192,11 +187,11 @@ def plot_trajectories(filename,results_path,traj_rel,first_obs,map_origin,object
                     cor_x, cor_y = pred_gt_x, pred_gt_y
                 elif i >= 2 and object_type == "AGENT": # pred (model) At this moment, only target AGENT
                     marker_type_index = 2
-                    if pred_trajectories_rel.shape[1] == 1: # Unimodal
-                        cor_x, cor_y = agent_pred_abs[:,0] + xcenter, agent_pred_abs[:,1] + ycenter
+                    if pred_trajectories.shape[1] == 1: # Unimodal
+                        cor_x, cor_y = agent_pred_abs[:,0,0] + xcenter, agent_pred_abs[:,0,1] + ycenter
                     else: # Multimodal
                         agent_pred_abs_ = agent_pred_abs[i_mm]
-                        cor_x, cor_y = agent_pred_abs_[:,0] + xcenter, agent_pred_abs_[:,1] + ycenter
+                        cor_x, cor_y = agent_pred_abs_[:,0,0] + xcenter, agent_pred_abs_[:,0,1] + ycenter
                         i_mm += 1
                 else:
                     continue
@@ -282,7 +277,7 @@ def plot_trajectories(filename,results_path,traj_rel,first_obs,map_origin,object
         # based on a [40,-40,40,-40] top view image. Then, we can merge the information
         full_img_cv = cv2.add(img1_bg,img2_fg)
     else: # TODO: Preprocess here the map? That would be too slow ...
-        full_img_cv = img_trajectories
+        full_img_cv = img_trajectories 
 
     if save:
         curr_seq = filename.split('/')[-1].split('.')[0]
@@ -295,12 +290,19 @@ def plot_trajectories(filename,results_path,traj_rel,first_obs,map_origin,object
  
         if data_aug:
             filename2 = output_dir + curr_seq + "_" + str(rot_angle) + "_aug" + ".png"
-        elif len(pred_trajectories_rel) != 1:
+        elif len(agent_traj_with_pred) != 1:
             filename2 = output_dir + curr_seq + f"_qualitative_{mode}" + ".png"
         else:
             filename2 = output_dir + curr_seq + "_original" + ".png"
 
         cv2.imwrite(filename2,full_img_cv)
+
+        if change_bg:
+            full_img_cv_inverted = change_bg_color(full_img_cv)
+
+            aux = filename2.split('.png')[0]
+            filename2_inv = aux+"_inverted.png"
+            cv2.imwrite(filename2_inv,full_img_cv_inverted)
 
     resized_full_img_cv = cv2.resize(full_img_cv,(224,224))
     norm_resized_full_img_cv = resized_full_img_cv / 255.0
@@ -309,3 +311,177 @@ def plot_trajectories(filename,results_path,traj_rel,first_obs,map_origin,object
     plt.close('all')
 
     return norm_resized_full_img_cv
+
+## Plot standard Argoverse
+
+def viz_predictions(
+        seq_id: int,
+        results_path: str,
+        input_abs: np.ndarray, # Around 0,0
+        output_abs: np.ndarray, # Around 0,0
+        target_abs: np.ndarray, # Around 0,0
+        city_names: np.ndarray,
+        map_origin,
+        avm,
+        centerlines: np.ndarray = np.array([]),
+        show: bool = False,
+        save: bool = False,
+        ade_metric: float = None,
+        fde_metric: float = None,
+) -> None:
+    """Visualize predicted trjectories.
+    Args:
+        OBS: Track = Sequence
+
+        input_ (numpy array): Input Trajectory with shape (num_tracks x obs_len x 2)
+        output (numpy array): Top-k predicted trajectories, each with shape (num_tracks x pred_len x 2)
+        target (numpy array): Ground Truth Trajectory with shape (num_tracks x pred_len x 2)
+        centerlines (numpy array of list of centerlines): Centerlines (Oracle/Top-k) for each trajectory
+        city_names (numpy array): city names for each trajectory
+        show (bool): if True, show
+    """
+
+    query_search_range_manhattan_ = 5
+
+    num_tracks = input_abs.shape[0]
+    obs_len = input_abs.shape[1]
+    pred_len = target_abs.shape[1]
+
+    # Transform to global coordinates
+
+    input_ = input_abs + map_origin
+    output = output_abs + map_origin
+    target = target_abs + map_origin
+
+    fig = plt.figure(0, figsize=(8, 7))
+
+    if ade_metric and fde_metric:
+        font = {
+                'family': 'serif',
+                'color':  'blue',
+                'weight': 'normal',
+                'size': 16,
+               }
+        plt.title(f"minADE: {round(ade_metric,3)} ; minFDE: {round(fde_metric,3)}", \
+                  fontdict=font, backgroundcolor= 'silver')
+
+    for i in range(num_tracks): # Sequences (.csv)
+        # Observation
+        plt.plot(
+            input_[i, :, 0],
+            input_[i, :, 1],
+            color="#ECA154",
+            label="Observed",
+            alpha=1,
+            linewidth=3,
+            zorder=15,
+        )
+        # Last observation
+        plt.plot(
+            input_[i, -1, 0],
+            input_[i, -1, 1],
+            "o",
+            color="#ECA154",
+            label="Observed",
+            alpha=1,
+            linewidth=3,
+            zorder=15,
+            markersize=9,
+        )
+        # Groundtruth prediction
+        plt.plot(
+            target[i, :, 0],
+            target[i, :, 1],
+            color="#d33e4c",
+            label="Target",
+            alpha=1,
+            linewidth=3,
+            zorder=20,
+        )
+        # Groundtruth end-point
+        plt.plot(
+            target[i, -1, 0],
+            target[i, -1, 1],
+            "o",
+            color="#d33e4c",
+            label="Target",
+            alpha=1,
+            linewidth=3,
+            zorder=20,
+            markersize=9,
+        )
+        # Centerlines (Optional)
+        if len(centerlines) > 0:
+            for j in range(len(centerlines[i])):
+                plt.plot(
+                    centerlines[i][j][:, 0],
+                    centerlines[i][j][:, 1],
+                    "--",
+                    color="grey",
+                    alpha=1,
+                    linewidth=1,
+                    zorder=0,
+                )
+        # Multimodal prediction
+        for num_mode in range(output.shape[0]):
+            # Prediction
+            plt.plot(
+                output[num_mode, :, 0],
+                output[num_mode, :, 1],
+                color="#007672",
+                label="Predicted",
+                alpha=1,
+                linewidth=3,
+                zorder=15,
+            )
+            # Prediction endpoint
+            plt.plot(
+                output[num_mode, -1, 0],
+                output[num_mode, -1, 1],
+                "o",
+                color="#007672",
+                label="Predicted",
+                alpha=1,
+                linewidth=3,
+                zorder=15,
+                markersize=9,
+            )
+            for k in range(pred_len):
+                lane_ids = avm.get_lane_ids_in_xy_bbox(
+                    output[num_mode, k, 0],
+                    output[num_mode, k, 1],
+                    city_names[i],
+                    query_search_range_manhattan=2.5,
+                )
+
+        for j in range(obs_len):
+            lane_ids = avm.get_lane_ids_in_xy_bbox(
+                input_[i, j, 0],
+                input_[i, j, 1],
+                city_names[i],
+                query_search_range_manhattan=query_search_range_manhattan_,
+            )
+            [avm.draw_lane(lane_id, city_names[i]) for lane_id in lane_ids]
+        for j in range(pred_len):
+            lane_ids = avm.get_lane_ids_in_xy_bbox(
+                target[i, j, 0],
+                target[i, j, 1],
+                city_names[i],
+                query_search_range_manhattan=query_search_range_manhattan_,
+            )
+            [avm.draw_lane(lane_id, city_names[i]) for lane_id in lane_ids]
+
+        plt.axis("equal")
+        plt.xticks([])
+        plt.yticks([])
+        handles, labels = plt.gca().get_legend_handles_labels()
+        by_label = OrderedDict(zip(labels, handles))
+        if show:
+            plt.show()
+
+        if save:
+            filename = os.path.join(results_path,"data_images_trajs",str(seq_id)+".png")
+            plt.savefig(filename, bbox_inches='tight', facecolor=fig.get_facecolor(), edgecolor='none', pad_inches=0)
+
+        plt.cla()
+        plt.close('all')
