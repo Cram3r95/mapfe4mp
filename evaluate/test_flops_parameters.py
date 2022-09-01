@@ -15,6 +15,7 @@ import time
 import pdb
 import yaml
 import os
+import git
 from prodict import Prodict
 
 # DL & Math
@@ -26,12 +27,13 @@ from fvcore.nn import FlopCountAnalysis, flop_count_table
 
 # Custom imports
 
-BASE_DIR = "/home/denso/carlos_vsr_workspace/mapfe4mp"
+repo = git.Repo('.', search_parent_directories=True)
+BASE_DIR = repo.working_tree_dir
 sys.path.append(BASE_DIR)
 
 import model.utils.utils as utils
 
-from model.models.social_lstm_mhsa_old import TrajectoryGenerator as TG_So_LSTM_MHSA
+from model.models.social_lstm_mhsa import TrajectoryGenerator as TG_So_LSTM_MHSA
 from model.models.social_set_transformer_mm import TrajectoryGenerator as TG_So_SET_Trans_MM
 
 #######################################

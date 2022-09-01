@@ -26,37 +26,36 @@ class MLP(nn.Module):
     def forward(self, data_input):
         return self.module(data_input)
 
+class Linear(nn.Module):
+    def __init__(self, n_in, n_out, norm='GN', ng=32, act=True):
+        super(Linear, self).__init__()
+        assert(norm in ['GN', 'BN', 'SyncBN'])
 
-class TrajConf(nn.Module):
-    """
-    """
-    def __init__(self, emb_dim=32, modes=3, pred_len=30):
-        super().__init__()
+        self.linear = nn.Linear(n_in, n_out, bias=False)
         
-        self.emb_dim=emb_dim
-        self.modes = modes # 3
-        self.pred_len = pred_len # 30
-        self.preds = self.modes*2*self.pred_len # 2 points * 30 preds = 60 * numbers of trajs = 180 + 3 (conf)
+        if norm == 'GN':
+            self.norm = nn.GroupNorm(gcd(ng, n_out), n_out)
+        elif norm == 'BN':
+            self.norm = nn.BatchNorm1d(n_out)
+        else:
+            exit('SyncBN has not been added!')
+        
+        self.relu = nn.ReLU(inplace=True)
+        self.act = act
 
-        self.logit = nn.Linear(
-            self.emb_dim, out_features=self.preds + self.modes
-        )
+        self.apply(self._init_weights)
+
+    def _init_weights(self, module):
+        nn.init.kaiming_normal_(module.weight)
 
     def forward(self, x):
-        """
-            x: (?)
-        """
-        x = self.logit(x)
-        b, _ = x.shape
-        preds, conf = torch.split(x, self.preds, dim=1)
-        # pred = pred.view(10, 3, 30, 2)
-        preds = preds.view(b, self.modes, self.pred_len, 2)
-        conf = torch.softmax(conf, dim=1)
-        return preds, conf
+        out = self.linear(x)
+        out = self.norm(out)
+        if self.act:
+            out = self.relu(out)
+        return out
 
 class LinearRes(nn.Module):
-    """
-    """
     def __init__(self, n_in, n_out, norm='GN', ng=32):
         super(LinearRes, self).__init__()
         assert(norm in ['GN', 'BN', 'SyncBN'])
@@ -102,4 +101,3 @@ class LinearRes(nn.Module):
 
         out = self.relu(out)
         return out
-        

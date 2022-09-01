@@ -73,7 +73,10 @@ hyperparameters:
     exp_name: # If no specific exp_name is used, fill with current day and hour
     output_dir: # To be filled in the code (save_root_dir/model_name/split_percentage/exp)
     checkpoint_start_from:
-    exp_description: "Without dropout and gaussian noise in data augmentation"
+    exp_description: "Test new MLP with decremental dimensions. 
+                      Add conv to model velocity and acceleration -> spatial_embedding -> decoder.
+                      Implement multimodal decoder using a regression branch and a classification (confidence) branch.
+                      Encoder bidirectional and num_layers = 2"
     tensorboard_active: True
 
 # Model

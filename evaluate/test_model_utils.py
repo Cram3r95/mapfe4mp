@@ -12,6 +12,7 @@ Created on Wed May 18 17:59:06 2022
 
 import sys
 import time
+import git
 
 # DL & Math
 
@@ -22,11 +23,14 @@ from pthflops import count_ops
 
 # Custom imports
 
-BASE_DIR = "/home/denso/carlos_vsr_workspace/efficient-goals-motion-prediction"
+repo = git.Repo('.', search_parent_directories=True)
+BASE_DIR = repo.working_tree_dir
 sys.path.append(BASE_DIR)
 
 from model.models.social_lstm_mhsa_old import TrajectoryGenerator
 from model.utils.utils import load_weights
+
+#######################################
 
 def test_load_weights():
     m = TrajectoryGenerator()

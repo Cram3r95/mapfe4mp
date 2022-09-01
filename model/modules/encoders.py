@@ -20,8 +20,6 @@ import torch.nn.functional as F
 
 # Custom imports
 
-from model.modules.layers import MLP
-
 #######################################
 
 class EncoderLSTM(nn.Module):

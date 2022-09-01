@@ -5,7 +5,7 @@
 
 """
 Created on Fri Feb 25 12:19:38 2022
-@author: Carlos Gómez-Huélamo and Miguel Eduardo Ortiz Huamaní
+@author: Carlos Gómez-Huélamo
 """
 
 # General purpose imports
@@ -61,12 +61,12 @@ def get_lr(optimizer):
     for param_group in optimizer.param_groups:
         return param_group['lr']
 
-def init_weights(m):
+def init_weights(module):
     """
     """
-    classname = m.__class__.__name__
-    if classname.find('Linear') != -1:
-        nn.init.kaiming_normal_(m.weight)
+    classname = module.__class__.__name__
+    if classname.find('Linear') != -1 and classname != "LinearRes":
+        nn.init.kaiming_normal_(module.weight)
 
 def get_dtypes(use_gpu):
     """
