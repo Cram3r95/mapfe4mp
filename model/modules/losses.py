@@ -182,7 +182,6 @@ def pytorch_neg_multi_log_likelihood_batch(
     else:
         return error
 
-
 def pytorch_neg_multi_log_likelihood_single(
     gt: Tensor, pred: Tensor, avails: Tensor
 ) -> Tensor:

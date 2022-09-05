@@ -555,7 +555,7 @@ def viz_predictions_all(
 
     for i in range(num_agents): # Sequences (.csv)
         object_type = translate_object_type(int(object_class_list[i]))
-        print("obj: ", object_type)
+
         # Observation
         plt.plot(
             input_[i, :, 0],
@@ -692,6 +692,11 @@ def viz_predictions_all(
         plt.show()
 
     if save:
+        output_dir = os.path.join(results_path,"data_images_trajs/")
+        if not os.path.exists(output_dir):
+            print("Create trajs folder: ", output_dir)
+            os.makedirs(output_dir) # makedirs creates intermediate folders
+
         filename = os.path.join(results_path,"data_images_trajs",str(seq_id)+".png")
         plt.savefig(filename, bbox_inches='tight', facecolor=fig.get_facecolor(), edgecolor='none', pad_inches=0)
 

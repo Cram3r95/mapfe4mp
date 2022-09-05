@@ -21,8 +21,10 @@ import pdb
 import time
 import glob
 import csv
+import pandas as pd
 import git
 
+from datetime import datetime
 from pathlib import Path
 from prodict import Prodict
 
@@ -66,13 +68,20 @@ parser.add_argument("--split", required=True, default="val", type=str)
 
 avm = ArgoverseMap()
 
+LIMIT_FILES = -1 # From 1 to num_files.
+                 # -1 by default to analyze all files of the specified split percentage
+
 OBS_ORIGIN = 20
 PRED_LEN = 30
 ARGOVERSE_NUM_MODES = 6
 
 dist_around = 40
 dist_rasterized_map = [-dist_around, dist_around, -dist_around, dist_around]
+
 GENERATE_QUALITATIVE_RESULTS = True
+PLOT_WORST_SCENES = True
+LIMIT_QUALITATIVE_RESULTS = 150
+
 COMPUTE_METRICS = True
 
 def generate_csv(results_path,ade_list,fde_list,num_seq_list,traj_kind_list,sort=False):
@@ -80,9 +89,14 @@ def generate_csv(results_path,ade_list,fde_list,num_seq_list,traj_kind_list,sort
     If sort = True, sort by ADE
     """
 
+    now = datetime.now()
+    exp_name = now.strftime("exp-%Y-%m-%d_%Hh")
+
     if sort:
+        # aux = now.strftime("metrics_sorted_ade-%Y-%m-%d_%Hh.csv")
         results_path = os.path.join(results_path,"metrics_sorted_ade.csv")  
     else:
+        # aux = now.strftime("metrics-%Y-%m-%d_%Hh.csv")
         results_path = os.path.join(results_path,"metrics.csv")  
 
     mean_ade = round(sum(ade_list) / (len(ade_list)),3)
@@ -114,7 +128,18 @@ def generate_csv(results_path,ade_list,fde_list,num_seq_list,traj_kind_list,sort
         csv_writer.writerow(['-','-','-','-','-'])
         csv_writer.writerow(['-','-','Mean',mean_ade,mean_fde])
 
-def evaluate(loader, generator, config, split, current_cuda, pred_len, results_path):
+def get_worst_scenes(csv_file_sorted):
+    """
+    """
+
+    df = pd.read_csv(csv_file_sorted,sep=" ")
+    seq_csvs_column = df["Index"][-LIMIT_QUALITATIVE_RESULTS-2:-2] # Index from 1 to num_files, not seq.csv!
+    worst_scenes = np.array(seq_csvs_column).tolist()
+    worst_scenes = list(map(int,worst_scenes))
+
+    return worst_scenes
+
+def evaluate(loader, generator, config, split, current_cuda, pred_len, results_path, worst_scenes=None):
     """
     """
     assert loader.batch_size == 1
@@ -125,41 +150,35 @@ def evaluate(loader, generator, config, split, current_cuda, pred_len, results_p
     fde_list = []
     traj_kind_list = []
     num_seq_list = []
-
-    ade_, fde_ = None, None
+    plot_scene = 0
 
     data_folder = BASE_DIR+f"/data/datasets/argoverse/motion-forecasting/{split}/data/"
     file_list = glob.glob(os.path.join(data_folder, "*.csv"))
     file_list = [int(name.split("/")[-1].split(".")[0]) for name in file_list]
-    print("Data folder: ", data_folder)
     num_files = len(file_list)
+
+    print("Data folder: ", data_folder)
     print("Num files ", num_files)
-
-    # Very hard (validation) (batch_index/csv): 4504/4723, 
-
-    # my_seqs = [21866,36005,29100,27919,40897,32509] # Write here the index (assuming batch_size = 1), not the sequence.csv
-                                                      # See index and metrics in results/your_model/your_split/metrics.csv
 
     time_per_iteration = float(0)
     aux_time = float(0)
-    limit = -1 # -1 by default to analyze all files of the specified split percentage
 
     with torch.no_grad(): # During inference (regardless the split), gradient calculation is not required
         for batch_index, batch in enumerate(loader):
-            if limit != -1: 
-                if batch_index+1 > limit:
+            if LIMIT_FILES != -1: 
+                if batch_index+1 > LIMIT_FILES:
                     break
 
-                files_remaining = limit - (batch_index+1)
-                print(f"Evaluating batch {batch_index+1}/{limit}")
+                files_remaining = LIMIT_FILES - (batch_index+1)
+                print(f"Evaluating batch {batch_index+1}/{LIMIT_FILES}")
             else: 
                 files_remaining = num_files - (batch_index+1)
                 print(f"Evaluating batch {batch_index+1}/{len(loader)}")
 
-            if 'my_seqs' in locals(): # Analyze some specific sequences
-                if batch_index > max(my_seqs):
+            if 'worst_scenes' in locals(): # Analyze some specific sequences
+                if batch_index > max(worst_scenes):
                     break
-                elif batch_index not in my_seqs:
+                elif batch_index not in worst_scenes:
                     continue
             
             start = time.time()
@@ -255,7 +274,8 @@ def evaluate(loader, generator, config, split, current_cuda, pred_len, results_p
 
             ## (Optional) Plot results
 
-            if GENERATE_QUALITATIVE_RESULTS and seq_id < 150:
+            if GENERATE_QUALITATIVE_RESULTS and plot_scene < LIMIT_QUALITATIVE_RESULTS:
+                plot_scene += 1
                 # Custom plot
 
                 if split == "test":
@@ -272,19 +292,19 @@ def evaluate(loader, generator, config, split, current_cuda, pred_len, results_p
 
                 # Custom plot
                 # TODO: Compute the optimal distance for each seq (only qualitative results)
-                plot_functions.plot_trajectories_custom(filename,
-                                                        results_path,
-                                                        curr_traj,
-                                                        curr_map_origin,
-                                                        curr_object_class_id_list,
-                                                        dist_rasterized_map, 
-                                                        obs_len=obs_traj.shape[0],
-                                                        smoothen=False,
-                                                        save=True,
-                                                        pred_trajectories=pred_traj_fake.squeeze(0).permute(1,0,2),
-                                                        ade_metric=ade_min,
-                                                        fde_metric=fde_min, 
-                                                        change_bg=True)
+                # plot_functions.plot_trajectories_custom(filename,
+                #                                         results_path,
+                #                                         curr_traj,
+                #                                         curr_map_origin,
+                #                                         curr_object_class_id_list,
+                #                                         dist_rasterized_map, 
+                #                                         obs_len=obs_traj.shape[0],
+                #                                         smoothen=False,
+                #                                         save=True,
+                #                                         pred_trajectories=pred_traj_fake.squeeze(0).permute(1,0,2),
+                #                                         ade_metric=ade_min,
+                #                                         fde_metric=fde_min, 
+                #                                         change_bg=True)
 
                 # Argoverse standard plot
 
@@ -399,10 +419,18 @@ def main(args):
         print("Create results path folder: ", results_path)
         os.makedirs(results_path) # os.makedirs create intermediate directories. os.mkdir only the last one
 
+    # Get worst scenes in order to plot and analyze
+
+    metrics_sorted_csv = os.path.join(results_path,"metrics_sorted_ade.csv")
+    if os.path.isfile(metrics_sorted_csv) and PLOT_WORST_SCENES:
+        worst_scenes = get_worst_scenes(metrics_sorted_csv)
+
     print(f"Evaluate model in {config.dataset.split} split")
     output_predictions, output_probabilities, ade_list, fde_list, traj_kind_list, num_seq_list = \
         evaluate(split_loader, generator, config, 
-                 config.dataset.split, current_cuda, config.hyperparameters.pred_len, results_path)
+                 config.dataset.split, current_cuda, 
+                 config.hyperparameters.pred_len, results_path,
+                 worst_scenes=worst_scenes)
 
     if not os.path.exists(results_path):
         print("Create results path folder: ", results_path)
@@ -413,7 +441,7 @@ def main(args):
 
         generate_forecasting_h5(output_predictions, results_path, probabilities=output_probabilities)
 
-    elif COMPUTE_METRICS: # val or train
+    elif COMPUTE_METRICS and not PLOT_WORST_SCENES: # val or train
 
         # Write results (ade and fde with the corresponding trajectory type) in CSV
 

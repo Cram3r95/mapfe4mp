@@ -32,10 +32,9 @@ sys.path.append(BASE_DIR)
 TRAINER_LIST = [
                 "social_lstm_mhsa",
                 "social_lstm_mhsa_mm"
-                "social_set_transformer",
-                "social_set_transformer_mm",
                 "gan_social_lstm_mhsa",
                 "pv_lstm",
+                "pv_lstm_mm",
                 "sophie",
                 "sophie_mm"
                ]

@@ -1,3 +1,5 @@
+## Stable
+
 import os
 import math
 import random
@@ -20,6 +22,9 @@ MLP_DIM = 64
 H_DIM = 64
 EMBEDDING_DIM = 16
 BOTTLENECK_DIM = 32
+
+USE_PREV_TRAJ = True
+USE_SATT = False
 
 NUM_HEADS = 4
 DROPOUT = 0.2
@@ -229,5 +234,5 @@ class TrajectoryGenerator(nn.Module):
             last_pos = obs_traj[-1, :, :]
             last_pos_rel = obs_traj_rel[-1, :, :]
 
-        pred_traj_fake_rel = self.decoder(last_pos, last_pos_rel, state_tuple)
-        return pred_traj_fake_rel
+        pred_traj_fake_rel, conf = self.decoder(last_pos, last_pos_rel, state_tuple)
+        return pred_traj_fake_rel, conf

@@ -52,7 +52,9 @@ pip install \
     matplotlib \
     sklearn \
     gitpython \
-    torchstat
+    torchstat \
+    torch_sparse \
+    torch_geometric
 ```
 Download argoverse-api (1.0) in another folder (out of this directory). \
 Go to the argoverse-api folder: 
