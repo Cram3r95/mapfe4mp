@@ -15,6 +15,7 @@ import os
 import numpy as np
 import pdb
 import time
+import sys
 import copy
 
 # DL & Math imports
@@ -52,6 +53,9 @@ CHECK_ACCURACY_VAL = True
 MAX_TIME_TO_CHECK_TRAIN = 120 # minutes
 MAX_TIME_TO_CHECK_VAL = 120 # minutes
 MAX_TIME_PATIENCE_LR_SCHEDULER = 120 # 60 # minutes
+
+min_ade_ = 50000
+g_lr = 0.001
 
 # Aux functions
 
@@ -305,7 +309,7 @@ def model_trainer(config, logger):
     
     if hyperparameters.lr_scheduler: 
         lr_scheduler_patience = int(hyperparameters.lr_epoch_percentage_patience * hyperparameters.num_iterations) # Every N epochs
-        scheduler_g = lrs.ReduceLROnPlateau(optimizer_g, "min", min_lr=1e-5, 
+        scheduler_g = lrs.ReduceLROnPlateau(optimizer_g, "min", min_lr=hyperparameters.lr_min, 
                                             verbose=True, factor=hyperparameters.lr_decay_factor, 
                                             patience=lr_scheduler_patience)
 
@@ -350,7 +354,9 @@ def model_trainer(config, logger):
     current_iteration = 0 # Current iteration, regardless the model had previous training
     flag_check_every = False
 
-    while t < hyperparameters.num_iterations + previous_t:
+    # while t < hyperparameters.num_iterations + previous_t:
+    global g_lr
+    while g_lr >= (hyperparameters.lr_min - sys.float_info.epsilon):
         gc.collect()
         epoch += 1
         logger.info('Starting epoch {}'.format(epoch))
@@ -378,7 +384,7 @@ def model_trainer(config, logger):
                 if seconds_lr_patience > MAX_TIME_PATIENCE_LR_SCHEDULER*60:
                     lr_scheduler_patience = round((MAX_TIME_PATIENCE_LR_SCHEDULER*60) / time_per_iteration)
 
-                    scheduler_g = lrs.ReduceLROnPlateau(optimizer_g, "min", min_lr=1e-5, 
+                    scheduler_g = lrs.ReduceLROnPlateau(optimizer_g, "min", min_lr=hyperparameters.lr_min, 
                                                         verbose=True, factor=hyperparameters.lr_decay_factor, 
                                                         patience=lr_scheduler_patience)
                                                 
@@ -407,16 +413,23 @@ def model_trainer(config, logger):
 
                 flag_check_every = True
 
+            # N.B. t represents the num of iteration. However, it is difficult to compare different plots in
+            # tensorboard if every iteration has a different batch size. So, we multiply the current iteration
+            # multiplied by the batch size in order to have in the X-axis the num of processed sequences 
+
+            num_analyzed_seqs = (t+1) * config.dataset.batch_size
+
             # Print losses info
             
             if current_iteration % hyperparameters.print_every == 0:
-                logger.info('Iteration = {} / {}'.format(t + 1, hyperparameters.num_iterations + previous_t))
+                logger.info('Iteration = {} / {}'.format(t+1, hyperparameters.num_iterations + previous_t))
                 logger.info('Time per iteration: {}'.format(time_per_iteration))
+                logger.info('Num of analyzed sequences: {}'.format(num_analyzed_seqs))
 
                 for k, v in sorted(losses_g.items()):
                     logger.info('  [G] {}: {:.3f}'.format(k, v))
                     if hyperparameters.tensorboard_active:
-                        writer.add_scalar(k, v, t+1)
+                        writer.add_scalar(k, v, num_analyzed_seqs)
                     if k not in checkpoint.config_cp["G_losses"].keys():
                         checkpoint.config_cp["G_losses"][k] = [] 
                     checkpoint.config_cp["G_losses"][k].append(v)
@@ -425,19 +438,17 @@ def model_trainer(config, logger):
             # Check training metrics
 
             if (CHECK_ACCURACY_TRAIN and current_iteration > 0 
-               and current_iteration % hyperparameters.checkpoint_train_every == 0):
+                and current_iteration % hyperparameters.checkpoint_train_every == 0):
 
                 logger.info('Checking stats on train ...')
                 split = "train"
 
-                metrics_train = check_accuracy(
-                    hyperparameters, train_loader, generator, split=split
-                )
+                metrics_train = check_accuracy(hyperparameters, train_loader, generator, split=split)
 
                 for k, v in sorted(metrics_train.items()):
                     logger.info('  [train] {}: {:.3f}'.format(k, v))
                     if hyperparameters.tensorboard_active:
-                        writer.add_scalar(k, v, t+1)
+                        writer.add_scalar(k, v, num_analyzed_seqs)
                     if k not in checkpoint.config_cp["metrics_train"].keys():
                         checkpoint.config_cp["metrics_train"][k] = []
                     checkpoint.config_cp["metrics_train"][k].append(v)
@@ -445,46 +456,49 @@ def model_trainer(config, logger):
             # Check validation metrics
 
             if (CHECK_ACCURACY_VAL and current_iteration > 0 
-               and current_iteration % hyperparameters.checkpoint_val_every == 0):
+                and current_iteration % hyperparameters.checkpoint_val_every == 0):
 
                 logger.info('Checking stats on val ...')
                 split = "val"
 
-                checkpoint.config_cp["counters"]["t"] = t
-                checkpoint.config_cp["counters"]["epoch"] = epoch
-                checkpoint.config_cp["sample_ts"].append(t)
+                # Compute val metrics        
 
                 metrics_val = check_accuracy(
                     hyperparameters, val_loader, generator, split=split
                 )
 
+                checkpoint.config_cp["counters"]["t"] = t
+                checkpoint.config_cp["counters"]["epoch"] = epoch
+                checkpoint.config_cp["sample_ts"].append(t)
+
                 for k, v in sorted(metrics_val.items()):
                     logger.info('  [val] {}: {:.3f}'.format(k, v))
                     if hyperparameters.tensorboard_active:
-                        writer.add_scalar(k, v, t+1)
+                        writer.add_scalar(k, v, num_analyzed_seqs)
                     if k not in checkpoint.config_cp["metrics_val"].keys():
                         checkpoint.config_cp["metrics_val"][k] = []
                     checkpoint.config_cp["metrics_val"][k].append(v)
 
-                min_ade = min(checkpoint.config_cp["metrics_val"][f'{split}_ade'])
+                # Get previous best metrics in order to compare
+
+                global min_ade_
+                min_ade_ = min(checkpoint.config_cp["metrics_val"][f'{split}_ade'])
                 min_fde = min(checkpoint.config_cp["metrics_val"][f'{split}_fde'])
                 min_ade_nl = min(checkpoint.config_cp["metrics_val"][f'{split}_ade_nl'])
-                logger.info("Min ADE: {}".format(min_ade))
+
+                logger.info("Min ADE: {}".format(min_ade_))
                 logger.info("Min FDE: {}".format(min_fde))
-                if metrics_val[f'{split}_ade'] <= min_ade:
+
+                # Compare with previous validation metrics
+
+                if metrics_val[f'{split}_ade'] <= min_ade_:
                     logger.info('New low for avg_disp_error')
                     checkpoint.config_cp["best_t"] = t
                     checkpoint.config_cp["g_best_state"] = generator.state_dict()
 
-                if metrics_val[f'{split}_ade_nl'] <= min_ade_nl:
-                    logger.info('New low for avg_disp_error_nl')
-                    checkpoint.config_cp["best_t_nl"] = t
-                    checkpoint.config_cp["g_best_nl_state"] = generator.state_dict()
+                    # If val_min_ade < min_ade_, save another checkpoint with model weights and
+                    # optimizer state
 
-                # If val_min_ade < min_ade, save another checkpoint with model weights and
-                # optimizer state
-                
-                if metrics_val[f'{split}_ade'] <= min_ade:
                     checkpoint.config_cp["g_state"] = generator.state_dict()
                     checkpoint.config_cp["g_optim_state"] = optimizer_g.state_dict()
                     checkpoint_path = os.path.join(
@@ -512,16 +526,21 @@ def model_trainer(config, logger):
                     torch.save(small_checkpoint, checkpoint_path)
                     logger.info('Done.')
 
+                if metrics_val[f'{split}_ade_nl'] <= min_ade_nl:
+                    logger.info('New low for avg_disp_error_nl')
+                    checkpoint.config_cp["best_t_nl"] = t
+                    checkpoint.config_cp["g_best_nl_state"] = generator.state_dict()
+
             t += 1
             current_iteration += 1
-
-            if current_iteration >= hyperparameters.num_iterations:
-                break
-        
+    
             if hyperparameters.lr_scheduler:
-                scheduler_g.step(losses_g["G_total_loss"])
+                # scheduler_g.step(losses_g["G_total_loss"]) # Do not use training total loss 
+                #                                              to reduce learning rate
+
+                scheduler_g.step(min_ade_)
                 g_lr = get_lr(optimizer_g)
-                writer.add_scalar("G_lr", g_lr, t+1)
+                writer.add_scalar("G_lr", g_lr, num_analyzed_seqs)
 
     logger.info("Training finished")
 

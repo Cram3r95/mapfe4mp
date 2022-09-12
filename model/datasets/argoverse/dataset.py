@@ -43,9 +43,20 @@ dropout_prob = [0.5,0.5] # Not applied/applied probability
 gaussian_noise_prob = [0.5,0.5]
 rotation_prob = [0.5,0.5]
 
-mu,std = 0,0.5
+points_dropout_percentage = 0.5
+mu_noise,std_noise = 0,0.5
 rotation_angles = [90,180,270]
 rotation_angles_prob = [0.33,0.33,0.34]
+
+# decision = [0,1] # Not apply/apply
+# dropout_prob = [0.3,0.7] # Not applied/applied probability
+# gaussian_noise_prob = [0.4,0.6]
+# rotation_prob = [0.3,0.7]
+
+# points_dropout_percentage = 0.3
+# mu_noise,std_noise = 0,0.6
+# rotation_angles = [90,180,270]
+# rotation_angles_prob = [0.33,0.33,0.34]
 
 # Auxiliar variables
 
@@ -136,13 +147,13 @@ def seq_collate(data):
                 aug_curr_obs_traj = data_augmentation_functions.dropout_points(aug_curr_obs_traj,
                                                                                apply_dropout,
                                                                                num_obs=obs_len,
-                                                                               percentage=0.3)
+                                                                               percentage=points_dropout_percentage)
             if np.any(apply_gaussian_noise): # Not apply if all elements are 0
                 aug_curr_obs_traj = data_augmentation_functions.add_gaussian_noise(aug_curr_obs_traj,
                                                                                    apply_gaussian_noise,
                                                                                    num_obstacles,
                                                                                    num_obs=obs_len,
-                                                                                   mu=0,sigma=0.5)
+                                                                                   mu=mu_noise,sigma=std_noise)
 
             ## N.B. If you apply rotation as data augmentation, the groundtruth must be rotated too!
             
@@ -211,7 +222,7 @@ def seq_collate(data):
     start = time.time()
 
     first_obs = obs_traj[0,:,:] # 1 x agents · batch_size x 2
-
+    pdb.set_trace()
     if (PHYSICAL_CONTEXT == "visual"  # batch_size x channels x height x width 
      or PHYSICAL_CONTEXT == "goals"): # batch_size x num_goal_points x 2 (x|y) (real-world coordinates (HDmap))
         frames = dataset_utils.load_physical_information(num_seq_list, obs_traj_rel, first_obs, map_origin,
@@ -395,7 +406,8 @@ class ArgoverseMotionForecastingDataset(Dataset):
         variable_name_list = ['seq_list','seq_list_rel','loss_mask_list','non_linear_obj',
                               'num_objs_in_seq','seq_id_list','object_class_id_list',
                               'object_id_list','ego_vehicle_origin','num_seq_list',
-                              'straight_trajectories_list','curved_trajectories_list','city_id','norm'] 
+                              'straight_trajectories_list','curved_trajectories_list','city_id',
+                              'norm','relevant_centerlines'] 
         
         # Preprocess data (from raw .csvs to torch Tensors, at least including the 
         # AGENT (most important vehicle) and AV
@@ -538,17 +550,24 @@ class ArgoverseMotionForecastingDataset(Dataset):
                 dataset_utils.save_processed_data_as_npy(self.data_processed_folder, 
                                                          preprocess_data_dict,
                                                          split_percentage)
-                assert 1 == 0 # Uncomment this if you want to stop after preprocessing and save
+                # assert 1 == 0 # Uncomment this if you want to stop after preprocessing and save
         else:
             print("Loading .npy files as np data structures ...")
 
+            pdb.set_trace()
+
             preprocess_data_dict = dataset_utils.load_processed_files_from_npy(self.data_processed_folder)
         
+            pdb.set_trace()
+
             seq_list, seq_list_rel, loss_mask_list, non_linear_obj, num_objs_in_seq, \
             seq_id_list, object_class_id_list, object_id_list, ego_vehicle_origin, num_seq_list, \
-            straight_trajectories_list, curved_trajectories_list, city_ids, norm  = \
+            straight_trajectories_list, curved_trajectories_list, city_ids, norm, relevant_centerlines  = \
                 operator.itemgetter(*variable_name_list)(preprocess_data_dict)
 
+            pdb.set_trace()
+
+            # TODO: Refactorize this
             if self.extra_data_train != -1:
                 extra_preprocess_data_dict = dataset_utils.load_processed_files_from_npy(self.extra_data_processed_folder)
         
@@ -656,6 +675,8 @@ class ArgoverseMotionForecastingDataset(Dataset):
         self.curved_trajectories_list = torch.from_numpy(curved_trajectories_list).type(torch.int)
         self.curved_aux_list = copy.deepcopy(self.curved_trajectories_list)
         self.norm = torch.from_numpy(np.array(norm))
+
+        # self.physical_information = 
         
     def __len__(self):
         return self.num_seq

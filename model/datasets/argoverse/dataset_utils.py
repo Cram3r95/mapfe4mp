@@ -224,11 +224,16 @@ def load_processed_files_from_npy(folder):
     preprocessed_data_dict = dict()
 
     preprocessed_files, num_files = load_list_from_folder(folder)
+    pdb.set_trace()
     for preprocessed_file in preprocessed_files:
         key = preprocessed_file.split('/')[-1].split('.')[0]
+        print("key: ", key)
         with open(preprocessed_file, 'rb') as my_file:
             if (preprocessed_file.find('npy') != -1): # Do not load other files
-                value = np.load(my_file)
+                try:
+                    value = np.load(my_file)
+                except:
+                    value = np.load(my_file, allow_pickle=True)
         preprocessed_data_dict[key] = value
 
     return preprocessed_data_dict
@@ -263,8 +268,7 @@ def load_physical_information(num_seq_list, obs_traj_rel, first_obs, map_origin,
         curr_map_origin = map_origin[i][0]#.reshape(1,-1)
                                                      
         filename = data_imgs_folder + str(curr_num_seq) + ".png"
-        
-        # TODO: Generate this including data aug
+
         if physical_context == "visual":
             img = map_functions.plot_trajectories(filename, curr_obs_traj_rel, curr_first_obs, 
                                                   curr_map_origin, curr_object_class_id, dist_rasterized_map,
@@ -289,6 +293,9 @@ def load_physical_information(num_seq_list, obs_traj_rel, first_obs, map_origin,
 
             goal_points = goal_points_functions.get_goal_points(filename, agent_obs_seq_global, curr_map_origin, dist_around)
             physical_context_list.append(goal_points)
+        # elif physical_context == "relevant_centerlines":
+            
+
         t0_idx = t1_idx
 
     physical_context_arr = np.array(physical_context_list)

@@ -151,7 +151,7 @@ def pytorch_neg_multi_log_likelihood_batch(
     assert torch.isfinite(gt).all(), "invalid value found in gt"
     assert torch.isfinite(confidences).all(), "invalid value found in confidences"
     assert torch.isfinite(avails).all(), "invalid value found in avails"
-
+    # pdb.set_trace()
     # convert to (batch_size, num_modes, future_len, num_coords)
     gt = torch.unsqueeze(gt, 1)  # add modes
     avails = avails[:, None, :, None]  # add modes and cords

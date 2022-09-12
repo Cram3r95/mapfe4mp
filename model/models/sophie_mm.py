@@ -1,5 +1,5 @@
-###########################################################################
-# # FROM https://github.com/schmidt-ju/crat-pred/blob/main/model/crat_pred.py
+# ###########################################################################
+# # # FROM https://github.com/schmidt-ju/crat-pred/blob/main/model/crat_pred.py
 
 import os
 import math
@@ -25,15 +25,9 @@ PRED_LEN = 30
 MLP_DIM = 64
 H_DIM = 128
 EMBEDDING_DIM = 16
-BOTTLENECK_DIM = 32
 
-USE_PREV_TRAJ = False
-USE_SATT = True
-
-NUM_HEADS = 4
-DROPOUT = 0.2
-
-MAX_PEDS = 64
+APPLY_DROPOUT = True
+DROPOUT = 0.3
 
 def make_mlp(dim_list):
     layers = []
@@ -46,8 +40,8 @@ class EncoderLSTM_CRAT(nn.Module):
     def __init__(self):
         super(EncoderLSTM_CRAT, self).__init__()
 
-        self.input_size = 2
-        self.hidden_size = 128
+        self.input_size = DATA_DIM
+        self.hidden_size = H_DIM
         self.num_layers = 1
 
         self.lstm = nn.LSTM(
@@ -68,11 +62,15 @@ class EncoderLSTM_CRAT(nn.Module):
             self.num_layers, lstm_in.shape[1], self.hidden_size, device=lstm_in.device)
         lstm_hidden = (lstm_hidden_state, lstm_cell_state)
 
-        lstm_out, lstm_hidden = self.lstm(lstm_in, lstm_hidden)
-
+        lstm_out, (lstm_hidden, lstm_cell) = self.lstm(lstm_in, lstm_hidden)
+        
         # lstm_out is the hidden state over all time steps from the last LSTM layer
         # In this case, only the features of the last time step are used
-        return lstm_out[-1, :, :]
+
+        # if APPLY_DROPOUT: lstm_hidden = F.dropout(lstm_hidden, p=DROPOUT, training=self.training)
+
+        # return lstm_out[-1, :, :]
+        return lstm_hidden.view(-1,self.hidden_size)
 
 class AgentGnn_CRAT(nn.Module):
     def __init__(self):
@@ -141,7 +139,8 @@ class MultiheadSelfAttention_CRAT(nn.Module):
 
         self.latent_size = H_DIM
 
-        self.multihead_attention = nn.MultiheadAttention(self.latent_size, 4)
+        if APPLY_DROPOUT: self.multihead_attention = nn.MultiheadAttention(self.latent_size, 4, dropout=DROPOUT)
+        else: self.multihead_attention = nn.MultiheadAttention(self.latent_size, 4)
 
     def forward(self, att_in, agents_per_sample):
         att_out_batch = []
@@ -183,19 +182,20 @@ class MultiheadSelfAttention_CRAT(nn.Module):
         return att_out_batch
 
 class MMDecoderLSTM(nn.Module):
-    def __init__(self, pred_len=30, h_dim=64, embedding_dim=16, num_modes=3):
+    def __init__(self):
         super().__init__()
 
-        self.pred_len = pred_len
+        self.pred_len = PRED_LEN
         self.h_dim = H_DIM
-        self.embedding_dim = embedding_dim
-        self.num_modes = num_modes
+        self.mlp_dim = MLP_DIM
+        self.embedding_dim = EMBEDDING_DIM
+        self.num_modes = NUM_MODES
 
-        traj_points = self.num_modes*2
+        traj_points = self.num_modes*2 # Vector length per step (6 modes x 2 (x,y))
         self.spatial_embedding = nn.Linear(traj_points, self.embedding_dim)
         
         self.decoder = nn.LSTM(self.embedding_dim, self.h_dim, 1)
-        
+  
         self.hidden2pos = nn.Linear(self.h_dim, traj_points)
         self.confidences = nn.Linear(self.h_dim, self.num_modes)
 
@@ -214,87 +214,34 @@ class MMDecoderLSTM(nn.Module):
 
         pred_traj_fake_rel = []
         decoder_input = F.leaky_relu(self.spatial_embedding(last_obs_rel.contiguous().view(batch_size, -1))) 
+        if APPLY_DROPOUT: decoder_input = F.dropout(decoder_input, p=DROPOUT, training=self.training)
         decoder_input = decoder_input.contiguous().view(1, batch_size, self.embedding_dim)
 
-        for _ in range(self.pred_len):
-            output, state_tuple = self.decoder(decoder_input, state_tuple) 
+        state_tuple_h, state_tuple_c = state_tuple
 
-            rel_pos = self.hidden2pos(state_tuple[0].contiguous().view(-1, self.h_dim))
+        for _ in range(self.pred_len):
+            output, (state_tuple_h, state_tuple_c) = self.decoder(decoder_input, (state_tuple_h, state_tuple_c)) 
+            # if APPLY_DROPOUT: F.dropout(decoder_input, p=DROPOUT, training=self.training)
+
+            rel_pos = self.hidden2pos(state_tuple_h.contiguous().view(-1, self.h_dim))
+            # if APPLY_DROPOUT: rel_pos = F.dropout(rel_pos, p=DROPOUT, training=self.training)
 
             decoder_input = F.leaky_relu(self.spatial_embedding(rel_pos.contiguous().view(batch_size, -1)))
-            decoder_input = decoder_input.contiguous().view(1, batch_size, self.embedding_dim)
+            if APPLY_DROPOUT: decoder_input = F.dropout(decoder_input, p=DROPOUT, training=self.training)
+            decoder_input = decoder_input.contiguous().view(1, batch_size, self.embedding_dim)           
             pred_traj_fake_rel.append(rel_pos.contiguous().view(batch_size,-1))
 
         pred_traj_fake_rel = torch.stack(pred_traj_fake_rel, dim=0)
         pred_traj_fake_rel = pred_traj_fake_rel.view(self.pred_len, batch_size, self.num_modes, -1)
         pred_traj_fake_rel = pred_traj_fake_rel.permute(1,2,0,3) # batch_size, num_modes, pred_len, data_dim
-        conf = self.confidences(state_tuple[0].contiguous().view(-1, self.h_dim))
-        conf = torch.softmax(conf, dim=1) # batch_size, num_modes
 
+        conf = self.confidences(state_tuple_h.contiguous().view(-1, self.h_dim))
+        if APPLY_DROPOUT: conf = F.dropout(conf, p=DROPOUT, training=self.training)
+        conf = torch.softmax(conf, dim=1) # batch_size, num_modes
+        if not torch.allclose(torch.sum(conf, dim=1), conf.new_ones((batch_size,))):
+            pdb.set_trace()
         return pred_traj_fake_rel, conf
 
-class DecoderResidual(nn.Module):
-    def __init__(self):
-        super(DecoderResidual, self).__init__()
-
-        self.h_dim = H_DIM
-        self.num_modes = NUM_MODES
-        self.pred_len = PRED_LEN
-        self.data_dim = DATA_DIM
-
-        output = []
-        for i in range(self.num_modes):
-            output.append(PredictionNet())
-
-        self.output = nn.ModuleList(output)
-
-        self.confidences = nn.Linear(self.num_modes*self.pred_len*self.data_dim, self.num_modes)
-
-    def forward(self, decoder_in):
-        sample_wise_out = []
-
-        for out_subnet in self.output:
-            sample_wise_out.append(out_subnet(decoder_in))
-
-        decoder_out = torch.stack(sample_wise_out)
-        decoder_out = torch.swapaxes(decoder_out, 0, 1)
-
-        conf = self.confidences(decoder_out.contiguous().view(decoder_in.shape[0],-1))
-        conf = torch.softmax(conf, dim=1) # batch_size, num_modes
-
-        return decoder_out, conf
-
-class PredictionNet(nn.Module):
-    def __init__(self):
-        super(PredictionNet, self).__init__()
-
-        self.latent_size = H_DIM
-        self.pred_len = PRED_LEN
-
-        self.weight1 = nn.Linear(self.latent_size, self.latent_size)
-        self.norm1 = nn.GroupNorm(1, self.latent_size)
-
-        self.weight2 = nn.Linear(self.latent_size, self.latent_size)
-        self.norm2 = nn.GroupNorm(1, self.latent_size)
-
-        self.output_fc = nn.Linear(self.latent_size, self.pred_len * 2)
-
-    def forward(self, prednet_in):
-        # Residual layer
-        x = self.weight1(prednet_in)
-        x = self.norm1(x)
-        x = F.relu(x)
-        x = self.weight2(x)
-        x = self.norm2(x)
-
-        x += prednet_in
-
-        x = F.relu(x)
-
-        # Last layer has no activation function
-        prednet_out = self.output_fc(x)
-
-        return prednet_out
 class TrajectoryGenerator(nn.Module):
     def __init__(self):
         super(TrajectoryGenerator, self).__init__()
@@ -303,26 +250,21 @@ class TrajectoryGenerator(nn.Module):
         self.pred_len = PRED_LEN
         self.mlp_dim = MLP_DIM
         self.h_dim = H_DIM
-        self.embedding_dim = EMBEDDING_DIM
-        self.bottleneck_dim = BOTTLENECK_DIM
 
+        # pdb.set_trace()
         self.encoder = EncoderLSTM_CRAT()
 
         self.agent_gnn = AgentGnn_CRAT()
         self.sattn = MultiheadSelfAttention_CRAT()
    
-        # self.decoder = MMDecoderLSTM(num_modes=NUM_MODES)
+        self.decoder = MMDecoderLSTM()
 
-        # mlp_context_input_dim = self.h_dim # After GNN and MHSA
+        mlp_context_input_dim = self.h_dim # After GNN and MHSA
  
-        # mlp_decoder_context_dims = [mlp_context_input_dim, self.mlp_dim, self.h_dim]
-        # self.mlp_decoder_context = make_mlp(mlp_decoder_context_dims)
-
-        self.decoder_residual = DecoderResidual()
+        mlp_decoder_context_dims = [mlp_context_input_dim, self.mlp_dim, self.h_dim]
+        self.mlp_decoder_context = make_mlp(mlp_decoder_context_dims)
 
     def forward(self, obs_traj, obs_traj_rel, seq_start_end, agent_idx):
-        current_cuda = obs_traj.device
-
         # Encoder
 
         final_encoder_h = self.encoder(obs_traj_rel)
@@ -334,32 +276,26 @@ class TrajectoryGenerator(nn.Module):
 
         out_agent_gnn = self.agent_gnn(final_encoder_h, centers, agents_per_sample)
         out_self_attention = self.sattn(out_agent_gnn, agents_per_sample)
-
+        # pdb.set_trace()
         # Decoder
 
-        # mlp_decoder_context_input = torch.cat(out_self_attention,dim=0) # batch_size · num_agents x num_inputs_decoder · hidden_dim
+        mlp_decoder_context_input = torch.cat(out_self_attention,dim=0) # batch_size · num_agents x num_inputs_decoder · hidden_dim
 
-        # ## Get agent last observations (both abs (around 0,0) and rel-rel)
+        ## Get agent last observations (both abs (around 0,0) and rel-rel)
 
-        # last_pos = obs_traj[:, agent_idx, :]
-        # last_pos_rel = obs_traj_rel[:, agent_idx, :]
+        last_pos = obs_traj[:, agent_idx, :]
+        last_pos_rel = obs_traj_rel[:, agent_idx, :]
 
-        # decoder_h = mlp_decoder_context_input[agent_idx,:].unsqueeze(0)
-        # decoder_c = torch.randn(tuple(decoder_h.shape)).cuda(current_cuda)
-        # state_tuple = (decoder_h, decoder_c)
+        decoder_h = mlp_decoder_context_input[agent_idx,:].unsqueeze(0)
+        decoder_c = torch.randn(tuple(decoder_h.shape)).cuda(obs_traj.device)
+        state_tuple = (decoder_h, decoder_c)
 
-        # last_pos = obs_traj[-1, agent_idx, :]
-        # last_pos_rel = obs_traj_rel[-1, agent_idx, :]
+        last_pos = obs_traj[-1, agent_idx, :]
+        last_pos_rel = obs_traj_rel[-1, agent_idx, :]
 
-        # pred_traj_fake_rel, conf = self.decoder(last_pos, last_pos_rel, state_tuple)
+        ## Predict trajectories
 
-        # Crat decoder
-
-        out_self_attention = torch.stack([x[0] for x in out_self_attention])
-        out_linear, conf = self.decoder_residual(out_self_attention)
-        pred_traj_fake_rel = out_linear.view(len(agent_idx), -1, self.pred_len, 2)
-
-        # Crat decoder
+        pred_traj_fake_rel, conf = self.decoder(last_pos, last_pos_rel, state_tuple)
 
         return pred_traj_fake_rel, conf
 
@@ -391,8 +327,8 @@ class TrajectoryGenerator(nn.Module):
 # EMBEDDING_DIM = 16
 # BOTTLENECK_DIM = 32
 
-# USE_PREV_TRAJ = True
-# USE_SATT = False
+# USE_PREV_TRAJ = False
+# USE_SATT = True
 
 # NUM_HEADS = 4
 # DROPOUT = 0.2
@@ -687,20 +623,20 @@ class TrajectoryGenerator(nn.Module):
 
 #     def forward(self, obs_traj):
 #         num_agents = obs_traj.size(1)
-#         state = self.init_hidden(num_agents, current_cuda=obs_traj.device)
+        # state = self.init_hidden(num_agents, current_cuda=obs_traj.device)
 
-#         if self.model_dynamics:
-#             # conv_vel = F.tanh(self.conv1(obs_traj.permute(1,2,0)))
-#             # conv_acc = F.tanh(self.conv2(conv_vel))
-#             conv_vel = self.SELU(self.conv1(obs_traj.permute(1,2,0)))
-#             conv_acc = self.SELU(self.conv2(conv_vel))
+        # if self.model_dynamics:
+        #     # conv_vel = F.tanh(self.conv1(obs_traj.permute(1,2,0)))
+        #     # conv_acc = F.tanh(self.conv2(conv_vel))
+        #     conv_vel = self.SELU(self.conv1(obs_traj.permute(1,2,0)))
+        #     conv_acc = self.SELU(self.conv2(conv_vel))
 
-#             kinematic_state = torch.cat([obs_traj,
-#                                          conv_vel.permute(2,0,1),
-#                                          conv_acc.permute(2,0,1)],dim=2) # obs_len x num_agents x (conv_filters·2 + embedding_dim)
-#             kinematic_state_embedding = self.spatial_embedding(kinematic_state)
-#             output, state = self.encoder(kinematic_state_embedding, state)
-#         else:
+        #     kinematic_state = torch.cat([obs_traj,
+        #                                  conv_vel.permute(2,0,1),
+        #                                  conv_acc.permute(2,0,1)],dim=2) # obs_len x num_agents x (conv_filters·2 + embedding_dim)
+        #     kinematic_state_embedding = self.spatial_embedding(kinematic_state)
+        #     output, state = self.encoder(kinematic_state_embedding, state)
+        # else:
 #             obs_traj_embedding = self.spatial_embedding(obs_traj.contiguous().view(-1, 2))
 #             obs_traj_embedding = obs_traj_embedding.view(-1, num_agents, self.embedding_dim)
 #             output, state = self.encoder(obs_traj_embedding, state)

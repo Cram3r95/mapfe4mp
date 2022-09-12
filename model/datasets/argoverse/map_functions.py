@@ -177,17 +177,11 @@ def map_generator(curr_num_seq,
     plt.savefig(filename, bbox_inches='tight', facecolor=fig.get_facecolor(), 
                 edgecolor='none', pad_inches=0)
 
-
-
-
-
-
-
-
 # Map Feature computations
+
 _MANHATTAN_THRESHOLD = 5.0  # meters
-_DFS_THRESHOLD_FRONT_SCALE = 45.0  # meters
-_DFS_THRESHOLD_BACK_SCALE = 40.0  # meters
+_DFS_THRESHOLD_FRONT_SCALE = 45.0  # m/s
+_DFS_THRESHOLD_BACK_SCALE = 40.0  # m/s
 _MAX_SEARCH_RADIUS_CENTERLINES = 10.0  # meters
 _MAX_CENTERLINE_CANDIDATES_TEST = 6
 
@@ -208,7 +202,7 @@ class MapFeaturesUtils:
         Args:
             lane_seq: Sequence of lane ids
             xy_seq: Trajectory coordinates
-            city_name: City name (PITT/MIA)
+            city_name: City name (PIT/MIA)
             avm: Argoverse map_api instance
         Returns:
             point_in_polygon_score: Number of coordinates in the trajectory that lie within the lane sequence
@@ -269,7 +263,7 @@ class MapFeaturesUtils:
         Args:
             lane_seqs: Sequence of lane sequences
             xy_seq: Trajectory coordinates
-            city_name: City name (PITT/MIA)
+            city_name: City name (PIT/MIA)
             avm: Argoverse map_api instance
             max_candidates: Maximum number of centerlines to return
         Return:
@@ -367,11 +361,17 @@ class MapFeaturesUtils:
         # Set dfs threshold
         traj_len = xy.shape[0]
 
-        # Assuming a speed of 50 mps, set threshold for traversing in the front and back
+        # 10 represents the frequency in which the obstacles positions have been sampled:
+        #   (steps / steps/s) -> s
+        # self._DFS_THRESHOLD_FRONT_SCALE and self._DFS_THRESHOLD_FRONT_SCALE represent the velocities to
+        # traverse frontwards and backwards in m/s:
+        #   m/s · s = m
         dfs_threshold_front = (self._DFS_THRESHOLD_FRONT_SCALE *
                                (seq_len + 1 - traj_len) / 10)
         dfs_threshold_back = self._DFS_THRESHOLD_BACK_SCALE * (traj_len +
                                                                1) / 10
+
+        print("dfs_threshold_front, dfs_threshold_back: ", dfs_threshold_front, dfs_threshold_back)
 
         # DFS to get all successor and predecessor candidates
         obs_pred_lanes: List[Sequence[int]] = []
@@ -387,7 +387,7 @@ class MapFeaturesUtils:
                     assert (
                         past_lane_seq[-1] == future_lane_seq[0]
                     ), "Incorrect DFS for candidate lanes past and future"
-                    # obs_pred_lanes.append(past_lane_seq + future_lane_seq[1:])
+                    obs_pred_lanes.append(past_lane_seq + future_lane_seq[1:])
                     obs_pred_lanes.append(future_lane_seq)
 
             # Only future
@@ -442,7 +442,9 @@ class MapFeaturesUtils:
         #########################
 
         if viz:
-            fig = plt.figure(0, figsize=(8, 8))
+            # fig = plt.figure(0, figsize=(8,8))
+            fig, ax = plt.subplots(figsize=(8,8), facecolor="white")
+
             for centerline_coords in candidate_centerlines:
                 # fig = visualize_centerline(centerline_coords)
                 visualize_centerline(centerline_coords)
@@ -525,8 +527,10 @@ class MapFeaturesUtils:
                 filename = BASE_DIR+f"/data/datasets/argoverse/motion-forecasting/{split}/map_features/{seq_id}_relevant_centerlines.png"
             else:
                 filename = BASE_DIR+f"/data/datasets/argoverse/motion-forecasting/{split}/map_features/{seq_id}_oracle.png"
-            plt.savefig(filename, bbox_inches='tight', facecolor=fig.get_facecolor(), 
-                edgecolor='none', pad_inches=0)
+
+            plt.savefig(filename, bbox_inches='tight', facecolor=fig.get_facecolor(), transparent=False,
+                        edgecolor='none', pad_inches=0)
+
             plt.close('all')
         return candidate_centerlines
 
@@ -563,22 +567,21 @@ class MapFeaturesUtils:
             raw_data_format["X"], raw_data_format["Y"]
         ]].astype("float")
 
-        # Get API for Argo Dataset map
-        # avm = ArgoverseMap()
-
         city_name = agent_track[0, raw_data_format["CITY_NAME"]]
+
+        viz_ = True
 
         # Get candidate centerlines using observed trajectory
         if mode == "test":
             oracle_centerline = np.full((seq_len, 2), None)
             oracle_nt_dist = np.full((seq_len, 2), None)
             candidate_centerlines = self.get_candidate_centerlines_for_trajectory(
-                agent_xy, # whole trajectory
-                # agent_xy_obs, # only observation
+                # agent_xy, # whole trajectory
+                agent_xy_obs, # only observation
                 city_name,
                 seq_id,
                 avm,
-                viz=True,
+                viz=viz_,
                 max_search_radius=self._MAX_SEARCH_RADIUS_CENTERLINES,
                 seq_len=seq_len,
                 max_candidates=self._MAX_CENTERLINE_CANDIDATES_TEST,
@@ -599,7 +602,7 @@ class MapFeaturesUtils:
                 city_name,
                 seq_id,
                 avm,
-                viz=True,
+                viz=viz_,
                 max_search_radius=self._MAX_SEARCH_RADIUS_CENTERLINES,
                 seq_len=seq_len,
                 mode=mode,
