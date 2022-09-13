@@ -20,6 +20,7 @@ from shapely.ops import unary_union
 
 # DL & Math imports
 
+import scipy as sp
 import numpy as np
 
 # Plot imports
@@ -180,8 +181,8 @@ def map_generator(curr_num_seq,
 # Map Feature computations
 
 _MANHATTAN_THRESHOLD = 5.0  # meters
-_DFS_THRESHOLD_FRONT_SCALE = 45.0  # m/s
-_DFS_THRESHOLD_BACK_SCALE = 40.0  # m/s
+_DFS_THRESHOLD_FRONT_SCALE = 45.0 # 45.0  # m/s
+_DFS_THRESHOLD_BACK_SCALE = 40.0 # 40.0  # m/s
 _MAX_SEARCH_RADIUS_CENTERLINES = 10.0  # meters
 _MAX_CENTERLINE_CANDIDATES_TEST = 6
 
@@ -410,7 +411,7 @@ class MapFeaturesUtils:
                 [obs_pred_lanes[0]], city_name)
 
         #########################
-        # TESTING
+        # Compute the lanes around a given position given a specific distance
 
         # dist_rasterized_map = [-40,40,-40,40]
 
@@ -442,7 +443,6 @@ class MapFeaturesUtils:
         #########################
 
         if viz:
-            # fig = plt.figure(0, figsize=(8,8))
             fig, ax = plt.subplots(figsize=(8,8), facecolor="white")
 
             for centerline_coords in candidate_centerlines:
@@ -520,19 +520,56 @@ class MapFeaturesUtils:
 
             plt.xlabel("Map X")
             plt.ylabel("Map Y")
-            plt.axis("off")
-            plt.title(f"Number of candidates = {len(candidate_centerlines)}")
-            
+            # plt.axis("off")
+            plt.title(f"Number of candidates = {len(candidate_centerlines)}")   
+
+            output_dir = os.path.join(BASE_DIR,f"data/datasets/argoverse/motion-forecasting/{split}/map_features")
+            if not os.path.exists(output_dir):
+                print("Create trajs folder: ", output_dir)
+                os.makedirs(output_dir) # makedirs creates intermediate folders
+
             if mode == "test":
-                filename = BASE_DIR+f"/data/datasets/argoverse/motion-forecasting/{split}/map_features/{seq_id}_relevant_centerlines.png"
+                filename = os.path.join(output_dir,f"{seq_id}_relevant_centerlines.png")
             else:
-                filename = BASE_DIR+f"/data/datasets/argoverse/motion-forecasting/{split}/map_features/{seq_id}_oracle.png"
+                filename = os.path.join(output_dir,f"{seq_id}_oracle.png")
 
             plt.savefig(filename, bbox_inches='tight', facecolor=fig.get_facecolor(), transparent=False,
                         edgecolor='none', pad_inches=0)
 
             plt.close('all')
         return candidate_centerlines
+
+    def interpolate_centerline(self,split,seq_id,centerline,max_points=40,viz=False):
+        """
+        """
+
+        cx, cy = centerline[:,0], centerline[:,1]
+        points = np.arange(cx.shape[0])
+
+        new_points = np.linspace(points.min(), points.max(), max_points)
+        try:
+            new_cx = sp.interpolate.interp1d(points,cx,kind='cubic')(new_points)
+            new_cy = sp.interpolate.interp1d(points,cy,kind='cubic')(new_points)
+        except:
+            pdb.set_trace()
+
+        interp_centerline = np.hstack([new_cx.reshape(-1,1),new_cy.reshape(-1,1)])
+
+        output_dir = os.path.join(BASE_DIR,f"data/datasets/argoverse/motion-forecasting/{split}/map_features")
+
+        if not os.path.exists(output_dir):
+            print("Create trajs folder: ", output_dir)
+            os.makedirs(output_dir) # makedirs creates intermediate folders
+
+        if viz:
+            fig, ax = plt.subplots(figsize=(8,8), facecolor="white")
+            visualize_centerline(interp_centerline)
+            filename = os.path.join(output_dir,f"{seq_id}_interpolated_oracle.png")
+
+            plt.savefig(filename, bbox_inches='tight', facecolor=fig.get_facecolor(), transparent=False,
+                        edgecolor='none', pad_inches=0)
+
+            plt.close('all')
 
     def compute_map_features(
             self,
@@ -544,6 +581,7 @@ class MapFeaturesUtils:
             raw_data_format: Dict[str, int],
             mode: str,
             avm: ArgoverseMap,
+            viz: bool = True,
     ) -> Tuple[np.ndarray, Dict[str, Any]]:
         """Compute map based features for the given sequence.
         If the mode is test, oracle_nt_dist will be empty, candidate_nt_dist will be populated.
@@ -569,8 +607,6 @@ class MapFeaturesUtils:
 
         city_name = agent_track[0, raw_data_format["CITY_NAME"]]
 
-        viz_ = True
-
         # Get candidate centerlines using observed trajectory
         if mode == "test":
             oracle_centerline = np.full((seq_len, 2), None)
@@ -581,7 +617,7 @@ class MapFeaturesUtils:
                 city_name,
                 seq_id,
                 avm,
-                viz=viz_,
+                viz=viz,
                 max_search_radius=self._MAX_SEARCH_RADIUS_CENTERLINES,
                 seq_len=seq_len,
                 max_candidates=self._MAX_CENTERLINE_CANDIDATES_TEST,
@@ -602,7 +638,7 @@ class MapFeaturesUtils:
                 city_name,
                 seq_id,
                 avm,
-                viz=viz_,
+                viz=viz,
                 max_search_radius=self._MAX_SEARCH_RADIUS_CENTERLINES,
                 seq_len=seq_len,
                 mode=mode,
@@ -614,7 +650,7 @@ class MapFeaturesUtils:
             # Get NT distance for oracle centerline
             oracle_nt_dist = get_nt_distance(agent_xy,
                                              oracle_centerline,
-                                             viz=False)
+                                             viz=viz)
 
         map_feature_helpers = {
             "ORACLE_CENTERLINE": oracle_centerline,

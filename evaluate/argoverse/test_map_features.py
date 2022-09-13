@@ -16,6 +16,7 @@ import time
 import pandas as pd
 import os
 import git
+import pdb
 
 # Custom imports
 
@@ -27,6 +28,7 @@ import model.datasets.argoverse.dataset_utils as dataset_utils
 
 from model.datasets.argoverse.map_functions import MapFeaturesUtils
 from argoverse.map_representation.map_api import ArgoverseMap
+from argoverse.data_loading.argoverse_forecasting_loader import ArgoverseForecastingLoader
 
 # Global variables
 
@@ -42,12 +44,13 @@ RAW_DATA_FORMAT = {
 map_features_utils_instance = MapFeaturesUtils()
 avm = ArgoverseMap()
 
+obs_origin = 20
 obs_len = 20
 pred_len = 30
 
-splits = ["train","val","test"]
-modes = ["train","test"] # if train -> compute the best candidate (oracle)
-                         # Otherwise, return N plausible candidates
+splits = ["train","val"] # ,"test"]
+modes = ["train"] # ,"test"] # if train -> compute the best candidate (oracle)
+                         # if test, return N plausible candidates
 limit = 150
 
 for split in splits:
@@ -81,7 +84,26 @@ for split in splits:
                     mode,
                     avm
                 )
+            
             end = time.time()
             print("Time consumed: ", end-start)
 
+# split_name = "train"
+# root_dir = os.path.join(BASE_DIR,f'data/datasets/argoverse/motion-forecasting/{split_name}/data/')
+# afl = ArgoverseForecastingLoader(root_dir)
+
+# seq_path = f"{root_dir}/13606.csv"
+
+# agent_obs_traj = afl.get(seq_path).agent_traj[:obs_len]
+# data = dataset_utils.read_file(seq_path) 
+# origin_pos, city_name = dataset_utils.get_origin_and_city(data,obs_origin)
+
+# viz = False
+# start = time.time()
+# # candidate_centerlines = avm.get_candidate_centerlines_for_traj_custom(agent_obs_traj, city_name, viz=viz)
+# candidate_centerlines = avm.get_candidate_centerlines_for_traj(agent_obs_traj, city_name, viz=viz)
+# end = time.time()
+# print("Candidate centerlines custom: ", end-start)
+
+# lane_direction, yaw, confidence = avm.get_lane_direction_custom(agent_obs_traj[-1], city_name, visualize=viz)
 # pdb.set_trace()
