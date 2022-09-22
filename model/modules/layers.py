@@ -1,6 +1,7 @@
 import torch
 from torch import nn
 from fractions import gcd
+import pdb
 
 class MLP(nn.Module):
     """
@@ -27,12 +28,12 @@ class MLP(nn.Module):
         return self.module(data_input)
 
 class Linear(nn.Module):
-    def __init__(self, n_in, n_out, norm='GN', ng=32, act=True):
+    def __init__(self, n_in, n_out, norm='BN', ng=32, act=True):
         super(Linear, self).__init__()
         assert(norm in ['GN', 'BN', 'SyncBN'])
 
         self.linear = nn.Linear(n_in, n_out, bias=False)
-        
+
         if norm == 'GN':
             self.norm = nn.GroupNorm(gcd(ng, n_out), n_out)
         elif norm == 'BN':
@@ -40,19 +41,26 @@ class Linear(nn.Module):
         else:
             exit('SyncBN has not been added!')
         
-        self.relu = nn.ReLU(inplace=True)
+        self.fa = nn.GELU()
         self.act = act
 
-        self.apply(self._init_weights)
+    #     self.apply(self._init_weights)
 
-    def _init_weights(self, module):
-        nn.init.kaiming_normal_(module.weight)
+    # def _init_weights(self, module):
+    #     """
+    #     """
+    #     classname = module.__class__.__name__
+    #     if classname.find('Linear') != -1:
+    #         try:
+    #             nn.init.kaiming_normal_(module.weight)
+    #         except:
+    #             pdb.set_trace()
 
     def forward(self, x):
         out = self.linear(x)
         out = self.norm(out)
         if self.act:
-            out = self.relu(out)
+            out = self.fa(out)
         return out
 
 class LinearRes(nn.Module):

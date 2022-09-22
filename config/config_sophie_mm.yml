@@ -17,7 +17,7 @@ dataset:
                           # -1.0 if not used
     shuffle: True 
     data_augmentation: True # Rotation, Swapping, Dropout, Gaussian noise
-    class_balance: -1.0 # % of straight trajectories (considering the AGENT). Remaining % are curved trajectories
+    class_balance: 0.7 # % of straight trajectories (considering the AGENT). Remaining % are curved trajectories
                         # (again, considering the AGENT). -1.0 if no class balance is used (get_item takes the corresponding
                         # sequence regardless if it is straight or curved)
     preprocess_data: False
@@ -62,20 +62,18 @@ hyperparameters:
     loss_fa_weight: 1
 
     lr_scheduler: True
-    lr_decay_factor: 0.5
-    lr_min: 1.0e-6
+    lr_decay_factor: 0.75
+    lr_min: 5.0e-5
     lr_epoch_percentage_patience: 0.15 # (0-N) E.g. If 0.05 -> the patience will be the 5 % of the total epochs
     
     g_steps: 1
     clipping_threshold_g: 1.1
     
     save_root_dir: "save/argoverse"
-    exp_name: "test_centerlines" # If no specific exp_name is used, fill with current day and hour
+    exp_name: "test_2" # If no specific exp_name is used, fill with current day and hour
     output_dir: # To be filled in the code (save_root_dir/model_name/split_percentage/exp)
     checkpoint_start_from:
-    exp_description: "gnn_based_whole_obs, weight decay 0.001, use min_ade to decay scheduler,
-    substitute encoder LSTM by whole obs (not only the last obs encoded). Keep Linear in the MM decoder. 
-    LR decay = 0.75. H_DIM = 128. Apply regularization"
+    exp_description: "test_2"
     tensorboard_active: True
 
 # Model

@@ -49,7 +49,7 @@ obs_len = 20
 pred_len = 30
 
 splits = ["train","val"] # ,"test"]
-modes = ["train"] # ,"test"] # if train -> compute the best candidate (oracle)
+modes = ["train","test"] # ,"test"] # if train -> compute the best candidate (oracle)
                          # if test, return N plausible candidates
 limit = 150
 

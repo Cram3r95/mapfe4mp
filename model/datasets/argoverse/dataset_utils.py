@@ -224,10 +224,10 @@ def load_processed_files_from_npy(folder):
     preprocessed_data_dict = dict()
 
     preprocessed_files, num_files = load_list_from_folder(folder)
-    pdb.set_trace()
+
     for preprocessed_file in preprocessed_files:
         key = preprocessed_file.split('/')[-1].split('.')[0]
-        print("key: ", key)
+
         with open(preprocessed_file, 'rb') as my_file:
             if (preprocessed_file.find('npy') != -1): # Do not load other files
                 try:

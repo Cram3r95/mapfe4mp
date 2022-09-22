@@ -6,7 +6,7 @@
 
 """
 Created on Sun Mar 06 23:47:19 2022
-@author: Carlos Gómez-Huélamo and Miguel Eduardo Ortiz Huamaní
+@author: Carlos Gómez-Huélamo
 """
 
 # General purpose imports
@@ -17,6 +17,7 @@ import time
 import os
 import git
 import pdb
+import copy
 import pandas as pd
 
 from prodict import Prodict
@@ -25,6 +26,8 @@ from prodict import Prodict
 
 import math
 import numpy as np
+
+from sklearn.metrics.pairwise import euclidean_distances
 
 # Custom imports
 
@@ -49,14 +52,14 @@ with open(config_path) as config:
     config = Prodict.from_dict(config)
     config.base_dir = BASE_DIR
 
-config.dataset.start_from_percentage = 0.0
+config.dataset.start_from_percentage = 0.82
 
 # Preprocess data
                          # Split, Process, Split percentage
-splits_to_process = dict({"train":[True,0.1],
-                          "val":[True,0.1],
+splits_to_process = dict({"train":[True,0.01],
+                          "val":[True,0.01],
                           "test":[False,1.0]})
-modes_centerlines = ["train"] # if train -> compute the best candidate (oracle)
+modes_centerlines = ["train"] #,"test"] # if train -> compute the best candidate (oracle)
                               # if test, return N plausible candidates
 
 PREPROCESS_SOCIAL_DATA = False
@@ -66,8 +69,10 @@ obs_len = 20 # steps
 pred_len = 30 # steps
 freq = 10 # Hz ("steps/s")
 obs_origin = 20 
-min_vel = 25
+min_dist_around = 25
 max_points = 40
+
+wrong_centerlines = []
 
 RAW_DATA_FORMAT = {
     "TIMESTAMP": 0,
@@ -93,17 +98,17 @@ for split_name,features in splits_to_process.items():
 
         if PREPROCESS_SOCIAL_DATA:
             ArgoverseMotionForecastingDataset(dataset_name=config.dataset_name,
-                                            root_folder=os.path.join(config.base_dir,config.dataset.path),
-                                            obs_len=config.hyperparameters.obs_len,
-                                            pred_len=config.hyperparameters.pred_len,
-                                            distance_threshold=config.hyperparameters.distance_threshold,
-                                            split=split_name,
-                                            split_percentage=features[1],
-                                            batch_size=config.dataset.batch_size,
-                                            class_balance=config.dataset.class_balance,
-                                            obs_origin=config.hyperparameters.obs_origin,
-                                            preprocess_data=True,
-                                            save_data=True)    
+                                              root_folder=os.path.join(config.base_dir,config.dataset.path),
+                                              obs_len=config.hyperparameters.obs_len,
+                                              pred_len=config.hyperparameters.pred_len,
+                                              distance_threshold=config.hyperparameters.distance_threshold,
+                                              split=split_name,
+                                              split_percentage=features[1],
+                                              batch_size=config.dataset.batch_size,
+                                              class_balance=config.dataset.class_balance,
+                                              obs_origin=config.hyperparameters.obs_origin,
+                                              preprocess_data=True,
+                                              save_data=True)    
 
         # Most relevant lanes around the target agent
 
@@ -122,8 +127,8 @@ for split_name,features in splits_to_process.items():
             file_id_list.sort()
             print("Num files: ", num_files)
 
-            start_from = int(config.dataset.start_from_percentage*num_files)
             n_files = int(features[1]*num_files)
+            start_from = int(config.dataset.start_from_percentage*n_files)
 
             if (start_from + n_files) >= num_files:
                 file_id_list = file_id_list[start_from:]
@@ -141,16 +146,6 @@ for split_name,features in splits_to_process.items():
 
                 start = time.time()
 
-                # Compute centerlines 
-
-                # data = read_file(seq_path) 
-                # origin_pos, city_name = get_origin_and_city(data,config.hyperparameters.obs_origin)
-
-                # agent_obs_traj = afl.get(seq_path).agent_traj[:config.hyperparameters.obs_len]
-                # candidate_centerlines = avm.get_candidate_centerlines_for_traj(agent_obs_traj, city_name, viz=False)
-                # print("Num relevant centerlines: ", len(candidate_centerlines))
-                # candidate_centerlines_list.append(candidate_centerlines)
-
                 # Compute map features using Argoverse Forecasting Baseline algorithm
 
                 start = time.time()
@@ -163,74 +158,147 @@ for split_name,features in splits_to_process.items():
                 city_name = agent_track[0,RAW_DATA_FORMAT["CITY_NAME"]]
                 agent_xy = agent_track[:,[RAW_DATA_FORMAT["X"],RAW_DATA_FORMAT["Y"]]].astype("float")
                 first_obs = agent_xy[0,:]
-                origin_pos = agent_xy[obs_origin-1,:]
+                last_obs = agent_xy[obs_origin-1,:]
 
                 for mode in modes_centerlines:
                     # Map features extraction
 
-                    map_features, map_feature_helpers = map_features_utils_instance.compute_map_features(
-                            agent_track,
-                            file_id,
-                            split_name,
-                            obs_len,
-                            obs_len + pred_len,
-                            RAW_DATA_FORMAT,
-                            mode,
-                            avm,
-                            viz
-                        )
+                    if file_id != -1:
+                    # if file_id == 1749:
+                        map_features, map_feature_helpers = map_features_utils_instance.compute_map_features(
+                                agent_track,
+                                file_id,
+                                split_name,
+                                obs_len,
+                                obs_len + pred_len,
+                                RAW_DATA_FORMAT,
+                                mode,
+                                avm,
+                                viz
+                            )
 
-                    if mode == "train": # only best centerline ("oracle")
-                        start_ = time.time()
-                        oracle_centerline = map_feature_helpers["ORACLE_CENTERLINE"]
-                        
-                        first_obs_rep = np.repeat(first_obs.reshape(1,-1),repeats=oracle_centerline.shape[0],axis=0)
+                        if mode == "train": # only best centerline ("oracle")
+                            start_ = time.time()
 
-                        dist_array = np.zeros((first_obs_rep.shape[0]))
-                        for k in range(first_obs_rep.shape[0]): # TODO: How to compute the L2-distance point by point?
-                            dist_array[k] = np.linalg.norm(oracle_centerline[k,:]-first_obs_rep[k,:])
-                        
-                        lane_direction, yaw, confidence = avm.get_lane_direction_custom(origin_pos, city_name, visualize=viz)
-                        # print("Degrees: ", math.degrees(yaw))
+                            oracle_centerline = map_feature_helpers["ORACLE_CENTERLINE"]                     
+                            
+                            # yaw = map_features_utils_instance.get_yaw(agent_xy, obs_len)
+                            # yaw_aux = math.pi/2 - yaw # In order to align the data with the vertical axis
+                            # R = map_features_utils_instance.rotz2D(yaw)
+                            # start_oracle = oracle_centerline[0,:]
 
-                        # TODO: The acceleration is quite noisy. Improve this calculation
-                        vel, acc = avm.get_agent_velocity_and_acceleration(agent_xy[:obs_len,:])
-                        if vel < min_vel:
-                            vel = min_vel # Estimate a prediction horizon considering at least 25 m/s
+                            # oracle_centerline_aux = []
+                            # oracle_centerline_aux.append(np.dot(R,oracle_centerline.T).T)
+                            # agent_xy_aux = np.dot(R,agent_xy.T).T
 
-                        # Reduce the lane to the closest fifty points, starting from the first observation
-                        # and ending in the closest wp assuming CTRV during pred seconds
+                            # map_features_utils_instance.debug_centerline_and_agent(oracle_centerline_aux, agent_xy_aux, obs_len, obs_len+pred_len, split_name, file_id)
 
-                        closest_wp = np.argmin(dist_array)
-                        dist_array = dist_array[closest_wp:]
+                            # Get index of the closest waypoint to the first observation
+                            
+                            closest_wp_first, _ = map_features_utils_instance.get_closest_wp(first_obs, oracle_centerline)
 
-                        pred_horizon = pred_len/freq * vel
-                        idx, value = find_nearest(dist_array,pred_horizon)
-                        num_points = idx+1
-                        print("Num points: ", num_points)
+                            # Get index of the closest waypoint to the last observation + dist_around
+                         
+                            closest_wp_last, dist_array_last = map_features_utils_instance.get_closest_wp(last_obs, oracle_centerline)
+                            dist_array_last = dist_array_last[closest_wp_last:] # To determine dist around from this point
 
-                        oracle_centerline_filtered = oracle_centerline[closest_wp:closest_wp+num_points,:]
+                            # TODO: The acceleration is quite noisy. Improve this calculation
+                            vel, acc = map_features_utils_instance.get_agent_velocity_and_acceleration(agent_xy[:obs_len,:],
+                                                                                                    filter="least_squares")                         
+                            dist_around = vel * (pred_len/freq) + 1/2 * acc * (pred_len/freq)**2
+                            if dist_around < min_dist_around:
+                                dist_around = min_dist_around
 
-                        if oracle_centerline_filtered.shape[0] != max_points:
-                            interpolated_centerline = map_features_utils_instance.interpolate_centerline(split_name,
-                                                                                            file_id,
-                                                                                            oracle_centerline_filtered,
-                                                                                            max_points=max_points,
-                                                                                            viz=True)
+                            idx, value = find_nearest(dist_array_last,dist_around)
+                            num_points = idx + 1 + (closest_wp_last - closest_wp_first)
 
-                            candidate_centerlines_list.append(interpolated_centerline)
+                            # Determine if the best oracle is inverted (this sometimes happens if the corresponding agent is
+                            # carrying a lane change maneuver): The best and most interpretable solution is if the
+                            # the end point is closer than the start point and the last observation is closer to the start
+                            # rather than the first observation
 
-                        end_ = time.time()
-                        print("Time consumed by L2 norm: ", end_-start_)
+                            oracle_centerline_orig = copy.deepcopy(oracle_centerline)
+                            
+                            ec = euclidean_distances(oracle_centerline[:-1,:],oracle_centerline[1:,:])
+                            indeces_rows = indeces_cols = np.arange(ec.shape[0])
+                            dist = ec[indeces_rows,indeces_cols]
+
+                            invert = False
+
+                            try:
+                                dist_firstobs2start = np.cumsum(dist[:closest_wp_first+1])[-1]
+                                dist_lastobs2start = np.cumsum(dist[:closest_wp_last+1])[-1]
+                                dist_firstobs2end = np.cumsum(dist[closest_wp_first:])[-1]
+
+                                if ((dist_lastobs2start >= dist_firstobs2start)
+                                   and ((closest_wp_first > 0 and closest_wp_first < oracle_centerline.shape[0])
+                                     or (dist_firstobs2start <= dist_firstobs2end))):
+                                    pass
+                                else:
+                                    invert = True
+
+                            except Exception as e:
+                                print("e: ", e)
+                                invert = True
+
+                            if invert:
+                                print("invert oracle")
+
+                                oracle_centerline_orig = copy.deepcopy(oracle_centerline)
+                                oracle_centerline = oracle_centerline[::-1]
+
+                                # Repeat again the process to obtain the closest wps
+
+                                # Get index of the closest waypoint to the first observation
+                            
+                                closest_wp_first, _ = map_features_utils_instance.get_closest_wp(first_obs, oracle_centerline)
+
+                                # Get index of the closest waypoint to the last observation + dist_around
+                            
+                                closest_wp_last, dist_array_last = map_features_utils_instance.get_closest_wp(last_obs, oracle_centerline)
+                                dist_array_last = dist_array_last[closest_wp_last:]
+
+                                idx, value = find_nearest(dist_array_last,dist_around)
+                                num_points = idx + 1 + (closest_wp_last - closest_wp_first)
+
+                            # Reduce the lane to the closest N points, starting from the first observation 
+                            # (closest to current position) and ending in the closest wp assuming CTRA during pred seconds
+
+                            end_point = agent_xy[-1,:]
+
+                            oracle_centerline_filtered = oracle_centerline[closest_wp_first:closest_wp_first+num_points,:]
+                            
+                            if oracle_centerline_filtered.shape[0] != max_points:
+                                try:
+                                    interpolated_centerline = map_features_utils_instance.interpolate_centerline(split_name,
+                                                                                                                file_id,
+                                                                                                                oracle_centerline_filtered,
+                                                                                                                agent_xy,
+                                                                                                                obs_len,
+                                                                                                                obs_len + pred_len,
+                                                                                                                max_points=max_points,
+                                                                                                                viz=viz)
+                                    assert interpolated_centerline.shape[0] == 40
+                                except:
+                                    # TODO: Take the closest max_points if the previous algorithm fails
+                                    pdb.set_trace()
+                                    map_features_utils_instance.debug_centerline_and_agent([oracle_centerline_orig], agent_xy, obs_len, obs_len+pred_len, split_name, file_id)
+                                    wrong_centerlines.append(file_id) 
+                                    print("Wrong centerlines: ", wrong_centerlines)              
+
+                                candidate_centerlines_list.append(interpolated_centerline)
+
+                            end_ = time.time()
+                            # print("Time consumed by L2 norm: ", end_-start_)
 
                 end = time.time()
 
                 aux_time += (end-start)
                 time_per_iteration = aux_time/(i+1)
-
+                
                 print(f"Time per iteration: {time_per_iteration} s. \n \
                         Estimated time to finish ({files_remaining} files): {round(time_per_iteration*files_remaining/60)} min")
-
+                print("Wrong centerlines: ", wrong_centerlines) 
             filename = os.path.join(BASE_DIR,config.dataset.path,split_name,
                                     f"data_processed_{str(int(features[1]*100))}_percent","relevant_centerlines.npy")
 

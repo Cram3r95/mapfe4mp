@@ -37,26 +37,27 @@ import model.datasets.argoverse.plot_functions as plot_functions
 
 APPLY_DATA_AUGMENTATION = False
 DEBUG_DATA_AUGMENTATION = False
-
-decision = [0,1] # Not apply/apply
-dropout_prob = [0.5,0.5] # Not applied/applied probability
-gaussian_noise_prob = [0.5,0.5]
-rotation_prob = [0.5,0.5]
-
-points_dropout_percentage = 0.5
-mu_noise,std_noise = 0,0.5
-rotation_angles = [90,180,270]
-rotation_angles_prob = [0.33,0.33,0.34]
+CURRENT_SPLIT = None
 
 # decision = [0,1] # Not apply/apply
-# dropout_prob = [0.3,0.7] # Not applied/applied probability
-# gaussian_noise_prob = [0.4,0.6]
-# rotation_prob = [0.3,0.7]
+# dropout_prob = [0.5,0.5] # Not applied/applied probability
+# gaussian_noise_prob = [0.5,0.5]
+# rotation_prob = [0.5,0.5]
 
-# points_dropout_percentage = 0.3
-# mu_noise,std_noise = 0,0.6
+# points_dropout_percentage = 0.5
+# mu_noise,std_noise = 0,0.5
 # rotation_angles = [90,180,270]
 # rotation_angles_prob = [0.33,0.33,0.34]
+
+decision = [0,1] # Not apply/apply
+dropout_prob = [0.3,0.7] # Not applied/applied probability
+gaussian_noise_prob = [0.4,0.6]
+rotation_prob = [0.3,0.7]
+
+points_dropout_percentage = 0.3
+mu_noise,std_noise = 0,0.2
+rotation_angles = [90,180,270]
+rotation_angles_prob = [0.33,0.33,0.34]
 
 # Auxiliar variables
 
@@ -108,9 +109,7 @@ def seq_collate(data):
 
     # Data augmentation
 
-    curr_split = data_imgs_folder.split('/')[-3]
-
-    if APPLY_DATA_AUGMENTATION and curr_split == "train":
+    if APPLY_DATA_AUGMENTATION and CURRENT_SPLIT == "train":
         aug_obs_traj = torch.zeros((obs_traj.shape))
         aug_obs_traj_rel = torch.zeros((obs_traj_rel.shape))
         aug_pred_traj_gt = torch.zeros((pred_traj_gt.shape))
@@ -217,12 +216,10 @@ def seq_collate(data):
 
     # Get physical information (image or goal points. Otherwise, use dummies)
 
-    # pdb.set_trace()
-
     start = time.time()
 
     first_obs = obs_traj[0,:,:] # 1 x agents · batch_size x 2
-    pdb.set_trace()
+
     if (PHYSICAL_CONTEXT == "visual"  # batch_size x channels x height x width 
      or PHYSICAL_CONTEXT == "goals"): # batch_size x num_goal_points x 2 (x|y) (real-world coordinates (HDmap))
         frames = dataset_utils.load_physical_information(num_seq_list, obs_traj_rel, first_obs, map_origin,
@@ -372,6 +369,8 @@ class ArgoverseMotionForecastingDataset(Dataset):
         super(ArgoverseMotionForecastingDataset, self).__init__()
 
         # Initialize class variables
+
+        self.init_global_variables = False
 
         self.obs_len, self.pred_len = obs_len, pred_len
         self.seq_len = self.obs_len + self.pred_len
@@ -554,18 +553,12 @@ class ArgoverseMotionForecastingDataset(Dataset):
         else:
             print("Loading .npy files as np data structures ...")
 
-            pdb.set_trace()
-
             preprocess_data_dict = dataset_utils.load_processed_files_from_npy(self.data_processed_folder)
-        
-            pdb.set_trace()
 
             seq_list, seq_list_rel, loss_mask_list, non_linear_obj, num_objs_in_seq, \
             seq_id_list, object_class_id_list, object_id_list, ego_vehicle_origin, num_seq_list, \
             straight_trajectories_list, curved_trajectories_list, city_ids, norm, relevant_centerlines  = \
                 operator.itemgetter(*variable_name_list)(preprocess_data_dict)
-
-            pdb.set_trace()
 
             # TODO: Refactorize this
             if self.extra_data_train != -1:
@@ -689,11 +682,15 @@ class ArgoverseMotionForecastingDataset(Dataset):
         32 because maybe there are not 34 csvs before this one)
         """
 
-        global data_imgs_folder, APPLY_DATA_AUGMENTATION, PHYSICAL_CONTEXT
-        data_imgs_folder = os.path.join(self.root_folder,self.split,"data_images")
+        if not self.init_global_variables:
+            global data_imgs_folder, APPLY_DATA_AUGMENTATION, PHYSICAL_CONTEXT, CURRENT_SPLIT
 
-        APPLY_DATA_AUGMENTATION = self.data_augmentation
-        PHYSICAL_CONTEXT = self.physical_context
+            data_imgs_folder = os.path.join(self.root_folder,self.split,"data_images")
+            APPLY_DATA_AUGMENTATION = self.data_augmentation
+            PHYSICAL_CONTEXT = self.physical_context
+            CURRENT_SPLIT = self.split
+
+            self.init_global_variables = True
 
         if self.class_balance >= 0.0: # Only during training
             if self.cont_seqs % self.batch_size == 0: # Get a new batch

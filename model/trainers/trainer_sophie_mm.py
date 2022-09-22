@@ -69,8 +69,15 @@ def init_weights(module):
     """
     """
     classname = module.__class__.__name__
-    if classname.find('Linear') != -1 and classname != "LinearRes":
-        nn.init.kaiming_normal_(module.weight)
+    try:
+        if classname.find('Linear') != -1 and classname != "LinearRes":
+            nn.init.kaiming_normal_(module.weight)
+    except: # Custom layers
+        keys = module.__dict__['_modules'].keys()
+
+        for key in keys:
+            if key.capitalize().find('Linear') != -1:
+                nn.init.kaiming_normal_(module.__dict__['_modules'][key].weight)
 
 def get_dtypes(use_gpu):
     """
@@ -81,27 +88,6 @@ def get_dtypes(use_gpu):
         long_dtype = torch.cuda.LongTensor
         float_dtype = torch.cuda.FloatTensor
     return long_dtype, float_dtype
-
-def handle_batch(batch, is_single_agent_out):
-    """
-    """
-    # Load batch in cuda
-
-    batch = [tensor.cuda(current_cuda) for tensor in batch]
-
-    (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel, non_linear_obj,
-     loss_mask, seq_start_end, frames, object_cls, obj_id, ego_origin, num_seq_list) = batch
-    
-    # Handle single agent
- 
-    agent_idx = None
-    if is_single_agent_out: # search agent idx
-        agent_idx = torch.where(object_cls==1)[0].cpu().numpy()
-        pred_traj_gt = pred_traj_gt[:,agent_idx, :]
-        pred_traj_gt_rel = pred_traj_gt_rel[:, agent_idx, :]
-
-    return (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel, non_linear_obj,
-            loss_mask, seq_start_end, frames, object_cls, obj_id, ego_origin, num_seq_list)
 
 # Aux functions losses
 
