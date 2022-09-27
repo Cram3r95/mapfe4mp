@@ -388,7 +388,7 @@ class MapFeaturesUtils:
         dfs_threshold_back = self._DFS_THRESHOLD_BACK_SCALE * (traj_len +
                                                                1) / 10
 
-        print("dfs_threshold_front, dfs_threshold_back: ", dfs_threshold_front, dfs_threshold_back)
+        # print("dfs_threshold_front, dfs_threshold_back: ", dfs_threshold_front, dfs_threshold_back)
 
         # DFS to get all successor and predecessor candidates
         obs_pred_lanes: List[Sequence[int]] = []
@@ -960,7 +960,7 @@ class MapFeaturesUtils:
             plt.plot(
                 first_obs_x,
                 first_obs_y,
-                "o",
+                "*",
                 color="b",
                 alpha=1,
                 markersize=5,
@@ -975,7 +975,7 @@ class MapFeaturesUtils:
             plt.plot(
                 last_obs_x,
                 last_obs_y,
-                "*",
+                "o",
                 color="b",
                 alpha=1,
                 markersize=5,

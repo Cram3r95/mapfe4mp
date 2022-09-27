@@ -205,6 +205,7 @@ def model_trainer(config, logger):
                                                    class_balance=config.dataset.class_balance,
                                                    obs_origin=config.hyperparameters.obs_origin,
                                                    data_augmentation=config.dataset.data_augmentation,
+                                                   physical_context=config.hyperparameters.physical_context,
                                                    extra_data_train=config.dataset.extra_data_train,
                                                    preprocess_data=config.dataset.preprocess_data,
                                                    save_data=config.dataset.save_data)
@@ -227,6 +228,7 @@ def model_trainer(config, logger):
                                                  split_percentage=config.dataset.split_percentage,
                                                  class_balance=-1,
                                                  obs_origin=config.hyperparameters.obs_origin,
+                                                 physical_context=config.hyperparameters.physical_context,
                                                  extra_data_train=config.dataset.extra_data_train,
                                                  preprocess_data=config.dataset.preprocess_data,
                                                  save_data=config.dataset.save_data)
@@ -335,6 +337,7 @@ def model_trainer(config, logger):
     # we are only training right now the specified number of epochs / iterations (given by current_iteration and
     # hyperparameters.num_iterations)
     
+    num_analyzed_seqs = 0
     time_iterations = float(0)
     time_per_iteration = float(0)
     current_iteration = 0 # Current iteration, regardless the model had previous training
@@ -342,7 +345,7 @@ def model_trainer(config, logger):
 
     # while t < hyperparameters.num_iterations + previous_t:
     global g_lr
-    while g_lr >= (hyperparameters.lr_min - sys.float_info.epsilon):
+    while g_lr > hyperparameters.lr_min:
         gc.collect()
         epoch += 1
         logger.info('Starting epoch {}'.format(epoch))
@@ -533,6 +536,8 @@ def model_trainer(config, logger):
     # Check train and validation metrics once the training is finished
     # Because you check every N iterations, but not specifically the last one
 
+    num_analyzed_seqs = t * config.dataset.batch_size
+
     ## Check train metrics
 
     logger.info('Checking stats on train ...')
@@ -545,7 +550,7 @@ def model_trainer(config, logger):
     for k, v in sorted(metrics_train.items()):
         logger.info('  [train] {}: {:.3f}'.format(k, v))
         if hyperparameters.tensorboard_active:
-            writer.add_scalar(k, v, t+1)
+            writer.add_scalar(k, v, num_analyzed_seqs)
         if k not in checkpoint.config_cp["metrics_train"].keys():
             checkpoint.config_cp["metrics_train"][k] = []
         checkpoint.config_cp["metrics_train"][k].append(v)
@@ -566,7 +571,7 @@ def model_trainer(config, logger):
     for k, v in sorted(metrics_val.items()):
         logger.info('  [val] {}: {:.3f}'.format(k, v))
         if hyperparameters.tensorboard_active:
-            writer.add_scalar(k, v, t+1)
+            writer.add_scalar(k, v, num_analyzed_seqs)
         if k not in checkpoint.config_cp["metrics_val"].keys():
             checkpoint.config_cp["metrics_val"][k] = []
         checkpoint.config_cp["metrics_val"][k].append(v)
@@ -624,10 +629,10 @@ def generator_step(hyperparameters, batch, generator, optimizer_g,
     """
     # Load data in device
 
-    batch = [tensor.cuda(current_cuda) for tensor in batch]
+    batch = [tensor.cuda(current_cuda) for tensor in batch if torch.is_tensor(tensor)]
 
     (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel, non_linear_obj,
-     loss_mask, seq_start_end, frames, object_cls, obj_id, map_origin, num_seq, norm) = batch
+     loss_mask, seq_start_end, object_cls, obj_id, map_origin, num_seq, norm, phy_info) = batch
 
     # Take (if specified) data of only the AGENT of interest
 
@@ -646,7 +651,7 @@ def generator_step(hyperparameters, batch, generator, optimizer_g,
     with autocast():
         # Forward (If agent_idx != None, model prediction refers only to target agent)
 
-        pred_traj_fake_rel, conf = generator(obs_traj, obs_traj_rel, seq_start_end, agent_idx)
+        pred_traj_fake_rel, conf = generator(obs_traj, obs_traj_rel, seq_start_end, agent_idx, phy_info)
 
         if hyperparameters.output_single_agent:
             pred_traj_fake = relative_to_abs_multimodal(pred_traj_fake_rel, obs_traj[-1,agent_idx,:])
@@ -753,7 +758,7 @@ def check_accuracy(hyperparameters, loader, generator,
             batch = [tensor.cuda(current_cuda) for tensor in batch]
 
             (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel, non_linear_obj,
-             loss_mask, seq_start_end, frames, object_cls, obj_id, ego_origin, _, _) = batch
+             loss_mask, seq_start_end, object_cls, obj_id, map_origin, num_seq, norm, phy_info) = batch
 
             # Take (if specified) data of only the AGENT of interest
 
@@ -777,7 +782,7 @@ def check_accuracy(hyperparameters, loader, generator,
 
             # Forward (If agent_idx != None, model prediction refers only to target agent)
 
-            pred_traj_fake_rel, conf = generator(obs_traj, obs_traj_rel, seq_start_end, agent_idx)
+            pred_traj_fake_rel, conf = generator(obs_traj, obs_traj_rel, seq_start_end, agent_idx, phy_info)
 
             if hyperparameters.output_single_agent:
                 pred_traj_fake = relative_to_abs_multimodal(pred_traj_fake_rel, obs_traj[-1,agent_idx,:])

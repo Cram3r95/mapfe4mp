@@ -62,7 +62,7 @@ rotation_angles_prob = [0.33,0.33,0.34]
 # Auxiliar variables
 
 data_imgs_folder = None
-PHYSICAL_CONTEXT = "Dummies"
+PHYSICAL_CONTEXT = "dummy" # dummy, visual, oracle, goals 
 
 dist_around = 40
 dist_rasterized_map = [-dist_around, dist_around, -dist_around, dist_around]
@@ -74,7 +74,7 @@ dist_rasterized_map = [-dist_around, dist_around, -dist_around, dist_around]
 def seq_collate(data):
     """
     This function takes the output of __getitem__ and returns a specific format
-    that will be used by the PyTorch class to output the data (used by the model)
+    that will be used by the PyTorch class to output the data (used by the model).
 
     N.B. Data augmentation must be always in the seq_collate function in order
     to always generate different data, not in the main class where the preprocessed
@@ -85,7 +85,7 @@ def seq_collate(data):
 
     (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel,
      non_linear_obj, loss_mask, seq_id_list, object_class_id_list, 
-     object_id_list, city_id, map_origin, num_seq_list, norm) = zip(*data)
+     object_id_list, city_id, map_origin, num_seq_list, norm, phy_info) = zip(*data)
 
     _len = [len(seq) for seq in obs_traj]
     cum_start_idx = [0] + np.cumsum(_len).tolist()
@@ -156,12 +156,12 @@ def seq_collate(data):
 
             ## N.B. If you apply rotation as data augmentation, the groundtruth must be rotated too!
             
-            rot_angle = 0
-            if np.any(apply_rotation): 
-                rot_angle = np.random.choice(rotation_angles,1,p=rotation_angles_prob).item()
+            # rot_angle = 0
+            # if np.any(apply_rotation): 
+            #     rot_angle = np.random.choice(rotation_angles,1,p=rotation_angles_prob).item()
 
-                aug_curr_obs_traj = data_augmentation_functions.rotate_traj(aug_curr_obs_traj,rot_angle)
-                aug_curr_pred_traj_gt = data_augmentation_functions.rotate_traj(aug_curr_pred_traj_gt,rot_angle)
+            #     aug_curr_obs_traj = data_augmentation_functions.rotate_traj(aug_curr_obs_traj,rot_angle)
+            #     aug_curr_pred_traj_gt = data_augmentation_functions.rotate_traj(aug_curr_pred_traj_gt,rot_angle)
 
             ## Get first obs and new relatives after data augmentation for this sequence
 
@@ -222,14 +222,16 @@ def seq_collate(data):
 
     if (PHYSICAL_CONTEXT == "visual"  # batch_size x channels x height x width 
      or PHYSICAL_CONTEXT == "goals"): # batch_size x num_goal_points x 2 (x|y) (real-world coordinates (HDmap))
-        frames = dataset_utils.load_physical_information(num_seq_list, obs_traj_rel, first_obs, map_origin,
-                                                         dist_rasterized_map, object_class_id_list, data_imgs_folder,
-                                                         physical_context=PHYSICAL_CONTEXT,debug_images=False)
-        frames = torch.from_numpy(frames).type(torch.float32)
-        if PHYSICAL_CONTEXT == "visual": frames = frames.permute(0, 3, 1, 2)
-    else: # dummy frames
-        frames = np.random.randn(1,1,1,1)
-        frames = torch.from_numpy(frames).type(torch.float32)
+        phy_info = dataset_utils.load_physical_information(num_seq_list, obs_traj_rel, first_obs, map_origin,
+                                                           dist_rasterized_map, object_class_id_list, data_imgs_folder,
+                                                           physical_context=PHYSICAL_CONTEXT,debug_images=False)
+        phy_info = torch.from_numpy(phy_info).type(torch.float32)
+        if PHYSICAL_CONTEXT == "visual": phy_info = phy_info.permute(0, 3, 1, 2)
+    elif PHYSICAL_CONTEXT == "oracle":
+        phy_info = torch.stack(phy_info)
+    elif PHYSICAL_CONTEXT == "dummy": # dummy phy_info
+        phy_info = np.random.randn(1,1,1,1)
+        phy_info = torch.from_numpy(phy_info).type(torch.float32)
 
     end = time.time()
     # print(f"Time consumed by load_images function: {end-start}\n")
@@ -241,7 +243,7 @@ def seq_collate(data):
     norm = torch.stack(norm)
 
     out = [obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel, non_linear_obj,
-           loss_mask, seq_start_end, frames, object_cls, obj_id, map_origin, num_seq_list, norm]
+           loss_mask, seq_start_end, object_cls, obj_id, map_origin, num_seq_list, norm, phy_info]
 
     end = time.time()
     # print(f"Time consumed by seq_collate function: {end-start}\n")
@@ -651,25 +653,27 @@ class ArgoverseMotionForecastingDataset(Dataset):
         self.pred_traj_gt = torch.from_numpy(seq_list[:, :, self.obs_len:]).type(torch.float)
         self.obs_traj_rel = torch.from_numpy(seq_list_rel[:, :, :self.obs_len]).type(torch.float)
         self.pred_traj_gt_rel = torch.from_numpy(seq_list_rel[:, :, self.obs_len:]).type(torch.float)
+
         self.loss_mask = torch.from_numpy(loss_mask_list).type(torch.float)
         self.non_linear_obj = torch.from_numpy(non_linear_obj).type(torch.float)
         cum_start_idx = [0] + np.cumsum(num_objs_in_seq).tolist()
         self.seq_start_end = [(start, end) for start, end in zip(cum_start_idx, cum_start_idx[1:])]
+
         self.seq_id_list = torch.from_numpy(seq_id_list).type(torch.float)
         self.object_class_id_list = torch.from_numpy(object_class_id_list).type(torch.float)
         self.object_id_list = torch.from_numpy(object_id_list).type(torch.float)
         self.ego_vehicle_origin = torch.from_numpy(ego_vehicle_origin).type(torch.float)
         self.city_ids = torch.from_numpy(city_ids).type(torch.float)
-
-        self.num_seq_list = torch.from_numpy(num_seq_list).type(torch.int)
-        self.num_seq = len(num_seq_list)
-
         self.straight_trajectories_list = torch.from_numpy(straight_trajectories_list).type(torch.int)
         self.curved_trajectories_list = torch.from_numpy(curved_trajectories_list).type(torch.int)
         self.curved_aux_list = copy.deepcopy(self.curved_trajectories_list)
         self.norm = torch.from_numpy(np.array(norm))
+        
+        self.num_seq_list = torch.from_numpy(num_seq_list).type(torch.int)
+        self.num_seq = len(num_seq_list)
 
-        # self.physical_information = 
+        relevant_centerlines = relevant_centerlines - ego_vehicle_origin # from global coordinates to absolute coordinates
+        self.phy_info = torch.from_numpy(relevant_centerlines).type(torch.float)
         
     def __len__(self):
         return self.num_seq
@@ -742,8 +746,8 @@ class ArgoverseMotionForecastingDataset(Dataset):
                     self.non_linear_obj[start:end], self.loss_mask[start:end, :],
                     self.seq_id_list[start:end, :, :], self.object_class_id_list[start:end], 
                     self.object_id_list[start:end], self.city_ids[index], self.ego_vehicle_origin[index,:,:],
-                    self.num_seq_list[index], self.norm
-                ] 
+                    self.num_seq_list[index], self.norm, self.phy_info[index,:,:]
+                  ] 
         except: # Well done (for test) -> origin is N x 2
             out = [
                     self.obs_traj[start:end, :, :], self.pred_traj_gt[start:end, :, :],
@@ -751,8 +755,8 @@ class ArgoverseMotionForecastingDataset(Dataset):
                     self.non_linear_obj[start:end], self.loss_mask[start:end, :],
                     self.seq_id_list[start:end, :, :], self.object_class_id_list[start:end], 
                     self.object_id_list[start:end], self.city_ids[index], self.ego_vehicle_origin[index,:], # HERE THE DIFFERENCE
-                    self.num_seq_list[index], self.norm
-                ]
+                    self.num_seq_list[index], self.norm, self.phy_info[index,:,:]
+                  ]
 
         # Increase file count
         

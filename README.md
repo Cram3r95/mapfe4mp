@@ -62,17 +62,21 @@ Go to the argoverse-api folder:
 pip install -e . (N.B. You must have the conda environment activated in order to have argoverse as a Python package of your environment)
 ```
 
+## Quantitative results
+
 More details soon ...
 
 ## Qualitative results
-Check [our paper here](https://arxiv.org/abs/2205.13071) for more results.
 
-<img src="media/qual-results-mp.png" style="width:30%">
+More details soon ...
+
+<img src="media/val_9_mm.png" style="width:30%">
+<img src="media/val_11_mm.png" style="width:30%">
+<img src="media/val_28_mm.png" style="width:30%">
 
 ## Contact
 
 Please add in the email subject "mapfe4mp" or "exploring map features paper"
 
 Carlos Gómez-Huélamo. [carlos.gomezh@edu.uah.es](mailto:carlos.gomezh@edu.uah.es)
-
 Marcos Conde [marcos.conde-osorio@uni-wuerzburg.de](mailto:marcos.conde-osorio@uni-wuerzburg.de)

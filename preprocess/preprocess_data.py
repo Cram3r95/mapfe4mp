@@ -52,13 +52,13 @@ with open(config_path) as config:
     config = Prodict.from_dict(config)
     config.base_dir = BASE_DIR
 
-config.dataset.start_from_percentage = 0.82
+config.dataset.start_from_percentage = 0.0
 
 # Preprocess data
                          # Split, Process, Split percentage
-splits_to_process = dict({"train":[True,0.01],
-                          "val":[True,0.01],
-                          "test":[False,1.0]})
+splits_to_process = dict({"train":[False,0.1], # 0.01 (1 %), 0.1 (10 %), 1.0 (100 %)
+                          "val":[False,0.1],
+                          "test":[True,1.0]})
 modes_centerlines = ["train"] #,"test"] # if train -> compute the best candidate (oracle)
                               # if test, return N plausible candidates
 
@@ -71,8 +71,12 @@ freq = 10 # Hz ("steps/s")
 obs_origin = 20 
 min_dist_around = 25
 max_points = 40
+min_points = 4 # to perform a cubic interpolation you need at least 3 points
 
-wrong_centerlines = []
+viz = True
+limit_qualitative_results = 150
+debug = False
+check_every = 0.1 # % of total files
 
 RAW_DATA_FORMAT = {
     "TIMESTAMP": 0,
@@ -85,7 +89,6 @@ RAW_DATA_FORMAT = {
 
 map_features_utils_instance = MapFeaturesUtils()
 avm = ArgoverseMap()
-viz = False
 
 def find_nearest(array, value):
     array = np.asarray(array)
@@ -97,6 +100,7 @@ for split_name,features in splits_to_process.items():
         # Agents trajectories
 
         if PREPROCESS_SOCIAL_DATA:
+            print(f"Analyzing social data of {split_name} split ...")
             ArgoverseMotionForecastingDataset(dataset_name=config.dataset_name,
                                               root_folder=os.path.join(config.base_dir,config.dataset.path),
                                               obs_len=config.hyperparameters.obs_len,
@@ -113,6 +117,9 @@ for split_name,features in splits_to_process.items():
         # Most relevant lanes around the target agent
 
         if PREPROCESS_RELEVANT_CENTERLINES:
+            print(f"Analyzing physical information of {split_name} split ...")
+            wrong_centerlines = []
+
             folder = os.path.join(BASE_DIR,config.dataset.path,split_name,"data")
             files, num_files = load_list_from_folder(folder)
             afl = ArgoverseForecastingLoader(folder)
@@ -125,9 +132,9 @@ for split_name,features in splits_to_process.items():
                 file_id = int(os.path.normpath(file_name).split('/')[-1].split('.')[0])
                 file_id_list.append(file_id)
             file_id_list.sort()
-            print("Num files: ", num_files)
 
             n_files = int(features[1]*num_files)
+            print("Num files to analyze: ", num_files)
             start_from = int(config.dataset.start_from_percentage*n_files)
 
             if (start_from + n_files) >= num_files:
@@ -135,12 +142,27 @@ for split_name,features in splits_to_process.items():
             else:
                 file_id_list = file_id_list[start_from:start_from+n_files]
 
+            ##############################################################################
+            # Overwrite file_id_list with some specific sequences to analyze the behaviour
+            # E.g. Those sequences for which the interpolated oracle has not been computed 
+            # correctly
+
+            # file_id_list = [27353, 57791, 102781, 129915, 143124, 146034, 149913, 154633, 160433, 166298, 168101, 189296, 209572]
+
+            ##############################################################################
+
+            check_every_n_files = int(len(file_id_list)*check_every)
+            print(f"Check remaining time every {check_every_n_files} files")
             time_per_iteration = float(0)
             aux_time = float(0)
             candidate_centerlines_list = []
 
             for i, file_id in enumerate(file_id_list):
-                print(f"File {file_id} -> {i+1}/{len(file_id_list)}")
+                # print(f"File {file_id} -> {i+1}/{len(file_id_list)}")
+
+                if limit_qualitative_results != -1 and i+1 > limit_qualitative_results:
+                    viz = False
+
                 files_remaining = len(file_id_list) - (i+1)
                 seq_path = os.path.join(root_file_name,str(file_id)+".csv")
 
@@ -164,7 +186,7 @@ for split_name,features in splits_to_process.items():
                     # Map features extraction
 
                     if file_id != -1:
-                    # if file_id == 1749:
+                    # if file_id == 5319:
                         map_features, map_feature_helpers = map_features_utils_instance.compute_map_features(
                                 agent_track,
                                 file_id,
@@ -210,7 +232,9 @@ for split_name,features in splits_to_process.items():
                                 dist_around = min_dist_around
 
                             idx, value = find_nearest(dist_array_last,dist_around)
-                            num_points = idx + 1 + (closest_wp_last - closest_wp_first)
+                            num_points = idx + (closest_wp_last - closest_wp_first)
+                            if num_points < min_points:
+                                    num_points = min_points # you must have at least 4 points to conduct a cubic interpolation
 
                             # Determine if the best oracle is inverted (this sometimes happens if the corresponding agent is
                             # carrying a lane change maneuver): The best and most interpretable solution is if the
@@ -238,11 +262,11 @@ for split_name,features in splits_to_process.items():
                                     invert = True
 
                             except Exception as e:
-                                print("e: ", e)
+                                # print("e: ", e)
                                 invert = True
 
                             if invert:
-                                print("invert oracle")
+                                # print("invert oracle")
 
                                 oracle_centerline_orig = copy.deepcopy(oracle_centerline)
                                 oracle_centerline = oracle_centerline[::-1]
@@ -258,36 +282,51 @@ for split_name,features in splits_to_process.items():
                                 closest_wp_last, dist_array_last = map_features_utils_instance.get_closest_wp(last_obs, oracle_centerline)
                                 dist_array_last = dist_array_last[closest_wp_last:]
 
-                                idx, value = find_nearest(dist_array_last,dist_around)
-                                num_points = idx + 1 + (closest_wp_last - closest_wp_first)
+                                idx, value = find_nearest(dist_array_last,dist_around) # TODO: Take the next point, or an interpolated point
+                                # between the closest and the next
+
+                                num_points = idx + (closest_wp_last - closest_wp_first)
+                                if num_points < min_points:
+                                    num_points = min_points # you must have at least 4 points to conduct a cubic interpolation
 
                             # Reduce the lane to the closest N points, starting from the first observation 
                             # (closest to current position) and ending in the closest wp assuming CTRA during pred seconds
 
                             end_point = agent_xy[-1,:]
 
-                            oracle_centerline_filtered = oracle_centerline[closest_wp_first:closest_wp_first+num_points,:]
+                            if closest_wp_first+num_points+1 <= oracle_centerline.shape[0]:
+                                oracle_centerline_filtered = oracle_centerline[closest_wp_first:closest_wp_first+num_points+1,:]
+                            else: # If we have reached the end, travel backwards 
+                                  # TODO: Interpolate frontwards
+                                back_num_points = (closest_wp_first+num_points+1) - oracle_centerline.shape[0]
+                                print("back: ", back_num_points)
+                                oracle_centerline_filtered = oracle_centerline[closest_wp_first-back_num_points:,:]
                             
                             if oracle_centerline_filtered.shape[0] != max_points:
                                 try:
                                     interpolated_centerline = map_features_utils_instance.interpolate_centerline(split_name,
-                                                                                                                file_id,
-                                                                                                                oracle_centerline_filtered,
-                                                                                                                agent_xy,
-                                                                                                                obs_len,
-                                                                                                                obs_len + pred_len,
-                                                                                                                max_points=max_points,
-                                                                                                                viz=viz)
+                                                                                                                 file_id,
+                                                                                                                 oracle_centerline_filtered,
+                                                                                                                 agent_xy,
+                                                                                                                 obs_len,
+                                                                                                                 obs_len + pred_len,
+                                                                                                                 max_points=max_points,
+                                                                                                                 viz=viz)
+
                                     assert interpolated_centerline.shape[0] == 40
+
+                                    candidate_centerlines_list.append(interpolated_centerline)
                                 except:
                                     # TODO: Take the closest max_points if the previous algorithm fails
-                                    pdb.set_trace()
+                                    
                                     map_features_utils_instance.debug_centerline_and_agent([oracle_centerline_orig], agent_xy, obs_len, obs_len+pred_len, split_name, file_id)
-                                    wrong_centerlines.append(file_id) 
-                                    print("Wrong centerlines: ", wrong_centerlines)              
-
-                                candidate_centerlines_list.append(interpolated_centerline)
-
+                                    pdb.set_trace()
+                                    wrong_centerlines.append(file_id)            
+              
+                            else:
+                                # print("The algorithm has the exact number of points")
+                                candidate_centerlines_list.append(oracle_centerline_filtered)
+                                
                             end_ = time.time()
                             # print("Time consumed by L2 norm: ", end_-start_)
 
@@ -296,12 +335,22 @@ for split_name,features in splits_to_process.items():
                 aux_time += (end-start)
                 time_per_iteration = aux_time/(i+1)
                 
-                print(f"Time per iteration: {time_per_iteration} s. \n \
-                        Estimated time to finish ({files_remaining} files): {round(time_per_iteration*files_remaining/60)} min")
-                print("Wrong centerlines: ", wrong_centerlines) 
-            filename = os.path.join(BASE_DIR,config.dataset.path,split_name,
-                                    f"data_processed_{str(int(features[1]*100))}_percent","relevant_centerlines.npy")
+                if i % check_every_n_files == 0:
+                    print(f"Time per iteration: {time_per_iteration} s. \n \
+                            Estimated time to finish ({files_remaining} files): {round(time_per_iteration*files_remaining/60)} min")
+                    print("Wrong centerlines: ", wrong_centerlines) 
+
+            if debug:
+                filename = os.path.join(BASE_DIR,config.dataset.path,split_name,
+                                        f"data_processed_{str(int(features[1]*100))}_percent","debug_relevant_centerlines.npy")
+            else:
+                filename = os.path.join(BASE_DIR,config.dataset.path,split_name,
+                                        f"data_processed_{str(int(features[1]*100))}_percent","relevant_centerlines.npy")
 
             with open(filename, 'wb') as my_file: np.save(my_file, candidate_centerlines_list)
+
+# Not analyzed
+
+# Train: 
 
         

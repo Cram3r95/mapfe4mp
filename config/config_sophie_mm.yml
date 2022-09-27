@@ -8,7 +8,7 @@ dataset_name: argoverse_motion_forecasting_dataset
 dataset:
     path: data/datasets/argoverse/motion-forecasting/
     split: "train"
-    batch_size: 1024
+    batch_size: 512
     num_workers: 0
     start_from_percentage: 0.0 # By default, 0. If you want to analize a particular bunch of files (e.g. from 25 % to 50 %)
                                # then write here 0.25 and in split_percentage 0.25
@@ -34,8 +34,7 @@ hyperparameters:
     use_rel_disp: &use_rel_disp True # If True, use dx/dy (equivalent to velocities) 
                                      # to encode/decode. 
                                      # Otherwise, use absolute coordinates
-                                     # (around target agent) and apply convolutions
-                                     # to model velocity and accelerations
+    physical_context: "oracle" # dummy, visual, oracle, goals 
 
     num_modes: 6 # Multimodality
     obs_origin: 20 # This frame will be the origin, tipically the first observation (1) or last observation 
@@ -70,10 +69,12 @@ hyperparameters:
     clipping_threshold_g: 1.1
     
     save_root_dir: "save/argoverse"
-    exp_name: "test_2" # If no specific exp_name is used, fill with current day and hour
+    exp_name: # If no specific exp_name is used, fill with current day and hour
     output_dir: # To be filled in the code (save_root_dir/model_name/split_percentage/exp)
     checkpoint_start_from:
-    exp_description: "test_2"
+    exp_description: "dataset 10 % with interpolated oracle centerlines.
+                      16 convolutional filters instead of 60 in the map encoder
+                      Test Multi (Linear+LSTM) encoding the output in the same loop, and new confidences"
     tensorboard_active: True
 
 # Model

@@ -60,6 +60,7 @@ if __name__ == "__main__":
     parser.add_argument("--trainer", required=True, type=str, choices=TRAINER_LIST)
     parser.add_argument("--device_gpu", required=True, type=int, default=0)
     parser.add_argument("--from_exp", type=str, default=None)
+    parser.add_argument("--overwrite_exp", type=bool, default=False)
     parser.add_argument("--num_ckpt", type=str, default="0")
     parser.add_argument("--batch_size", type=int, default=0)
     parser.add_argument("--output_dir", type=str, default="save")
@@ -103,18 +104,17 @@ if __name__ == "__main__":
   
         if args.from_exp and os.path.isdir(args.from_exp): # Overwrite checkpoint_start_from
             model = config["dataset_name"] + "_" + args.num_ckpt + "_with_model.pt"
-
             config["hyperparameters"]["checkpoint_start_from"] = os.path.join(args.from_exp,model)
         else:
             dataset_name = config["dataset_name"]
             filename = os.path.join(config["hyperparameters"]["output_dir"],f"{dataset_name}_0_with_model.pt")
-            assert not os.path.exists(filename),print("This path already has a checkpoint!")
 
-            # If the dir does not exist, or it does not have a checkpoint, delete
+            if args.overwrite_exp:
+                path_to_remove = config["hyperparameters"]["output_dir"]
+                os.system(f"rm -rf {path_to_remove}")
+            else:
+                assert not os.path.exists(filename),print("This path already has a checkpoint!")
 
-            path_to_remove = config["hyperparameters"]["output_dir"]
-            os.system(f"rm -rf {path_to_remove}")
-  
         if not os.path.exists(config["hyperparameters"]["output_dir"]):
             print("Create experiment path: ", config["hyperparameters"]["output_dir"])
             os.makedirs(config["hyperparameters"]["output_dir"]) # makedirs creates intermediate folders
