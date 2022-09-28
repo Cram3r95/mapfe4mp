@@ -73,7 +73,7 @@ min_dist_around = 25
 max_points = 40
 min_points = 4 # to perform a cubic interpolation you need at least 3 points
 
-viz = True
+viz = False
 limit_qualitative_results = 150
 debug = False
 check_every = 0.1 # % of total files

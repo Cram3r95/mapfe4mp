@@ -8,11 +8,11 @@ dataset_name: argoverse_motion_forecasting_dataset
 dataset:
     path: data/datasets/argoverse/motion-forecasting/
     split: "train"
-    batch_size: 512
+    batch_size: 1
     num_workers: 0
     start_from_percentage: 0.0 # By default, 0. If you want to analize a particular bunch of files (e.g. from 25 % to 50 %)
                                # then write here 0.25 and in split_percentage 0.25
-    split_percentage: 0.1 # % of the dataset (0-1)
+    split_percentage: 0.01 # % of the dataset (0-1)
     extra_data_train: -1.0 # % (0-1) of the val split is used for training too. Remaining files are used for validation
                           # -1.0 if not used
     shuffle: True 
@@ -26,7 +26,7 @@ dataset:
 # Model hyperparameters
 
 optim_parameters:
-    g_learning_rate: 1.0e-3
+    g_learning_rate: 1.0e-3 # 1.0e-3
     g_weight_decay: 1.0e-3
 hyperparameters:
     output_single_agent: True
@@ -61,7 +61,7 @@ hyperparameters:
     loss_fa_weight: 1
 
     lr_scheduler: True
-    lr_decay_factor: 0.75
+    lr_decay_factor: 0.5
     lr_min: 5.0e-5
     lr_epoch_percentage_patience: 0.15 # (0-N) E.g. If 0.05 -> the patience will be the 5 % of the total epochs
     

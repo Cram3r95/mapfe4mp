@@ -91,7 +91,6 @@ More details soon ...
 
 Work done with Miguel Ortiz, Santiago Montiel, Rafael Barea, [Luis M. Bergasa](https://scholar.google.com/citations?hl=en&user=uEBILewAAAAJ)
 
-
 ```
 @article{gomez2022exploring,
   title={Exploring Map-based Features for Efficient Attention-based Vehicle Motion Prediction},

@@ -79,7 +79,7 @@ dist_around = 40
 dist_rasterized_map = [-dist_around, dist_around, -dist_around, dist_around]
 
 GENERATE_QUALITATIVE_RESULTS = True
-PLOT_WORST_SCENES = True
+PLOT_WORST_SCENES = False
 LIMIT_QUALITATIVE_RESULTS = 150
 
 COMPUTE_METRICS = True
@@ -175,7 +175,7 @@ def evaluate(loader, generator, config, split, current_cuda, pred_len, results_p
                 files_remaining = num_files - (batch_index+1)
                 print(f"Evaluating batch {batch_index+1}/{len(loader)}")
 
-            if 'worst_scenes' in locals(): # Analyze some specific sequences
+            if worst_scenes: # Analyze some specific sequences
                 if batch_index > max(worst_scenes):
                     break
                 elif batch_index not in worst_scenes:
@@ -186,9 +186,9 @@ def evaluate(loader, generator, config, split, current_cuda, pred_len, results_p
             # Load batch in device
 
             batch = [tensor.cuda(current_cuda) for tensor in batch]
-            
+
             (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel, non_linear_obj,
-             loss_mask, seq_start_end, frames, object_cls, obj_id, map_origin, num_seq, norm) = batch
+             loss_mask, seq_start_end, object_cls, obj_id, map_origin, num_seq, norm, phy_info) = batch
 
             seq_id = num_seq.cpu().item()
             print(f"{seq_id}.csv")
@@ -231,7 +231,7 @@ def evaluate(loader, generator, config, split, current_cuda, pred_len, results_p
 
                 ## Get predictions (relative displacements)
 
-                pred_traj_fake_rel, conf = generator(obs_traj, obs_traj_rel, seq_start_end, agent_idx)
+                pred_traj_fake_rel, conf = generator(obs_traj, obs_traj_rel, seq_start_end, agent_idx, phy_info)
 
                 ## Get predictions in absolute -> map coordinates
 
@@ -289,22 +289,6 @@ def evaluate(loader, generator, config, split, current_cuda, pred_len, results_p
                 curr_object_class_id_list = object_cls
 
                 filename = f"data/datasets/argoverse/motion-forecasting/{split}/data_images/{seq_id}.png"
-
-                # Custom plot
-                # TODO: Compute the optimal distance for each seq (only qualitative results)
-                # plot_functions.plot_trajectories_custom(filename,
-                #                                         results_path,
-                #                                         curr_traj,
-                #                                         curr_map_origin,
-                #                                         curr_object_class_id_list,
-                #                                         dist_rasterized_map, 
-                #                                         obs_len=obs_traj.shape[0],
-                #                                         smoothen=False,
-                #                                         save=True,
-                #                                         pred_trajectories=pred_traj_fake.squeeze(0).permute(1,0,2),
-                #                                         ade_metric=ade_min,
-                #                                         fde_metric=fde_min, 
-                #                                         change_bg=True)
 
                 # Argoverse standard plot
 
@@ -379,6 +363,7 @@ def main(args):
     # Dataloader
 
     print(f"Load {config.dataset.split} split...")
+
     data_split = ArgoverseMotionForecastingDataset(dataset_name=config.dataset_name,
                                                    root_folder=config.dataset.path,
                                                    obs_len=config.hyperparameters.obs_len,
@@ -389,9 +374,7 @@ def main(args):
                                                    batch_size=config.dataset.batch_size,
                                                    class_balance=config.dataset.class_balance,
                                                    obs_origin=config.hyperparameters.obs_origin,
-                                                   data_augmentation=config.dataset.data_augmentation,
-                                                   preprocess_data=config.dataset.preprocess_data,
-                                                   save_data=config.dataset.save_data)
+                                                   physical_context=config.hyperparameters.physical_context)
 
     split_loader = DataLoader(data_split,
                               batch_size=config.dataset.batch_size,
@@ -422,8 +405,11 @@ def main(args):
     # Get worst scenes in order to plot and analyze
 
     metrics_sorted_csv = os.path.join(results_path,"metrics_sorted_ade.csv")
+    
     if os.path.isfile(metrics_sorted_csv) and PLOT_WORST_SCENES:
         worst_scenes = get_worst_scenes(metrics_sorted_csv)
+    else:
+        worst_scenes = None
 
     print(f"Evaluate model in {config.dataset.split} split")
     output_predictions, output_probabilities, ade_list, fde_list, traj_kind_list, num_seq_list = \
@@ -462,5 +448,11 @@ python evaluate/argoverse/generate_results_rel-rel.py \
 """
 python evaluate/argoverse/generate_results_rel-rel.py \
 --model_path "save/argoverse/sophie_mm/100.0_percent/exp-2022-08-26_06h/argoverse_motion_forecasting_dataset_0_with_model.pt" \
+--device_gpu 0 --split "test"
+"""
+
+"""
+python evaluate/argoverse/generate_results_rel-rel.py \
+--model_path "save/argoverse/sophie_mm/100.0_percent/exp-2022-09-26_06h/argoverse_motion_forecasting_dataset_0_with_model.pt" \
 --device_gpu 0 --split "test"
 """

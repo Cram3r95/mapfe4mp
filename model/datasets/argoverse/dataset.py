@@ -672,7 +672,11 @@ class ArgoverseMotionForecastingDataset(Dataset):
         self.num_seq_list = torch.from_numpy(num_seq_list).type(torch.int)
         self.num_seq = len(num_seq_list)
 
-        relevant_centerlines = relevant_centerlines - ego_vehicle_origin # from global coordinates to absolute coordinates
+        try: # train, val TODO: Preprocess again the map data
+            relevant_centerlines = relevant_centerlines - ego_vehicle_origin # from global coordinates to absolute coordinates
+        except:
+            relevant_centerlines = relevant_centerlines - np.expand_dims(ego_vehicle_origin,axis=1)
+
         self.phy_info = torch.from_numpy(relevant_centerlines).type(torch.float)
         
     def __len__(self):

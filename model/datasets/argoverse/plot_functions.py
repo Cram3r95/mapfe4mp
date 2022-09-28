@@ -517,6 +517,10 @@ def viz_predictions_all(
         city_names (numpy array): city names for each trajectory
         show (bool): if True, show
     """
+    
+    splits_name = ["train","val","test"]
+    split_name = results_path.split('/')[-1]
+    assert split_name in splits_name, "Wrong results_path!"
 
     # https://www.computerhope.com/htmcolor.htm#color-codes
     color_dict_obs = {"AGENT": "#ECA154", "OTHER": "#413839", "AV": "#0000A5"}
@@ -579,27 +583,29 @@ def viz_predictions_all(
             markersize=9,
         )
         # Groundtruth prediction
-        plt.plot(
-            target[i, :, 0],
-            target[i, :, 1],
-            color=color_dict_pred_gt[object_type],
-            label="Target",
-            alpha=1,
-            linewidth=3,
-            zorder=20,
-        )
-        # Groundtruth end-point
-        plt.plot(
-            target[i, -1, 0],
-            target[i, -1, 1],
-            "D",
-            color=color_dict_pred_gt[object_type],
-            label="Target",
-            alpha=1,
-            linewidth=3,
-            zorder=20,
-            markersize=9,
-        )
+
+        if split_name != "test":
+            plt.plot(
+                target[i, :, 0],
+                target[i, :, 1],
+                color=color_dict_pred_gt[object_type],
+                label="Target",
+                alpha=1,
+                linewidth=3,
+                zorder=20,
+            )
+            # Groundtruth end-point
+            plt.plot(
+                target[i, -1, 0],
+                target[i, -1, 1],
+                "D",
+                color=color_dict_pred_gt[object_type],
+                label="Target",
+                alpha=1,
+                linewidth=3,
+                zorder=20,
+                markersize=9,
+            )
         # Centerlines (Optional)
         if len(centerlines) > 0:
             for j in range(len(centerlines[i])):
