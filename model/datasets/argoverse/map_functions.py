@@ -8,11 +8,11 @@ Created on Mon Feb 7 12:33:19 2022
 
 # General purpose imports
 
-import pdb
 import time
 import pdb
 import os
 import git
+import copy
 
 from typing import Any, Dict, List, Tuple, Union
 from shapely.geometry import LineString, Point, Polygon
@@ -22,6 +22,7 @@ from shapely.ops import unary_union
 
 import math
 import torch
+import cv2
 import scipy as sp
 import numpy as np
 
@@ -39,11 +40,18 @@ from argoverse.utils.mpl_plotting_utils import visualize_centerline
 from argoverse.map_representation.map_api import ArgoverseMap
 from argoverse.utils.centerline_utils import (
     get_nt_distance,
+    centerline_to_polygon,
+    filter_candidate_centerlines,
+    get_centerlines_most_aligned_with_trajectory,
+    lane_waypt_to_query_dist,
     remove_overlapping_lane_seq,
-    centerline_to_polygon
 )
 
 #######################################
+
+# https://matplotlib.org/stable/api/markers_api.html
+# https://matplotlib.org/stable/gallery/color/named_colors.html
+
 
 repo = git.Repo('.', search_parent_directories=True)
 BASE_DIR = repo.working_tree_dir
@@ -190,7 +198,7 @@ _MANHATTAN_THRESHOLD = 10.0  # meters
 _DFS_THRESHOLD_FRONT_SCALE = 45.0 # 45.0  # m/s
 _DFS_THRESHOLD_BACK_SCALE = 40.0 # 40.0  # m/s
 _MAX_SEARCH_RADIUS_CENTERLINES = 10.0  # meters
-_MAX_CENTERLINE_CANDIDATES_TEST = 6
+_MAX_CENTERLINE_CANDIDATES_TEST = 10
 
 class MapFeaturesUtils:
     """Utils for computation of map-based features."""
@@ -320,334 +328,6 @@ class MapFeaturesUtils:
             test_centerlines += diverse_centerlines
 
         return test_centerlines
-
-    def get_candidate_centerlines_for_trajectory(
-            self,
-            xy: np.ndarray,
-            city_name: str,
-            seq_id: int,
-            avm: ArgoverseMap,
-            viz: bool = False,
-            max_search_radius: float = 50.0,
-            seq_len: int = 50,
-            max_candidates: int = 10,
-            mode: str = "test",
-            split: str = "train"
-    ) -> List[np.ndarray]:
-        """Get centerline candidates upto a threshold.
-        Algorithm:
-        1. Take the lanes in the bubble of last observed coordinate
-        2. Extend before and after considering all possible candidates
-        3. Get centerlines based on point in polygon score.
-        Args:
-            xy: Trajectory coordinates, 
-            city_name: City name, 
-            avm: Argoverse map_api instance, 
-            viz: Visualize candidate centerlines, 
-            max_search_radius: Max search radius for finding nearby lanes in meters,
-            seq_len: Sequence length, 
-            max_candidates: Maximum number of centerlines to return, 
-            mode: train/val/test mode
-        Returns:
-            candidate_centerlines: List of candidate centerlines
-        """
-
-        obs_len = 20
-        pred_len = 30
-        freq = 10
-
-        min_dist_around = 50
-
-        # Get all lane candidates within a bubble
-
-        curr_lane_candidates = avm.get_lane_ids_in_xy_bbox(
-            xy[-1, 0], xy[-1, 1], city_name, self._MANHATTAN_THRESHOLD)
-
-        # Keep expanding the bubble until at least 1 lane is found
-
-        while (len(curr_lane_candidates) < 1
-               and self._MANHATTAN_THRESHOLD < max_search_radius):
-            self._MANHATTAN_THRESHOLD *= 2
-            curr_lane_candidates = avm.get_lane_ids_in_xy_bbox(
-                xy[-1, 0], xy[-1, 1], city_name, self._MANHATTAN_THRESHOLD)
-
-        assert len(curr_lane_candidates) > 0, "No nearby lanes found!!"
-
-        # Set dfs threshold
-
-        traj_len = xy.shape[0]
-
-        # 10 represents the frequency in which the obstacles positions have been sampled:
-        #   (steps / steps/s) -> s
-        # self._DFS_THRESHOLD_FRONT_SCALE and self._DFS_THRESHOLD_FRONT_SCALE represent the velocities to
-        # traverse frontwards and backwards in m/s:
-        #   m/s · s = m
-
-        dfs_threshold_front = (self._DFS_THRESHOLD_FRONT_SCALE *
-                               (seq_len + 1 - traj_len) / 10)
-        dfs_threshold_back = self._DFS_THRESHOLD_BACK_SCALE * (traj_len +
-                                                               1) / 10
-
-        # print("dfs_threshold_front, dfs_threshold_back: ", dfs_threshold_front, dfs_threshold_back)
-
-        # DFS to get all successor and predecessor candidates
-        obs_pred_lanes: List[Sequence[int]] = []
-        for lane in curr_lane_candidates:
-            candidates_future = avm.dfs(lane, city_name, 0,
-                                        dfs_threshold_front)
-            candidates_past = avm.dfs(lane, city_name, 0, dfs_threshold_back,
-                                      True)
-
-            # Merge past and future
-            for past_lane_seq in candidates_past:
-                for future_lane_seq in candidates_future:
-                    assert (
-                        past_lane_seq[-1] == future_lane_seq[0]
-                    ), "Incorrect DFS for candidate lanes past and future"
-                    obs_pred_lanes.append(past_lane_seq + future_lane_seq[1:])
-                    obs_pred_lanes.append(future_lane_seq)
-
-            # Only future
-            # for future_lane_seq in candidates_future:
-            #     obs_pred_lanes.append(future_lane_seq[1:])
-
-        # Removing overlapping lanes
-        obs_pred_lanes = remove_overlapping_lane_seq(obs_pred_lanes)
-
-        # Sort lanes based on point in polygon score
-        obs_pred_lanes, scores = self.sort_lanes_based_on_point_in_polygon_score(
-            obs_pred_lanes, xy, city_name, avm)
-
-        # If the best centerline is not along the direction of travel, re-sort
-        if mode == "test":
-            candidate_centerlines = self.get_heuristic_centerlines_for_test_set(
-                obs_pred_lanes, xy, city_name, avm, max_candidates, scores)
-        else:
-            candidate_centerlines = avm.get_cl_from_lane_seq(
-                [obs_pred_lanes[0]], city_name)
-
-        # Compute the lanes around a given position given a specific distance
-
-        # vel, acc = self.get_agent_velocity_and_acceleration(xy[:obs_len,:],
-        #                                                     filter="least_squares")
-        # dist_around = vel * (pred_len/freq) + 1/2 * acc * (pred_len/freq)**2
-        # print("vel, acc, dist_around: ", vel, acc, dist_around)
-        # if dist_around < min_dist_around:
-        #     dist_around = min_dist_around
-
-        # dist_rasterized_map = [-dist_around,dist_around,-dist_around,dist_around]
-
-        # xcenter, ycenter = xy[obs_len-1, 0], xy[obs_len-1, 1]
-        # x_min = xcenter + dist_rasterized_map[0]
-        # x_max = xcenter + dist_rasterized_map[1]
-        # y_min = ycenter + dist_rasterized_map[2]
-        # y_max = ycenter + dist_rasterized_map[3]
-
-        # seq_lane_props = dict()
-
-        # seq_lane_props = avm.city_lane_centerlines_dict[city_name]
-
-        # ### Get lane centerlines which lie within the range of trajectories
-
-        # lane_centerlines = []
-        # lane_ids = []
-        # obs_pred_lanes: List[Sequence[int]] = []
-
-        # for lane_id, lane_props in seq_lane_props.items():
-        #     lane_cl = lane_props.centerline
-
-        #     if (np.min(lane_cl[:, 0]) < x_max
-        #         and np.min(lane_cl[:, 1]) < y_max
-        #         and np.max(lane_cl[:, 0]) > x_min
-        #         and np.max(lane_cl[:, 1]) > y_min):
-
-        #         lane_centerlines.append(lane_cl)
-        #         lane_ids.append(lane_id)
-        # candidate_centerlines = lane_centerlines
-
-        if viz:
-            fig, ax = plt.subplots(figsize=(8,8), facecolor="white")
-
-            for centerline_coords in candidate_centerlines:
-                # fig = visualize_centerline(centerline_coords)
-                visualize_centerline(centerline_coords)
-
-            if xy.shape[0] == seq_len: # train and val
-                # Agent observation
-
-                plt.plot(
-                    xy[:obs_len, 0],
-                    xy[:obs_len, 1],
-                    "-",
-                    color="b",
-                    alpha=1,
-                    linewidth=3,
-                    zorder=15,
-                )
-
-                # Agent prediction
-
-                plt.plot(
-                    xy[obs_len:, 0],
-                    xy[obs_len:, 1],
-                    "-",
-                    color="r",
-                    alpha=1,
-                    linewidth=3,
-                    zorder=15,
-                )
-
-                final_x = xy[-1, 0]
-                final_y = xy[-1, 1]
-
-                # Final position
-
-                plt.plot(
-                    final_x,
-                    final_y,
-                    "o",
-                    color="r",
-                    alpha=1,
-                    markersize=5,
-                    zorder=15,
-                )
-            else: # test
-                # Agent observation
-                
-                plt.plot(
-                    xy[:, 0],
-                    xy[:, 1],
-                    "-",
-                    color="b",
-                    alpha=1,
-                    linewidth=3,
-                    zorder=15,
-                )
-
-                final_x = xy[-1, 0]
-                final_y = xy[-1, 1]
-
-                # Final position
-
-                plt.plot(
-                    final_x,
-                    final_y,
-                    "o",
-                    color="b",
-                    alpha=1,
-                    markersize=5,
-                    zorder=15,
-                )
-
-            plt.xlabel("Map X")
-            plt.ylabel("Map Y")
-            # plt.axis("off")
-            plt.title(f"Number of candidates = {len(candidate_centerlines)}")   
-
-            output_dir = os.path.join(BASE_DIR,f"data/datasets/argoverse/motion-forecasting/{split}/map_features")
-            if not os.path.exists(output_dir):
-                print("Create trajs folder: ", output_dir)
-                os.makedirs(output_dir) # makedirs creates intermediate folders
-
-            if mode == "test":
-                filename = os.path.join(output_dir,f"{seq_id}_relevant_centerlines.png")
-            else:
-                filename = os.path.join(output_dir,f"{seq_id}_oracle.png")
-
-            plt.savefig(filename, bbox_inches='tight', facecolor=fig.get_facecolor(), transparent=False,
-                        edgecolor='none', pad_inches=0)
-
-            # plt.close('all')
-
-        return candidate_centerlines
-
-    def compute_map_features(
-            self,
-            agent_track: np.ndarray,
-            seq_id: int,
-            split: str,
-            obs_len: int,
-            seq_len: int,
-            raw_data_format: Dict[str, int],
-            mode: str,
-            avm: ArgoverseMap,
-            viz: bool = True,
-    ) -> Tuple[np.ndarray, Dict[str, Any]]:
-        """Compute map based features for the given sequence.
-        If the mode is test, oracle_nt_dist will be empty, candidate_nt_dist will be populated.
-        If the mode is train/val, oracle_nt_dist will be populated, candidate_nt_dist will be empty.
-        Args:
-            agent_track : Data for the agent track
-            obs_len : Length of observed trajectory
-            seq_len : Length of the sequence
-            raw_data_format : Format of the sequence
-            mode: train/val/test mode
-            
-        Returns:
-            oracle_nt_dist (numpy array): normal and tangential distances for oracle centerline
-                map_feature_helpers (dict): Dictionary containing helpers for map features
-        """
-        # Get observed 2 secs of the agent
-        agent_xy = agent_track[:, [raw_data_format["X"], raw_data_format["Y"]
-                                   ]].astype("float")
-        agent_track_obs = agent_track[:obs_len]
-        agent_xy_obs = agent_track_obs[:, [
-            raw_data_format["X"], raw_data_format["Y"]
-        ]].astype("float")
-
-        city_name = agent_track[0, raw_data_format["CITY_NAME"]]
-
-        # Get candidate centerlines using observed trajectory
-        if mode == "test":
-            oracle_centerline = np.full((seq_len, 2), None)
-            oracle_nt_dist = np.full((seq_len, 2), None)
-            candidate_centerlines = self.get_candidate_centerlines_for_trajectory(
-                agent_xy_obs, # only observation
-                city_name,
-                seq_id,
-                avm,
-                viz=viz,
-                max_search_radius=self._MAX_SEARCH_RADIUS_CENTERLINES,
-                seq_len=seq_len,
-                max_candidates=self._MAX_CENTERLINE_CANDIDATES_TEST,
-                split=split
-            )
-
-            # Get nt distance for the entire trajectory using candidate centerlines
-            candidate_nt_distances = []
-            for candidate_centerline in candidate_centerlines:
-                candidate_nt_distance = np.full((seq_len, 2), None)
-                candidate_nt_distance[:obs_len] = get_nt_distance(
-                    agent_xy_obs, candidate_centerline)
-                candidate_nt_distances.append(candidate_nt_distance)
-
-        else:
-            oracle_centerline = self.get_candidate_centerlines_for_trajectory(
-                agent_xy, # whole trajectory
-                city_name,
-                seq_id,
-                avm,
-                viz=viz,
-                max_search_radius=self._MAX_SEARCH_RADIUS_CENTERLINES,
-                seq_len=seq_len,
-                mode=mode,
-                split=split
-            )[0]
-            candidate_centerlines = [np.full((seq_len, 2), None)]
-            candidate_nt_distances = [np.full((seq_len, 2), None)]
-
-            # Get NT distance for oracle centerline
-            oracle_nt_dist = get_nt_distance(agent_xy,
-                                             oracle_centerline,
-                                             viz=viz)
-
-        map_feature_helpers = {
-            "ORACLE_CENTERLINE": oracle_centerline,
-            "CANDIDATE_CENTERLINES": candidate_centerlines,
-            "CANDIDATE_NT_DISTANCES": candidate_nt_distances,
-        }
-
-        return oracle_nt_dist, map_feature_helpers
 
     def get_agent_velocity_and_acceleration(self, agent_seq, obs_len=20, period=0.1, 
                                             upsampling_factor=2, filter=None, debug=False):
@@ -790,7 +470,7 @@ class MapFeaturesUtils:
         output_dir = os.path.join(BASE_DIR,f"data/datasets/argoverse/motion-forecasting/{split}/map_features")
 
         if not os.path.exists(output_dir):
-            print("Create trajs folder: ", output_dir)
+            print("Create output folder: ", output_dir)
             os.makedirs(output_dir) # makedirs creates intermediate folders
 
         if viz:
@@ -866,8 +546,7 @@ class MapFeaturesUtils:
 
             filename = os.path.join(output_dir,f"{seq_id}_interpolated_oracle.png")
 
-            plt.savefig(filename, bbox_inches='tight', facecolor=fig.get_facecolor(), transparent=False,
-                        edgecolor='none', pad_inches=0)
+            plt.savefig(filename, bbox_inches='tight', facecolor=fig.get_facecolor(), edgecolor='none', pad_inches=0)
 
             plt.close('all')
 
@@ -882,30 +561,30 @@ class MapFeaturesUtils:
         lane_dir_vector = agent_xy[obs_len-1,:] - agent_xy[obs_len-2,:]
         yaw = math.atan2(lane_dir_vector[1],lane_dir_vector[0])
 
-        return yaw
+        # yaw_aux = math.pi/2 - yaw # In order to align the data with the vertical axis
+        # R = map_features_utils_instance.rotz2D(yaw)
+        # start_oracle = oracle_centerline[0,:]
 
-    # def apply_tf(source_location, transform):  
-    #     """
-    #     """
-    #     centroid = np.array([0.0,0.0,0.0,1.0]).reshape(4,1)
+        # oracle_centerline_aux = []
+        # oracle_centerline_aux.append(np.dot(R,oracle_centerline.T).T)
+        # agent_xy_aux = np.dot(R,agent_xy.T).T
 
-    #     try:
-    #         centroid[0,0] = source_location.x 
-    #         centroid[1,0] = source_location.y
-    #         centroid[2,0] = source_location.z
-    #     except:
-    #         centroid[0,0] = source_location[0] # LiDAR points (3,)
-    #         centroid[1,0] = source_location[1]
-    #         centroid[2,0] = source_location[2]
+        # map_features_utils_instance.debug_centerline_and_agent(oracle_centerline_aux, agent_xy_aux, obs_len, obs_len+pred_len, split_name, file_id)
 
-    #     aux = np.dot(transform,centroid) 
+        return lane_dir_vector, yaw
 
-    #     target_location = t4ac_msgs.msg.Node()
-    #     target_location.x = aux[0,0]
-    #     target_location.y = aux[1,0]
-    #     target_location.z = aux[2,0]
+    def apply_tf(source_location, transform):  
+        """
+        """
+        centroid = np.array([0.0,0.0,0.0,1.0]).reshape(4,1)
 
-    #     return target_location 
+        centroid[0,0] = source_location[0]
+        centroid[1,0] = source_location[1]
+        centroid[2,0] = source_location[2]
+
+        target_location = np.dot(transform,centroid) # == transform @ centroid
+
+        return target_location 
 
     def rotz2D(self,yaw):
         """ 
@@ -1046,13 +725,12 @@ class MapFeaturesUtils:
 
         output_dir = os.path.join(BASE_DIR,f"data/datasets/argoverse/motion-forecasting/{split}/map_features")
         if not os.path.exists(output_dir):
-            print("Create trajs folder: ", output_dir)
+            print("Create output folder: ", output_dir)
             os.makedirs(output_dir) # makedirs creates intermediate folders
 
         filename = os.path.join(output_dir,f"{seq_id}_debug.png")
 
-        plt.savefig(filename, bbox_inches='tight', facecolor=fig.get_facecolor(), transparent=False,
-                    edgecolor='none', pad_inches=0)
+        plt.savefig(filename, bbox_inches='tight', facecolor=fig.get_facecolor(), edgecolor='none', pad_inches=0)
 
     def apply_rot(self,pos,R):
         """
@@ -1074,4 +752,448 @@ class MapFeaturesUtils:
         closest_wp = np.argmin(dist_array)
 
         return closest_wp, dist_array
+
+    def get_candidate_centerlines_for_trajectory(
+            self,
+            xy: np.ndarray,
+            city_name: str,
+            seq_id: int,
+            avm: ArgoverseMap,
+            viz: bool = False,
+            max_search_radius: float = 50.0,
+            seq_len: int = 50,
+            max_candidates: int = 10,
+            mode: str = "test",
+            split: str = "train",
+            algorithm: str = "competition", # competition, map_api, get_around
+            debug: bool = True
+    ) -> List[np.ndarray]:
+        """Get centerline candidates upto a threshold.
+        Algorithm:
+        1. Take the lanes in the bubble of last observed coordinate
+        2. Extend before and after considering all possible candidates
+        3. Get centerlines based on point in polygon score.
+        Args:
+            xy: Trajectory coordinates, 
+            city_name: City name, 
+            avm: Argoverse map_api instance, 
+            viz: Visualize candidate centerlines, 
+            max_search_radius: Max search radius for finding nearby lanes in meters,
+            seq_len: Sequence length, 
+            max_candidates: Maximum number of centerlines to return, 
+            mode: train/val/test mode
+        Returns:
+            candidate_centerlines: List of candidate centerlines
+        """
+
+        output_dir = os.path.join(BASE_DIR,f"data/datasets/argoverse/motion-forecasting/{split}/map_features")
+        if not os.path.exists(output_dir):
+            print("Create output folder: ", output_dir)
+            os.makedirs(output_dir) # makedirs creates intermediate folders
+
+        obs_len = 20
+        pred_len = 30
+        freq = 10
+
+        min_dist_around = 25
+
+        traj_len = xy.shape[0]
+        agent_traj = copy.deepcopy(xy)
+        if debug: # If debug, compute the centerlines with only the observation data 
+                  # (even with train and val)
+            xy = xy[:obs_len,:]
+
+        vel, acc = self.get_agent_velocity_and_acceleration(xy[:obs_len,:],
+                                                                filter="least_squares")
+        dist_around = vel * (pred_len/freq) + 1/2 * acc * (pred_len/freq)**2
+
+        if dist_around < min_dist_around:
+            dist_around = min_dist_around
+
+        if algorithm == "competition":
+        # Compute algorithms using Argoverse Forecasting baseline
+
+            # Get all lane candidates within a bubble
+
+            curr_lane_candidates = avm.get_lane_ids_in_xy_bbox(
+                xy[-1, 0], xy[-1, 1], city_name, self._MANHATTAN_THRESHOLD)
+
+            # Keep expanding the bubble until at least 1 lane is found
+
+            while (len(curr_lane_candidates) < 1
+                and self._MANHATTAN_THRESHOLD < max_search_radius):
+                self._MANHATTAN_THRESHOLD *= 2
+                curr_lane_candidates = avm.get_lane_ids_in_xy_bbox(
+                    xy[-1, 0], xy[-1, 1], city_name, self._MANHATTAN_THRESHOLD)
+
+            assert len(curr_lane_candidates) > 0, "No nearby lanes found!!"
+
+            # Set dfs threshold
+
+            # 10 represents the frequency in which the obstacles positions have been sampled:
+            #   (steps / steps/s) -> s
+            # self._DFS_THRESHOLD_FRONT_SCALE and self._DFS_THRESHOLD_FRONT_SCALE represent the velocities to
+            # traverse frontwards and backwards in m/s:
+            #   m/s · s = m
+
+            # dfs_threshold_front = (self._DFS_THRESHOLD_FRONT_SCALE * (seq_len + 1 - traj_len) / 10)
+            # dfs_threshold_back = self._DFS_THRESHOLD_BACK_SCALE * (traj_len + 1) / 10
+            dfs_threshold_front = dfs_threshold_back = dist_around
+
+            # print("dfs_threshold_front, dfs_threshold_back: ", dfs_threshold_front, dfs_threshold_back)
+
+            # DFS to get all successor and predecessor candidates
+            obs_pred_lanes: List[Sequence[int]] = []
+            for lane in curr_lane_candidates:
+                candidates_future = avm.dfs(lane, city_name, 0, dfs_threshold_front)
+                candidates_past = avm.dfs(lane, city_name, 0, dfs_threshold_back, True)
+
+                # Merge past and future
+                for past_lane_seq in candidates_past:
+                    for future_lane_seq in candidates_future:
+                        assert (
+                            past_lane_seq[-1] == future_lane_seq[0]
+                        ), "Incorrect DFS for candidate lanes past and future"
+                        obs_pred_lanes.append(past_lane_seq + future_lane_seq[1:])
+                        obs_pred_lanes.append(future_lane_seq)
+
+                # Only future
+                for future_lane_seq in candidates_future:
+                    obs_pred_lanes.append(future_lane_seq[1:])
+
+            # Removing overlapping lanes
+            obs_pred_lanes = remove_overlapping_lane_seq(obs_pred_lanes)
+
+            # Sort lanes based on point in polygon score
+            obs_pred_lanes, scores = self.sort_lanes_based_on_point_in_polygon_score(
+                obs_pred_lanes, xy, city_name, avm)
+
+            # If the best centerline is not along the direction of travel, re-sort
+            if mode == "test":
+                candidate_centerlines = self.get_heuristic_centerlines_for_test_set(
+                    obs_pred_lanes, xy, city_name, avm, max_candidates, scores)
+            else:
+                candidate_centerlines = avm.get_cl_from_lane_seq(
+                    [obs_pred_lanes[0]], city_name)
+
+        elif algorithm == "map_api": 
+        # Compute algorithms using Argoverse Map API
+
+            # Get all lane candidates within a bubble
+            manhattan_threshold = 5.0
+            curr_lane_candidates = avm.get_lane_ids_in_xy_bbox(xy[-1, 0], xy[-1, 1], city_name, manhattan_threshold)
+
+            # Keep expanding the bubble until at least 1 lane is found
+            while len(curr_lane_candidates) < 1 and manhattan_threshold < max_search_radius:
+                manhattan_threshold *= 2
+                curr_lane_candidates = avm.get_lane_ids_in_xy_bbox(xy[-1, 0], xy[-1, 1], city_name, manhattan_threshold)
+
+            assert len(curr_lane_candidates) > 0, "No nearby lanes found!!"
+
+            # displacement = np.sqrt((xy[0, 0] - xy[obs_len-1, 0]) ** 2 + (xy[0, 1] - xy[obs_len-1, 1]) ** 2)
+            # dfs_threshold = displacement * 2.0
+            # dfs_threshold_front = dfs_threshold_back = dfs_threshold
+                
+            dfs_threshold_front = dist_around
+            dfs_threshold_back = dist_around
+            
+            # DFS to get all successor and predecessor candidates
+            obs_pred_lanes: List[List[int]] = []
+            for lane in curr_lane_candidates:
+                candidates_future = avm.dfs(lane, city_name, 0, dfs_threshold_front)
+                candidates_past = avm.dfs(lane, city_name, 0, dfs_threshold_back, True)
+
+                # Merge past and future
+                for past_lane_seq in candidates_past:
+                    for future_lane_seq in candidates_future:
+                        assert past_lane_seq[-1] == future_lane_seq[0], "Incorrect DFS for candidate lanes past and future"
+                        obs_pred_lanes.append(past_lane_seq + future_lane_seq[1:])
+
+            # Removing overlapping lanes
+            obs_pred_lanes = remove_overlapping_lane_seq(obs_pred_lanes)
+
+            # Remove unnecessary extended predecessors
+            obs_pred_lanes = avm.remove_extended_predecessors(obs_pred_lanes, xy, city_name)
+
+            # Getting candidate centerlines
+            candidate_cl = avm.get_cl_from_lane_seq(obs_pred_lanes, city_name)
+
+            # Reduce the number of candidates based on distance travelled along the centerline
+            candidate_centerlines = filter_candidate_centerlines(xy, candidate_cl)
+
+            # If no candidate found using above criteria, take the onces along with travel is the maximum
+            if len(candidate_centerlines) < 1:
+                candidate_centerlines = get_centerlines_most_aligned_with_trajectory(xy, candidate_cl)
+
+        elif algorithm == "get_around":
+        # Compute the lanes around a given position given a specific distance
+
+            vel, acc = self.get_agent_velocity_and_acceleration(xy[:obs_len,:],
+                                                                filter="least_squares")
+            dist_around = vel * (pred_len/freq) + 1/2 * acc * (pred_len/freq)**2
+
+            if dist_around < min_dist_around:
+                dist_around = min_dist_around
+
+            dist_rasterized_map = [-dist_around,dist_around,-dist_around,dist_around]
+
+            xcenter, ycenter = xy[obs_len-1, 0], xy[obs_len-1, 1]
+            x_min = xcenter + dist_rasterized_map[0]
+            x_max = xcenter + dist_rasterized_map[1]
+            y_min = ycenter + dist_rasterized_map[2]
+            y_max = ycenter + dist_rasterized_map[3]
+
+            seq_lane_props = dict()
+
+            seq_lane_props = avm.city_lane_centerlines_dict[city_name]
+
+            ### Get lane centerlines which lie within the range of trajectories
+
+            lane_centerlines = []
+            lane_ids = []
+            obs_pred_lanes: List[Sequence[int]] = []
+
+            for lane_id, lane_props in seq_lane_props.items():
+                lane_cl = lane_props.centerline
+
+                if (np.min(lane_cl[:, 0]) < x_max
+                    and np.min(lane_cl[:, 1]) < y_max
+                    and np.max(lane_cl[:, 0]) > x_min
+                    and np.max(lane_cl[:, 1]) > y_min):
+
+                    lane_centerlines.append(lane_cl)
+                    lane_ids.append(lane_id)
+            candidate_centerlines = lane_centerlines
+
+        # Compute agent orientation
+
+        lane_dir_vector, yaw = self.get_yaw(xy, obs_len)
+        yaw_aux = math.pi/2 - yaw # In order to align the data with the vertical axis
+    
+        if viz:
+            fig, ax = plt.subplots(figsize=(6,6), facecolor="black")
+
+            xmin = ymin = 50000
+            xmax = ymax = -50000
+
+            # Paint centerlines
+
+            for centerline_coords in candidate_centerlines:
+                visualize_centerline(centerline_coords) # Uncomment this to check the start and end
+
+                if np.min(centerline_coords[:,0]) < xmin: xmin = np.min(centerline_coords[:,0])
+                if np.min(centerline_coords[:,1]) < ymin: ymin = np.min(centerline_coords[:,1])
+                if np.max(centerline_coords[:,0]) > xmax: xmax = np.max(centerline_coords[:,0])
+                if np.max(centerline_coords[:,1]) > ymax: ymax = np.max(centerline_coords[:,1])
+
+                lane_polygon = centerline_to_polygon(centerline_coords)
+
+                                                                          #"black"  
+                ax.fill(lane_polygon[:, 0], lane_polygon[:, 1], "white", edgecolor='white', fill=True)
+                ax.plot(centerline_coords[:, 0], centerline_coords[:, 1], "-", color="gray", linewidth=1.5, alpha=1.0, zorder=2)
+
+            # Paint agent's orientation
+
+            dx = lane_dir_vector[0] * 10
+            dy = lane_dir_vector[1] * 10
+
+            plt.arrow(
+                xy[obs_len-1,0], # Arrow origin
+                xy[obs_len-1,1],
+                dx, # Length of the arrow
+                dy,
+                color="darkmagenta",
+                width=1.0,
+                zorder=16,
+            )
+
+            plt.xlim(xmin, xmax)
+            plt.ylim(ymin, ymax)
+            plt.axis("off")
+
+            if algorithm == "map_api":
+                filename = os.path.join(output_dir,f"{seq_id}_binary_plausible_area.png")
+                plt.savefig(filename, bbox_inches='tight', facecolor=fig.get_facecolor(), edgecolor='none', pad_inches=0)
+
+            if agent_traj.shape[0] == seq_len: # train and val
+                # Agent observation
+
+                plt.plot(
+                    agent_traj[:obs_len, 0],
+                    agent_traj[:obs_len, 1],
+                    "-",
+                    color="b",
+                    alpha=1,
+                    linewidth=3,
+                    zorder=15,
+                )
+
+                # Agent prediction
+
+                plt.plot(
+                    agent_traj[obs_len:, 0],
+                    agent_traj[obs_len:, 1],
+                    "-",
+                    color="r",
+                    alpha=1,
+                    linewidth=3,
+                    zorder=15,
+                )
+
+                final_x = agent_traj[-1, 0]
+                final_y = agent_traj[-1, 1]
+
+                # Final position
+
+                plt.plot(
+                    final_x,
+                    final_y,
+                    "o",
+                    color="r",
+                    alpha=1,
+                    markersize=5,
+                    zorder=15,
+                )
+            else: # test
+                # Agent observation
+                
+                plt.plot(
+                    agent_traj[:, 0],
+                    agent_traj[:, 1],
+                    "-",
+                    color="b",
+                    alpha=1,
+                    linewidth=3,
+                    zorder=15,
+                )
+
+                final_x = agent_traj[-1, 0]
+                final_y = agent_traj[-1, 1]
+
+                # Final position
+
+                plt.plot(
+                    final_x,
+                    final_y,
+                    "o",
+                    color="b",
+                    alpha=1,
+                    markersize=5,
+                    zorder=15,
+                )
+
+            plt.xlabel("Map X")
+            plt.ylabel("Map Y")
+            plt.axis("on")
+
+            fig.patch.set_facecolor('white')
+            plt.title(f"Number of candidates = {len(candidate_centerlines)}")   
+
+            if mode == "test":
+                filename = os.path.join(output_dir,f"{seq_id}_relevant_centerlines.png")
+            else:
+                filename = os.path.join(output_dir,f"{seq_id}_oracle.png")
+
+            plt.savefig(filename, bbox_inches='tight', facecolor="white", edgecolor='none', pad_inches=0)
+
+            plt.show()
+            plt.close('all')
+
+        return candidate_centerlines
+
+    def compute_map_features(
+            self,
+            agent_track: np.ndarray,
+            seq_id: int,
+            split: str,
+            obs_len: int,
+            seq_len: int,
+            raw_data_format: Dict[str, int],
+            mode: str,
+            avm: ArgoverseMap,
+            viz: bool = False,
+            max_candidates: int = 6,
+            algorithm: str = "competition" # competition, map_api, get_around
+    ) -> Tuple[np.ndarray, Dict[str, Any]]:
+        """Compute map based features for the given sequence.
+        If the mode is test, oracle_nt_dist will be empty, candidate_nt_dist will be populated.
+        If the mode is train/val, oracle_nt_dist will be populated, candidate_nt_dist will be empty.
+        Args:
+            agent_track : Data for the agent track
+            obs_len : Length of observed trajectory
+            seq_len : Length of the sequence
+            raw_data_format : Format of the sequence
+            mode: train/val/test mode
+            
+        Returns:
+            oracle_nt_dist (numpy array): normal and tangential distances for oracle centerline
+                map_feature_helpers (dict): Dictionary containing helpers for map features
+        """
+
+        if max_candidates != self._MAX_CENTERLINE_CANDIDATES_TEST:
+            self._MAX_CENTERLINE_CANDIDATES_TEST = max_candidates
+
+        # Get observed 2 secs of the agent
+        agent_xy = agent_track[:, [raw_data_format["X"], raw_data_format["Y"]
+                                   ]].astype("float")
+        agent_track_obs = agent_track[:obs_len]
+        agent_xy_obs = agent_track_obs[:, [
+            raw_data_format["X"], raw_data_format["Y"]
+        ]].astype("float")
+
+        city_name = agent_track[0, raw_data_format["CITY_NAME"]]
+
+        # Get candidate centerlines using observed trajectory
+        if mode == "test":
+            oracle_centerline = np.full((seq_len, 2), None)
+            oracle_nt_dist = np.full((seq_len, 2), None)
+            candidate_centerlines = self.get_candidate_centerlines_for_trajectory(
+                # agent_xy_obs, # only observation
+                agent_xy, # whole observation (if train/val, plot GT, even with multiple centerlines)
+                city_name,
+                seq_id,
+                avm,
+                viz=viz,
+                max_search_radius=self._MAX_SEARCH_RADIUS_CENTERLINES,
+                seq_len=seq_len,
+                max_candidates=self._MAX_CENTERLINE_CANDIDATES_TEST,
+                split=split,
+                algorithm=algorithm
+            )
+
+            # Get nt distance for the entire trajectory using candidate centerlines
+            candidate_nt_distances = []
+            for candidate_centerline in candidate_centerlines:
+                candidate_nt_distance = np.full((seq_len, 2), None)
+                candidate_nt_distance[:obs_len] = get_nt_distance(
+                    agent_xy_obs, candidate_centerline)
+                candidate_nt_distances.append(candidate_nt_distance)
+
+        else:
+            oracle_centerline = self.get_candidate_centerlines_for_trajectory(
+                agent_xy, # whole trajectory
+                city_name,
+                seq_id,
+                avm,
+                viz=viz,
+                max_search_radius=self._MAX_SEARCH_RADIUS_CENTERLINES,
+                seq_len=seq_len,
+                mode=mode,
+                split=split
+            )[0]
+            candidate_centerlines = [np.full((seq_len, 2), None)]
+            candidate_nt_distances = [np.full((seq_len, 2), None)]
+
+            # Get NT distance for oracle centerline
+            oracle_nt_dist = get_nt_distance(agent_xy,
+                                             oracle_centerline,
+                                             viz=viz)
+
+        map_feature_helpers = {
+            "ORACLE_CENTERLINE": oracle_centerline,
+            "CANDIDATE_CENTERLINES": candidate_centerlines,
+            "CANDIDATE_NT_DISTANCES": candidate_nt_distances,
+        }
+
+        return oracle_nt_dist, map_feature_helpers
 

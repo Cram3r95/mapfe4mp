@@ -1,10 +1,10 @@
-# A baseline for Goal-based Efficient Vehicle Motion Prediction
-
+# A baseline for Map Features processing and Goal-based Efficient Vehicle Motion Prediction
 
 [![arXiv](https://img.shields.io/badge/arXiv-Paper-<COLOR>.svg)](https://arxiv.org/abs/2205.13071)
 ![visitors](https://visitor-badge.glitch.me/badge?page_id=Cram3r95/mapfe4mp)
 
-[Carlos Gómez-Huélamo](https://scholar.google.com/citations?view_op=list_works&hl=es&hl=es&user=OWwoG6EAAAAJ), [Marcos V. Conde](https://scholar.google.com/citations?user=NtB1kjYAAAAJ&hl=en)
+[Carlos Gómez-Huélamo](https://scholar.google.com/citations?view_op=list_works&hl=es&hl=es&user=OWwoG6EAAAAJ), 
+[Marcos V. Conde](https://scholar.google.com/citations?user=NtB1kjYAAAAJ&hl=en)
 
 ------------------
 
@@ -24,21 +24,11 @@ Our papers:
 - [Exploring Attention GAN for Vehicle Motion Prediction](https://arxiv.org/abs/2209.12674v1) at IEEE International Conference on Intelligent Transportation Systems 2022
 
 <img src="media/icra22-overview.png"/>
+<img src="media/gan-lstm-mhsa.JPG"/>
 
 >Motion prediction (MP) of multiple agents is a crucial task in arbitrarily complex environments, from social robots to self-driving cars. Current approaches tackle this problem using end-to-end networks, where the input data is usually a rendered top-view of the scene and the past trajectories of all the agents; leveraging this information is a must to obtain optimal performance. In that sense, a reliable Autonomous Driving (AD) system must produce reasonable predictions on time, however, despite many of these approaches use simple ConvNets and LSTMs, models might not be efficient enough for real-time applications when using both sources of information (map and trajectory history). Moreover, the performance of these models highly depends on the amount of training data, which can be expensive (particularly the annotated HD maps). In this work, we explore how to achieve competitive performance on the Argoverse 1.0 Benchmark using efficient attention-based models, which take as input the past trajectories and map-based features from minimal map information to ensure efficient and reliable MP. These features represent interpretable information as the driveable area and plausible goal points, in opposition to black-box CNN-based methods for map processing.
 
 <br>
-
-Please cite this work if you use our code or ideas.
-
-```
-@article{gomez2022mapfemp,
-  author = {Gómez-Huélamo, Carlos and Conde, Marcos V. and Ortiz, Miguel},
-  title  = {Exploring Map-based Features for Efficient Attention-based Vehicle Motion Prediction},
-  journal= {ICRA 2022 Workshops},
-  year = {2022}
-}
-```
 
 ## Get Started and Usage
 
@@ -83,13 +73,17 @@ More details soon ...
 
 More details soon ...
 
-<img src="media/val_9_mm.png" style="width:30%">
-<img src="media/val_11_mm.png" style="width:30%">
-<img src="media/val_28_mm.png" style="width:30%">
+<img src="media/val_9_mm.png" style="width:25%">
+<img src="media/val_11_mm.png" style="width:25%">
+<img src="media/val_28_mm.png" style="width:25%">
 
 ## Citation and Acknowledgement
 
-Work done with Miguel Ortiz, Santiago Montiel, Rafael Barea, [Luis M. Bergasa](https://scholar.google.com/citations?hl=en&user=uEBILewAAAAJ)
+Please cite this work if you use our code or ideas.
+
+Work done with Miguel Ortiz, Santiago Montiel, 
+[Rafael Barea](https://scholar.google.es/citations?user=IktmiSAAAAAJ&hl=es), 
+[Luis M. Bergasa](https://scholar.google.com/citations?hl=en&user=uEBILewAAAAJ)
 
 ```
 @article{gomez2022exploring,
@@ -111,5 +105,5 @@ Work done with Miguel Ortiz, Santiago Montiel, Rafael Barea, [Luis M. Bergasa](h
 
 Please add in the email subject "mapfe4mp" or "exploring map features paper"
 
-Carlos Gómez-Huélamo. [carlos.gomezh@edu.uah.es](mailto:carlos.gomezh@edu.uah.es)
+Carlos Gómez-Huélamo. [carlos.gomezh@uah.es](mailto:carlos.gomezh@uah.es)
 Marcos Conde [marcos.conde-osorio@uni-wuerzburg.de](mailto:marcos.conde-osorio@uni-wuerzburg.de)

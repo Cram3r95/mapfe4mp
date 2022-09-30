@@ -284,7 +284,7 @@ def evaluate(loader, generator, config, split, current_cuda, pred_len, results_p
                 else:
                     curr_map_origin = map_origin[0][0] # TODO: Generate again val and train data without [[]] in the map!
                     curr_traj = torch.cat((obs_traj,
-                                               pred_traj_gt),dim=0)
+                                           pred_traj_gt),dim=0)
 
                 curr_object_class_id_list = object_cls
 

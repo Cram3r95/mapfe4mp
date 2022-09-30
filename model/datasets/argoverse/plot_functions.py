@@ -643,35 +643,6 @@ def viz_predictions_all(
                     zorder=15,
                     markersize=9,
                 )
-                # for k in range(pred_len):
-                #     lane_ids = avm.get_lane_ids_in_xy_bbox(
-                #         output[num_mode, k, 0],
-                #         output[num_mode, k, 1],
-                #         city_name,
-                #         query_search_range_manhattan=query_search_range_manhattan_,
-                #     )
-                #     # Paint lanes
-                #     [avm.draw_lane(lane_id, city_name) for lane_id in lane_ids]
-        # Identify lanes using input data
-        # for j in range(obs_len):
-        #     lane_ids = avm.get_lane_ids_in_xy_bbox(
-        #         input_[i, j, 0],
-        #         input_[i, j, 1],
-        #         city_name,
-        #         query_search_range_manhattan=query_search_range_manhattan_,
-        #     )
-        #     # Paint lanes
-        #     [avm.draw_lane(lane_id, city_name) for lane_id in lane_ids]
-        # Identify lanes using prediction data
-        # for j in range(pred_len):
-        #     lane_ids = avm.get_lane_ids_in_xy_bbox(
-        #         target[i, j, 0],
-        #         target[i, j, 1],
-        #         city_name,
-        #         query_search_range_manhattan=query_search_range_manhattan_,
-        #     )
-        #     # Paint lanes
-        #     [avm.draw_lane(lane_id, city_name) for lane_id in lane_ids]
 
     seq_lane_props = avm.city_lane_centerlines_dict[city_name]
 
