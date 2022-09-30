@@ -74,9 +74,10 @@ More details soon ...
 More details soon ...
 
 <p float="center">
-  <img src="media/val_9_mm.png" style="width:30%">
-  <img src="media/val_11_mm.png" style="width:30%">
-  <img src="media/val_28_mm.png" style="width:30%">
+  <img src="media/val_9_mm.png" style="width:24%">
+  <img src="media/val_28_mm.png" style="width:24%">
+  <img src="media/val_44_mm.png" style="width:24%">
+  <img src="media/val_51_mm.png" style="width:24%">
 </p>
 
 
