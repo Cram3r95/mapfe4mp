@@ -73,9 +73,13 @@ More details soon ...
 
 More details soon ...
 
-<img src="media/val_9_mm.png" style="width:25%">
-<img src="media/val_11_mm.png" style="width:25%">
-<img src="media/val_28_mm.png" style="width:25%">
+<p float="center">
+  <img src="media/val_9_mm.png" style="width:30%">
+  <img src="media/val_11_mm.png" style="width:30%">
+  <img src="media/val_28_mm.png" style="width:30%">
+</p>
+
+
 
 ## Citation and Acknowledgement
 
