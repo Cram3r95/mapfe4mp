@@ -8,6 +8,7 @@ antlr4-python3-runtime=4.8=pypi_0
 argon2-cffi=21.3.0=pypi_0
 argon2-cffi-bindings=21.2.0=pypi_0
 argoverse=1.1.0=dev_0
+astropy=5.1=pypi_0
 asttokens=2.0.5=pyhd3eb1b0_0
 attrs=21.4.0=pypi_0
 backcall=0.2.0=pyhd3eb1b0_0
@@ -19,6 +20,7 @@ certifi=2021.10.8=py38h06a4308_2
 cffi=1.15.0=pypi_0
 charset-normalizer=2.0.12=pypi_0
 colour=0.1.5=pypi_0
+csaps=1.1.0=pypi_0
 cycler=0.11.0=pypi_0
 debugpy=1.5.1=py38h295c915_0
 decorator=5.1.1=pyhd3eb1b0_0
@@ -29,6 +31,8 @@ executing=0.8.3=pyhd3eb1b0_0
 fastjsonschema=2.15.3=pypi_0
 fonttools=4.33.3=pypi_0
 fvcore=0.1.5.post20220512=pypi_0
+gitdb=4.0.9=pypi_0
+gitpython=3.1.27=pypi_0
 glob2=0.7=pypi_0
 google-auth=2.6.6=pypi_0
 google-auth-oauthlib=0.4.6=pypi_0
@@ -100,12 +104,14 @@ pure_eval=0.2.2=pyhd3eb1b0_0
 pyasn1=0.4.8=pypi_0
 pyasn1-modules=0.2.8=pypi_0
 pycparser=2.21=pypi_0
+pyerfa=2.0.0.1=pypi_0
 pygments=2.11.2=pyhd3eb1b0_0
 pyntcloud=0.2.0=pypi_0
 pyparsing=3.0.9=pypi_0
 pyrsistent=0.18.1=pypi_0
 python=3.8.13=h12debd9_0
 python-dateutil=2.8.2=pyhd3eb1b0_0
+python-git=2018.2.1=pypi_0
 pytz=2022.1=pypi_0
 pyyaml=6.0=pypi_0
 pyzmq=22.3.0=py38h295c915_2
@@ -120,6 +126,7 @@ setuptools=61.2.0=py38h06a4308_0
 shapely=1.8.2=pypi_0
 six=1.16.0=pyhd3eb1b0_1
 sklearn=0.0=pypi_0
+smmap=5.0.0=pypi_0
 soupsieve=2.3.2.post1=pypi_0
 sqlite=3.38.3=hc218d9a_0
 stack_data=0.2.0=pyhd3eb1b0_0
@@ -135,6 +142,9 @@ threadpoolctl=3.1.0=pypi_0
 tinycss2=1.1.1=pypi_0
 tk=8.6.11=h1ccaba5_1
 torch=1.11.0=pypi_0
+torch-geometric=2.1.0.post1=pypi_0
+torch-scatter=2.0.9=pypi_0
+torch-sparse=0.6.15=pypi_0
 torchstat=0.0.7=pypi_0
 torchvision=0.12.0=pypi_0
 tornado=6.1=py38h27cfd23_0
