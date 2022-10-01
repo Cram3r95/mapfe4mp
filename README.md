@@ -80,8 +80,6 @@ More details soon ...
   <img src="media/val_51_mm.png" style="width:24%">
 </p>
 
-
-
 ## Citation and Acknowledgement
 
 Please cite this work if you use our code or ideas.
@@ -110,5 +108,5 @@ Work done with Miguel Ortiz, Santiago Montiel,
 
 Please add in the email subject "mapfe4mp" or "exploring map features paper"
 
-Carlos Gómez-Huélamo. [carlos.gomezh@uah.es](mailto:carlos.gomezh@uah.es)
+Carlos Gómez-Huélamo. [carlos.gomezh@uah.es](mailto:carlos.gomezh@uah.es) \
 Marcos Conde [marcos.conde-osorio@uni-wuerzburg.de](mailto:marcos.conde-osorio@uni-wuerzburg.de)

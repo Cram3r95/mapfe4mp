@@ -62,8 +62,8 @@ config.dataset.start_from_percentage = 0.0
 
 # Preprocess data
                          # Split, Process, Split percentage
-splits_to_process = dict({"train":[True,0.01], # 0.01 (1 %), 0.1 (10 %), 1.0 (100 %)
-                          "val":[True,0.01],
+splits_to_process = dict({"train":[True,0.1], # 0.01 (1 %), 0.1 (10 %), 1.0 (100 %)
+                          "val":[True,0.1],
                           "test":[False,1.0]})
 modes_centerlines = ["test"] # "train","test" 
 # if train -> compute the best candidate (oracle), only using the "competition" algorithm
@@ -162,7 +162,8 @@ for split_name,features in splits_to_process.items():
             print(f"Check remaining time every {check_every_n_files} files")
             time_per_iteration = float(0)
             aux_time = float(0)
-            candidate_centerlines_list = []
+            
+            map_info = dict()
 
             for i, file_id in enumerate(file_id_list):
                 # print(f"File {file_id} -> {i+1}/{len(file_id_list)}")
@@ -187,13 +188,16 @@ for split_name,features in splits_to_process.items():
                 first_obs = agent_xy[0,:]
                 last_obs = agent_xy[obs_origin-1,:]
 
+                # TODO: This is wrong -> Compute the orientation using the filtered observation, not 
+                # the raw data
                 lane_dir_vector, yaw = map_features_utils_instance.get_yaw(agent_xy, obs_len)
 
                 for mode in modes_centerlines:
                     # Map features extraction
 
                     if file_id != -1:
-                    # if file_id == 5319:
+                    # if file_id == 1:
+                    # if file_id < 3:
                         map_features, map_feature_helpers = map_features_utils_instance.compute_map_features(
                                 agent_track,
                                 file_id,
@@ -213,7 +217,8 @@ for split_name,features in splits_to_process.items():
 
                             relevant_centerlines = map_feature_helpers["CANDIDATE_CENTERLINES"]  
 
-                            relevant_centerlines_filtered = []                   
+                            seq_map_info = dict()
+                            relevant_centerlines_filtered = []                 
 
                             for relevant_centerline in relevant_centerlines:
                                 # Get index of the closest waypoint to the first observation
@@ -326,9 +331,9 @@ for split_name,features in splits_to_process.items():
                 
                                 else:
                                     # print("The algorithm has the exact number of points")
-                                    relevant_centerlines_filtered.append(relevant_centerline_filtered)
+                                    relevant_centerlines_filtered.append(relevant_centerline_filtered)            
 
-                            
+                            seq_map_info["relevant_centerlines_filtered"] = relevant_centerlines_filtered
 
                             fig, ax = plt.subplots(figsize=(6,6), facecolor="black")
 
@@ -338,23 +343,36 @@ for split_name,features in splits_to_process.items():
                             # Paint centerlines
 
                             for centerline_coords in relevant_centerlines_filtered:
-                                visualize_centerline(centerline_coords) # Uncomment this to check the start and end
-
-                                if np.min(centerline_coords[:,0]) < xmin: xmin = np.min(centerline_coords[:,0])
-                                if np.min(centerline_coords[:,1]) < ymin: ymin = np.min(centerline_coords[:,1])
-                                if np.max(centerline_coords[:,0]) > xmax: xmax = np.max(centerline_coords[:,0])
-                                if np.max(centerline_coords[:,1]) > ymax: ymax = np.max(centerline_coords[:,1])
+                                # visualize_centerline(centerline_coords) # Uncomment this to check the start and end
 
                                 lane_polygon = centerline_to_polygon(centerline_coords)
 
-                                                                                        #"black"  
+                                if np.min(lane_polygon[:,0]) < xmin: xmin = np.min(lane_polygon[:,0])
+                                if np.min(lane_polygon[:,1]) < ymin: ymin = np.min(lane_polygon[:,1])
+                                if np.max(lane_polygon[:,0]) > xmax: xmax = np.max(lane_polygon[:,0])
+                                if np.max(lane_polygon[:,1]) > ymax: ymax = np.max(lane_polygon[:,1])
+                                                                        #"black"  
                                 ax.fill(lane_polygon[:, 0], lane_polygon[:, 1], "white", edgecolor='white', fill=True)
                                 ax.plot(centerline_coords[:, 0], centerline_coords[:, 1], "-", color="gray", linewidth=1.5, alpha=1.0, zorder=2)
 
+                            center_plausible_area_filtered = np.zeros((2))
+                            center_plausible_area_filtered[0] = (xmin+xmax)/2
+                            center_plausible_area_filtered[1] = (ymin+ymax)/2
+
+                            real_world_width = xmax - xmin
+                            real_world_height = ymax - ymin
+
+                            seq_map_info["center_plausible_area_filtered"] = center_plausible_area_filtered
+                            seq_map_info["real_world_width"] = real_world_width
+                            seq_map_info["real_world_height"] = real_world_height
+
+                            # circ_car = plt.Circle((center_plausible_area_filtered[0], center_plausible_area_filtered[1]), 0.2, color="cyan", fill=True)
+                            # ax.add_patch(circ_car)
+
                             # Paint agent's orientation
 
-                            dx = lane_dir_vector[0] * 10
-                            dy = lane_dir_vector[1] * 10
+                            dx = lane_dir_vector[0] * 4
+                            dy = lane_dir_vector[1] * 4
 
                             plt.xlim(xmin, xmax)
                             plt.ylim(ymin, ymax)
@@ -362,86 +380,90 @@ for split_name,features in splits_to_process.items():
 
                             output_dir = os.path.join(BASE_DIR,f"data/datasets/argoverse/motion-forecasting/{split_name}/map_features")
                             filename = os.path.join(output_dir,f"{file_id}_binary_plausible_area_filtered.png")
+                            # plt.savefig(filename, bbox_inches='tight', facecolor=fig.get_facecolor(), edgecolor='none', pad_inches=0)
+                            
+                            # plt.close('all')
+
+                            plt.arrow(
+                                agent_xy[obs_len-1,0], # Arrow origin
+                                agent_xy[obs_len-1,1],
+                                dx, # Length of the arrow
+                                dy,
+                                color="darkmagenta",
+                                width=0.3,
+                                zorder=16,
+                            )
+
+                            if agent_xy.shape[0] == obs_len+pred_len: # train and val
+                                # Agent observation
+
+                                plt.plot(
+                                    agent_xy[:obs_len, 0],
+                                    agent_xy[:obs_len, 1],
+                                    "-",
+                                    color="b",
+                                    alpha=1,
+                                    linewidth=3,
+                                    zorder=15,
+                                )
+
+                                # Agent prediction
+
+                                plt.plot(
+                                    agent_xy[obs_len:, 0],
+                                    agent_xy[obs_len:, 1],
+                                    "-",
+                                    color="r",
+                                    alpha=1,
+                                    linewidth=3,
+                                    zorder=15,
+                                )
+
+                                final_x = agent_xy[-1, 0]
+                                final_y = agent_xy[-1, 1]
+
+                                # Final position
+
+                                plt.plot(
+                                    final_x,
+                                    final_y,
+                                    "o",
+                                    color="r",
+                                    alpha=1,
+                                    markersize=5,
+                                    zorder=15,
+                                )
+                            else: # test
+                                # Agent observation
+                                
+                                plt.plot(
+                                    agent_xy[:, 0],
+                                    agent_xy[:, 1],
+                                    "-",
+                                    color="b",
+                                    alpha=1,
+                                    linewidth=3,
+                                    zorder=15,
+                                )
+
+                                final_x = agent_xy[-1, 0]
+                                final_y = agent_xy[-1, 1]
+
+                                # Final position
+
+                                plt.plot(
+                                    final_x,
+                                    final_y,
+                                    "o",
+                                    color="b",
+                                    alpha=1,
+                                    markersize=5,
+                                    zorder=15,
+                                )
+
                             plt.savefig(filename, bbox_inches='tight', facecolor=fig.get_facecolor(), edgecolor='none', pad_inches=0)
                             
                             plt.close('all')
-
-                            # plt.arrow(
-                            #     agent_xy[obs_len-1,0], # Arrow origin
-                            #     agent_xy[obs_len-1,1],
-                            #     dx, # Length of the arrow
-                            #     dy,
-                            #     color="darkmagenta",
-                            #     width=1.0,
-                            #     zorder=16,
-                            # )
-
-                            # if agent_xy.shape[0] == obs_len+pred_len: # train and val
-                            #     # Agent observation
-
-                            #     plt.plot(
-                            #         agent_xy[:obs_len, 0],
-                            #         agent_xy[:obs_len, 1],
-                            #         "-",
-                            #         color="b",
-                            #         alpha=1,
-                            #         linewidth=3,
-                            #         zorder=15,
-                            #     )
-
-                            #     # Agent prediction
-
-                            #     plt.plot(
-                            #         agent_xy[obs_len:, 0],
-                            #         agent_xy[obs_len:, 1],
-                            #         "-",
-                            #         color="r",
-                            #         alpha=1,
-                            #         linewidth=3,
-                            #         zorder=15,
-                            #     )
-
-                            #     final_x = agent_xy[-1, 0]
-                            #     final_y = agent_xy[-1, 1]
-
-                            #     # Final position
-
-                            #     plt.plot(
-                            #         final_x,
-                            #         final_y,
-                            #         "o",
-                            #         color="r",
-                            #         alpha=1,
-                            #         markersize=5,
-                            #         zorder=15,
-                            #     )
-                            # else: # test
-                            #     # Agent observation
-                                
-                            #     plt.plot(
-                            #         agent_xy[:, 0],
-                            #         agent_xy[:, 1],
-                            #         "-",
-                            #         color="b",
-                            #         alpha=1,
-                            #         linewidth=3,
-                            #         zorder=15,
-                            #     )
-
-                            #     final_x = agent_xy[-1, 0]
-                            #     final_y = agent_xy[-1, 1]
-
-                            #     # Final position
-
-                            #     plt.plot(
-                            #         final_x,
-                            #         final_y,
-                            #         "o",
-                            #         color="b",
-                            #         alpha=1,
-                            #         markersize=5,
-                            #         zorder=15,
-                            #     )
 
                             # plt.xlabel("Map X")
                             # plt.ylabel("Map Y")
@@ -509,128 +531,128 @@ for split_name,features in splits_to_process.items():
                             # print("Num lanes: ", len(relevant_centerlines_filtered))
                             # print("Time consumed: ", end_-start_)
 
-                            candidate_centerlines_list.append(relevant_centerlines_filtered)   
+                            # candidate_centerlines_list.append(relevant_centerlines_filtered)  
+                            map_info[str(file_id)] = seq_map_info 
                         
+                        # elif mode == "train": # only best centerline ("oracle")
+                        #     start_ = time.time()
 
-                        elif mode == "train": # only best centerline ("oracle")
-                            start_ = time.time()
+                        #     oracle_centerline = map_feature_helpers["ORACLE_CENTERLINE"]                     
 
-                            oracle_centerline = map_feature_helpers["ORACLE_CENTERLINE"]                     
-
-                            # Get index of the closest waypoint to the first observation
+                        #     # Get index of the closest waypoint to the first observation
                             
-                            closest_wp_first, _ = map_features_utils_instance.get_closest_wp(first_obs, oracle_centerline)
+                        #     closest_wp_first, _ = map_features_utils_instance.get_closest_wp(first_obs, oracle_centerline)
 
-                            # Get index of the closest waypoint to the last observation + dist_around
+                        #     # Get index of the closest waypoint to the last observation + dist_around
                          
-                            closest_wp_last, dist_array_last = map_features_utils_instance.get_closest_wp(last_obs, oracle_centerline)
-                            dist_array_last = dist_array_last[closest_wp_last:] # To determine dist around from this point
+                        #     closest_wp_last, dist_array_last = map_features_utils_instance.get_closest_wp(last_obs, oracle_centerline)
+                        #     dist_array_last = dist_array_last[closest_wp_last:] # To determine dist around from this point
 
-                            # TODO: The acceleration is quite noisy. Improve this calculation
-                            vel, acc = map_features_utils_instance.get_agent_velocity_and_acceleration(agent_xy[:obs_len,:],
-                                                                                                    filter="least_squares")                         
-                            dist_around = vel * (pred_len/freq) + 1/2 * acc * (pred_len/freq)**2
-                            if dist_around < min_dist_around:
-                                dist_around = min_dist_around
+                        #     # TODO: The acceleration is quite noisy. Improve this calculation
+                        #     vel, acc = map_features_utils_instance.get_agent_velocity_and_acceleration(agent_xy[:obs_len,:],
+                        #                                                                             filter="least_squares")                         
+                        #     dist_around = vel * (pred_len/freq) + 1/2 * acc * (pred_len/freq)**2
+                        #     if dist_around < min_dist_around:
+                        #         dist_around = min_dist_around
 
-                            idx, value = find_nearest(dist_array_last,dist_around)
-                            num_points = idx + (closest_wp_last - closest_wp_first)
-                            if num_points < min_points:
-                                    num_points = min_points # you must have at least 4 points to conduct a cubic interpolation
+                        #     idx, value = find_nearest(dist_array_last,dist_around)
+                        #     num_points = idx + (closest_wp_last - closest_wp_first)
+                        #     if num_points < min_points:
+                        #             num_points = min_points # you must have at least 4 points to conduct a cubic interpolation
 
-                            # Determine if the best oracle is inverted (this sometimes happens if the corresponding agent is
-                            # carrying a lane change maneuver): The best and most interpretable solution is if the
-                            # the end point is closer than the start point and the last observation is closer to the start
-                            # rather than the first observation
+                        #     # Determine if the best oracle is inverted (this sometimes happens if the corresponding agent is
+                        #     # carrying a lane change maneuver): The best and most interpretable solution is if the
+                        #     # the end point is closer than the start point and the last observation is closer to the start
+                        #     # rather than the first observation
 
-                            oracle_centerline_orig = copy.deepcopy(oracle_centerline)
+                        #     oracle_centerline_orig = copy.deepcopy(oracle_centerline)
                             
-                            ec = euclidean_distances(oracle_centerline[:-1,:],oracle_centerline[1:,:])
-                            indeces_rows = indeces_cols = np.arange(ec.shape[0])
-                            dist = ec[indeces_rows,indeces_cols]
+                        #     ec = euclidean_distances(oracle_centerline[:-1,:],oracle_centerline[1:,:])
+                        #     indeces_rows = indeces_cols = np.arange(ec.shape[0])
+                        #     dist = ec[indeces_rows,indeces_cols]
 
-                            invert = False
+                        #     invert = False
 
-                            try:
-                                dist_firstobs2start = np.cumsum(dist[:closest_wp_first+1])[-1]
-                                dist_lastobs2start = np.cumsum(dist[:closest_wp_last+1])[-1]
-                                dist_firstobs2end = np.cumsum(dist[closest_wp_first:])[-1]
+                        #     try:
+                        #         dist_firstobs2start = np.cumsum(dist[:closest_wp_first+1])[-1]
+                        #         dist_lastobs2start = np.cumsum(dist[:closest_wp_last+1])[-1]
+                        #         dist_firstobs2end = np.cumsum(dist[closest_wp_first:])[-1]
 
-                                if ((dist_lastobs2start >= dist_firstobs2start)
-                                   and ((closest_wp_first > 0 and closest_wp_first < oracle_centerline.shape[0])
-                                     or (dist_firstobs2start <= dist_firstobs2end))):
-                                    pass
-                                else:
-                                    invert = True
+                        #         if ((dist_lastobs2start >= dist_firstobs2start)
+                        #            and ((closest_wp_first > 0 and closest_wp_first < oracle_centerline.shape[0])
+                        #              or (dist_firstobs2start <= dist_firstobs2end))):
+                        #             pass
+                        #         else:
+                        #             invert = True
 
-                            except Exception as e:
-                                # print("e: ", e)
-                                invert = True
+                        #     except Exception as e:
+                        #         # print("e: ", e)
+                        #         invert = True
 
-                            if invert:
-                                # print("invert oracle")
+                        #     if invert:
+                        #         # print("invert oracle")
 
-                                oracle_centerline_orig = copy.deepcopy(oracle_centerline)
-                                oracle_centerline = oracle_centerline[::-1]
+                        #         oracle_centerline_orig = copy.deepcopy(oracle_centerline)
+                        #         oracle_centerline = oracle_centerline[::-1]
 
-                                # Repeat again the process to obtain the closest wps
+                        #         # Repeat again the process to obtain the closest wps
 
-                                # Get index of the closest waypoint to the first observation
+                        #         # Get index of the closest waypoint to the first observation
                             
-                                closest_wp_first, _ = map_features_utils_instance.get_closest_wp(first_obs, oracle_centerline)
+                        #         closest_wp_first, _ = map_features_utils_instance.get_closest_wp(first_obs, oracle_centerline)
 
-                                # Get index of the closest waypoint to the last observation + dist_around
+                        #         # Get index of the closest waypoint to the last observation + dist_around
                             
-                                closest_wp_last, dist_array_last = map_features_utils_instance.get_closest_wp(last_obs, oracle_centerline)
-                                dist_array_last = dist_array_last[closest_wp_last:]
+                        #         closest_wp_last, dist_array_last = map_features_utils_instance.get_closest_wp(last_obs, oracle_centerline)
+                        #         dist_array_last = dist_array_last[closest_wp_last:]
 
-                                idx, value = find_nearest(dist_array_last,dist_around) # TODO: Take the next point, or an interpolated point
-                                # between the closest and the next
+                        #         idx, value = find_nearest(dist_array_last,dist_around) # TODO: Take the next point, or an interpolated point
+                        #         # between the closest and the next
 
-                                num_points = idx + (closest_wp_last - closest_wp_first)
-                                if num_points < min_points:
-                                    num_points = min_points # you must have at least 4 points to conduct a cubic interpolation
+                        #         num_points = idx + (closest_wp_last - closest_wp_first)
+                        #         if num_points < min_points:
+                        #             num_points = min_points # you must have at least 4 points to conduct a cubic interpolation
 
-                            # Reduce the lane to the closest N points, starting from the first observation 
-                            # (closest to current position) and ending in the closest wp assuming CTRA during pred seconds
+                        #     # Reduce the lane to the closest N points, starting from the first observation 
+                        #     # (closest to current position) and ending in the closest wp assuming CTRA during pred seconds
 
-                            end_point = agent_xy[-1,:]
+                        #     end_point = agent_xy[-1,:]
 
-                            if closest_wp_first+num_points+1 <= oracle_centerline.shape[0]:
-                                oracle_centerline_filtered = oracle_centerline[closest_wp_first:closest_wp_first+num_points+1,:]
-                            else: # If we have reached the end, travel backwards 
-                                  # TODO: Interpolate frontwards
-                                back_num_points = (closest_wp_first+num_points+1) - oracle_centerline.shape[0]
-                                print("back: ", back_num_points)
-                                oracle_centerline_filtered = oracle_centerline[closest_wp_first-back_num_points:,:]
+                        #     if closest_wp_first+num_points+1 <= oracle_centerline.shape[0]:
+                        #         oracle_centerline_filtered = oracle_centerline[closest_wp_first:closest_wp_first+num_points+1,:]
+                        #     else: # If we have reached the end, travel backwards 
+                        #           # TODO: Interpolate frontwards
+                        #         back_num_points = (closest_wp_first+num_points+1) - oracle_centerline.shape[0]
+                        #         print("back: ", back_num_points)
+                        #         oracle_centerline_filtered = oracle_centerline[closest_wp_first-back_num_points:,:]
                             
-                            if oracle_centerline_filtered.shape[0] != max_points:
-                                try:
-                                    interpolated_centerline = map_features_utils_instance.interpolate_centerline(split_name,
-                                                                                                                 file_id,
-                                                                                                                 oracle_centerline_filtered,
-                                                                                                                 agent_xy,
-                                                                                                                 obs_len,
-                                                                                                                 obs_len + pred_len,
-                                                                                                                 max_points=max_points,
-                                                                                                                 viz=viz)
+                        #     if oracle_centerline_filtered.shape[0] != max_points:
+                        #         try:
+                        #             interpolated_centerline = map_features_utils_instance.interpolate_centerline(split_name,
+                        #                                                                                          file_id,
+                        #                                                                                          oracle_centerline_filtered,
+                        #                                                                                          agent_xy,
+                        #                                                                                          obs_len,
+                        #                                                                                          obs_len + pred_len,
+                        #                                                                                          max_points=max_points,
+                        #                                                                                          viz=viz)
 
-                                    assert interpolated_centerline.shape[0] == 40
+                        #             assert interpolated_centerline.shape[0] == 40
 
-                                    candidate_centerlines_list.append(interpolated_centerline)
-                                except:
-                                    # TODO: Take the closest max_points if the previous algorithm fails
+                        #             candidate_centerlines_list.append(interpolated_centerline)
+                        #         except:
+                        #             # TODO: Take the closest max_points if the previous algorithm fails
                                     
-                                    map_features_utils_instance.debug_centerline_and_agent([oracle_centerline_orig], agent_xy, obs_len, obs_len+pred_len, split_name, file_id)
-                                    pdb.set_trace()
-                                    wrong_centerlines.append(file_id)            
+                        #             map_features_utils_instance.debug_centerline_and_agent([oracle_centerline_orig], agent_xy, obs_len, obs_len+pred_len, split_name, file_id)
+                        #             pdb.set_trace()
+                        #             wrong_centerlines.append(file_id)            
               
-                            else:
-                                # print("The algorithm has the exact number of points")
-                                candidate_centerlines_list.append(oracle_centerline_filtered)
+                        #     else:
+                        #         # print("The algorithm has the exact number of points")
+                        #         candidate_centerlines_list.append(oracle_centerline_filtered)
                                 
-                            end_ = time.time()
-                            # print("Time consumed by L2 norm: ", end_-start_)
+                        #     end_ = time.time()
+                        #     # print("Time consumed by L2 norm: ", end_-start_)
 
                 end = time.time()
 
@@ -650,10 +672,10 @@ for split_name,features in splits_to_process.items():
                                         f"data_processed_{str(int(features[1]*100))}_percent","relevant_centerlines.npy")
 
             if mode == "train":
-                with open(filename, 'wb') as my_file: np.save(my_file, candidate_centerlines_list)
+                with open(filename, 'wb') as my_file: np.save(my_file, map_info)
             elif mode == "test":
                 filename = os.path.join(BASE_DIR,config.dataset.path,split_name,
                                         f"data_processed_{str(int(features[1]*100))}_percent","relevant_centerlines_filtered.npz")
-                with open(filename, 'wb') as my_file: np.savez(my_file, candidate_centerlines_list)
+                with open(filename, 'wb') as my_file: np.savez(my_file, map_info)
             
             
