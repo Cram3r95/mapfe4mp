@@ -52,6 +52,13 @@ from argoverse.utils.centerline_utils import (
 # https://matplotlib.org/stable/api/markers_api.html
 # https://matplotlib.org/stable/gallery/color/named_colors.html
 
+# N.B. When you plot your visualization, it will be plotted in RGB (so, saved in RGB)
+# but if you read that image using CV2, you will need to convert from BGR to RGB
+
+# E.g. 
+
+# img = cv2.imread(img_filename)
+# img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
 repo = git.Repo('.', search_parent_directories=True)
 BASE_DIR = repo.working_tree_dir

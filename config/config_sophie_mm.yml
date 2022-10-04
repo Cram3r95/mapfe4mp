@@ -8,7 +8,7 @@ dataset_name: argoverse_motion_forecasting_dataset
 dataset:
     path: data/datasets/argoverse/motion-forecasting/
     split: "train"
-    batch_size: 1
+    batch_size: 64
     num_workers: 0
     start_from_percentage: 0.0 # By default, 0. If you want to analize a particular bunch of files (e.g. from 25 % to 50 %)
                                # then write here 0.25 and in split_percentage 0.25
@@ -34,7 +34,7 @@ hyperparameters:
     use_rel_disp: &use_rel_disp True # If True, use dx/dy (equivalent to velocities) 
                                      # to encode/decode. 
                                      # Otherwise, use absolute coordinates
-    physical_context: "oracle" # dummy, visual, oracle, goals 
+    physical_context: "plausible_centerlines+area" # dummy, visual, goals oracle, plausible_centerlines+area
 
     num_modes: 6 # Multimodality
     obs_origin: 20 # This frame will be the origin, tipically the first observation (1) or last observation 

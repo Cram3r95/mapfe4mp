@@ -18,13 +18,12 @@ import os
 import git
 import pdb
 import copy
-import pandas as pd
 
 from prodict import Prodict
 
 # DL & Math
 
-import math
+import pandas as pd
 import numpy as np
 
 from sklearn.metrics.pairwise import euclidean_distances
@@ -664,18 +663,17 @@ for split_name,features in splits_to_process.items():
                             Estimated time to finish ({files_remaining} files): {round(time_per_iteration*files_remaining/60)} min")
                     print("Wrong centerlines: ", wrong_centerlines) 
 
-            if debug:
-                filename = os.path.join(BASE_DIR,config.dataset.path,split_name,
-                                        f"data_processed_{str(int(features[1]*100))}_percent","debug_relevant_centerlines.npy")
-            else:
-                filename = os.path.join(BASE_DIR,config.dataset.path,split_name,
-                                        f"data_processed_{str(int(features[1]*100))}_percent","relevant_centerlines.npy")
-
             if mode == "train":
+                if debug:
+                    filename = os.path.join(BASE_DIR,config.dataset.path,split_name,
+                                            f"data_processed_{str(int(features[1]*100))}_percent","debug_oracle_centerlines.npy")
+                else:
+                    filename = os.path.join(BASE_DIR,config.dataset.path,split_name,
+                                            f"data_processed_{str(int(features[1]*100))}_percent","oracle_centerlines.npy")
                 with open(filename, 'wb') as my_file: np.save(my_file, map_info)
             elif mode == "test":
                 filename = os.path.join(BASE_DIR,config.dataset.path,split_name,
-                                        f"data_processed_{str(int(features[1]*100))}_percent","relevant_centerlines_filtered.npz")
+                                        f"data_processed_{str(int(features[1]*100))}_percent","relevant_centerlines.npz")
                 with open(filename, 'wb') as my_file: np.savez(my_file, map_info)
             
             

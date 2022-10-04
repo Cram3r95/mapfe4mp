@@ -63,7 +63,7 @@ rotation_angles_prob = [0.33,0.33,0.34]
 # Auxiliar variables
 
 data_imgs_folder = None
-PHYSICAL_CONTEXT = "dummy" # dummy, visual, oracle, goals 
+PHYSICAL_CONTEXT = "dummy" # dummy, visual, oracle, goals, plausible_centerlines+area 
 
 dist_around = 40
 dist_rasterized_map = [-dist_around, dist_around, -dist_around, dist_around]
@@ -86,7 +86,8 @@ def seq_collate(data):
 
     (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel,
      non_linear_obj, loss_mask, seq_id_list, object_class_id_list, 
-     object_id_list, city_id, map_origin, num_seq_list, norm, phy_info) = zip(*data)
+     object_id_list, city_id, map_origin, num_seq_list, norm, 
+     oracle_centerlines, relevant_centerlines) = zip(*data)
 
     _len = [len(seq) for seq in obs_traj]
     cum_start_idx = [0] + np.cumsum(_len).tolist()
@@ -157,7 +158,7 @@ def seq_collate(data):
 
             ## N.B. If you apply rotation as data augmentation, the groundtruth must be rotated too!
             
-            # rot_angle = 0
+            rot_angle = 0
             # if np.any(apply_rotation): 
             #     rot_angle = np.random.choice(rotation_angles,1,p=rotation_angles_prob).item()
 
@@ -171,7 +172,7 @@ def seq_collate(data):
             aug_curr_obs_traj_rel[1:,:,:] = torch.sub(aug_curr_obs_traj[1:,:,:],
                                                       aug_curr_obs_traj[:-1,:,:])
 
-            #rel_curr_obj_seq[:, 1:] = curr_obj_seq[:, 1:] - curr_obj_seq[:, :-1] # Get displacements between consecutive steps
+            # rel_curr_obj_seq[:, 1:] = curr_obj_seq[:, 1:] - curr_obj_seq[:, :-1] # Get displacements between consecutive steps
 
             aug_curr_pred_traj_gt_rel = torch.zeros((aug_curr_pred_traj_gt.shape))
             aug_curr_pred_traj_gt_rel[1:,:,:] = torch.sub(aug_curr_pred_traj_gt[1:,:,:],
@@ -229,7 +230,17 @@ def seq_collate(data):
         phy_info = torch.from_numpy(phy_info).type(torch.float32)
         if PHYSICAL_CONTEXT == "visual": phy_info = phy_info.permute(0, 3, 1, 2)
     elif PHYSICAL_CONTEXT == "oracle":
+        # Oracle centerlines from global (map) coordinates to absolute (around origin) coordinates
+
+        try: # train, val TODO: Preprocess again the map data
+            phy_info = oracle_centerlines - map_origin 
+        except:
+            phy_info = oracle_centerlines - np.expand_dims(map_origin,axis=1)
+
         phy_info = torch.stack(phy_info)
+    elif PHYSICAL_CONTEXT == "plausible_centerlines+area":
+        pdb.set_trace()
+        phy_info = "test"
     elif PHYSICAL_CONTEXT == "dummy": # dummy phy_info
         phy_info = np.random.randn(1,1,1,1)
         phy_info = torch.from_numpy(phy_info).type(torch.float32)
@@ -405,12 +416,25 @@ class ArgoverseMotionForecastingDataset(Dataset):
             if self.split == "val":
                 self.extra_data_train = 1 - self.extra_data_train # Use remaining files for validation
 
-        variable_name_list = ['seq_list','seq_list_rel','loss_mask_list','non_linear_obj',
-                              'num_objs_in_seq','seq_id_list','object_class_id_list',
-                              'object_id_list','ego_vehicle_origin','num_seq_list',
-                              'straight_trajectories_list','curved_trajectories_list','city_id',
-                              'norm','relevant_centerlines'] 
+        social_variables_names = ['seq_list','seq_list_rel','loss_mask_list','non_linear_obj',
+                                  'num_objs_in_seq','seq_id_list','object_class_id_list',
+                                  'object_id_list','ego_vehicle_origin','num_seq_list',
+                                  'straight_trajectories_list','curved_trajectories_list','city_id',
+                                  'norm'] 
+        physical_variables_names = ['oracle_centerlines','relevant_centerlines']
         
+        # Load file_id_list and apply split percentage/start_from
+
+        folder = os.path.join(root_folder,self.split,"data")
+        files, num_files = dataset_utils.load_list_from_folder(folder)
+
+        ## Sort list and analize a specific percentage/from a specific position
+
+        self.file_id_list, root_file_name = dataset_utils.get_sorted_file_id_list(files)     
+        self.file_id_list = dataset_utils.apply_percentage_startfrom(self.file_id_list, num_files, 
+                                                                     split_percentage=split_percentage, 
+                                                                     start_from_percentage=start_from_percentage)
+
         # Preprocess data (from raw .csvs to torch Tensors, at least including the 
         # AGENT (most important vehicle) and AV
 
@@ -418,15 +442,7 @@ class ArgoverseMotionForecastingDataset(Dataset):
              
         if (preprocess_data and not os.path.isdir(self.data_processed_folder)): # This split percentage has not been processed yet
                                                                                 # (in order to avoid unwanted overwriting, just in case ...)
-            folder = os.path.join(root_folder,self.split,"data")
-            files, num_files = dataset_utils.load_list_from_folder(folder)
-
-            # Sort list and analize a specific percentage/from a specific position
-
-            file_id_list, root_file_name = dataset_utils.get_sorted_file_id_list(files)     
-            file_id_list = dataset_utils.apply_percentage_startfrom(file_id_list, num_files, 
-                                                                    split_percentage=split_percentage, 
-                                                                    start_from_percentage=start_from_percentage)
+    
 
             seq_list = [] # Absolute coordinates (obs+pred) around 0.0 (center of the local map)
             seq_list_rel = [] # Relative displacements (obs+pred)
@@ -449,11 +465,11 @@ class ArgoverseMotionForecastingDataset(Dataset):
             aux_time = float(0)
 
             t0 = time.time()
-            for i, file_id in enumerate(file_id_list):
+            for i, file_id in enumerate(self.file_id_list):
                 start = time.time()
 
-                print(f"File {file_id} -> {i+1}/{len(file_id_list)}")
-                files_remaining = len(file_id_list) - (i+1)
+                print(f"File {file_id} -> {i+1}/{len(self.file_id_list)}")
+                files_remaining = len(self.file_id_list) - (i+1)
 
                 num_seq_list.append(file_id)
                 path = os.path.join(root_file_name,str(file_id)+".csv")
@@ -537,13 +553,13 @@ class ArgoverseMotionForecastingDataset(Dataset):
 
             norm = (abs_norm, rel_norm)
 
-            # Create dictionary with all processed data
+            # Create dictionary with all the processed social data
 
-            variable_list = [seq_list, seq_list_rel, loss_mask_list, non_linear_obj, num_objs_in_seq,
-                             seq_id_list, object_class_id_list, object_id_list, ego_vehicle_origin, 
-                             num_seq_list, straight_trajectories_list, curved_trajectories_list, city_ids, norm]
-            preprocess_data_dict = dataset_utils.create_dictionary_from_variable_list(variable_list, 
-                                                                                      variable_name_list)
+            social_variables_list = [seq_list, seq_list_rel, loss_mask_list, non_linear_obj, num_objs_in_seq,
+                                     seq_id_list, object_class_id_list, object_id_list, ego_vehicle_origin, 
+                                     num_seq_list, straight_trajectories_list, curved_trajectories_list, city_ids, norm]
+            preprocess_data_dict = dataset_utils.create_dictionary_from_variable_list(social_variables_list, 
+                                                                                      social_variables_names)
 
             if save_data:
                 # Save numpy objects as npy 
@@ -558,9 +574,15 @@ class ArgoverseMotionForecastingDataset(Dataset):
 
             preprocess_data_dict = dataset_utils.load_processed_files_from_npy(self.data_processed_folder)
 
+            variable_name_list = social_variables_names + physical_variables_names
+
+            assert len(variable_name_list) == len(preprocess_data_dict.keys()), \
+                   "The number of loaded files from the folder does not match the number of variables you want"
+
             seq_list, seq_list_rel, loss_mask_list, non_linear_obj, num_objs_in_seq, \
             seq_id_list, object_class_id_list, object_id_list, ego_vehicle_origin, num_seq_list, \
-            straight_trajectories_list, curved_trajectories_list, city_ids, norm, relevant_centerlines  = \
+            straight_trajectories_list, curved_trajectories_list, city_ids, norm, oracle_centerlines, \
+            relevant_centerlines  = \
                 operator.itemgetter(*variable_name_list)(preprocess_data_dict)
 
             # TODO: Refactorize this
@@ -673,12 +695,8 @@ class ArgoverseMotionForecastingDataset(Dataset):
         self.num_seq_list = torch.from_numpy(num_seq_list).type(torch.int)
         self.num_seq = len(num_seq_list)
 
-        try: # train, val TODO: Preprocess again the map data
-            relevant_centerlines = relevant_centerlines - ego_vehicle_origin # from global coordinates to absolute coordinates
-        except:
-            relevant_centerlines = relevant_centerlines - np.expand_dims(ego_vehicle_origin,axis=1)
-
-        self.phy_info = torch.from_numpy(relevant_centerlines).type(torch.float)
+        self.oracle_centerlines = torch.from_numpy(oracle_centerlines).type(torch.float)
+        self.relevant_centerlines = relevant_centerlines
         
     def __len__(self):
         return self.num_seq
@@ -751,7 +769,8 @@ class ArgoverseMotionForecastingDataset(Dataset):
                     self.non_linear_obj[start:end], self.loss_mask[start:end, :],
                     self.seq_id_list[start:end, :, :], self.object_class_id_list[start:end], 
                     self.object_id_list[start:end], self.city_ids[index], self.ego_vehicle_origin[index,:,:],
-                    self.num_seq_list[index], self.norm, self.phy_info[index,:,:]
+                    self.num_seq_list[index], self.norm, self.oracle_centerlines[index,:,:], 
+                    self.relevant_centerlines[str(self.file_id_list[index])]
                   ] 
         except: # Well done (for test) -> origin is N x 2
             out = [
@@ -760,8 +779,9 @@ class ArgoverseMotionForecastingDataset(Dataset):
                     self.non_linear_obj[start:end], self.loss_mask[start:end, :],
                     self.seq_id_list[start:end, :, :], self.object_class_id_list[start:end], 
                     self.object_id_list[start:end], self.city_ids[index], self.ego_vehicle_origin[index,:], # HERE THE DIFFERENCE
-                    self.num_seq_list[index], self.norm, self.phy_info[index,:,:]
-                  ]
+                    self.num_seq_list[index], self.norm, self.oracle_centerlines[index,:,:],
+                    self.relevant_centerlines[str(self.file_id_list[index])]
+                ]
 
         # Increase file count
         

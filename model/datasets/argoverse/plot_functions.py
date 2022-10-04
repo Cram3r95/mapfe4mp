@@ -561,6 +561,7 @@ def viz_predictions_all(
         object_type = translate_object_type(int(object_class_list[i]))
 
         # Observation
+
         plt.plot(
             input_[i, :, 0],
             input_[i, :, 1],
@@ -570,7 +571,9 @@ def viz_predictions_all(
             linewidth=3,
             zorder=15,
         )
+
         # Last observation
+
         plt.plot(
             input_[i, -1, 0],
             input_[i, -1, 1],
@@ -582,6 +585,7 @@ def viz_predictions_all(
             zorder=15,
             markersize=9,
         )
+
         # Groundtruth prediction
 
         if split_name != "test":
@@ -594,7 +598,9 @@ def viz_predictions_all(
                 linewidth=3,
                 zorder=20,
             )
+
             # Groundtruth end-point
+
             plt.plot(
                 target[i, -1, 0],
                 target[i, -1, 1],
@@ -606,7 +612,9 @@ def viz_predictions_all(
                 zorder=20,
                 markersize=9,
             )
+
         # Centerlines (Optional)
+        
         if len(centerlines) > 0:
             for j in range(len(centerlines[i])):
                 plt.plot(

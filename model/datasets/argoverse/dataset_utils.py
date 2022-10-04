@@ -229,13 +229,20 @@ def load_processed_files_from_npy(folder):
         key = preprocessed_file.split('/')[-1].split('.')[0]
 
         with open(preprocessed_file, 'rb') as my_file:
-            if (preprocessed_file.find('npy') != -1): # Do not load other files
-                try:
-                    value = np.load(my_file)
-                except:
-                    value = np.load(my_file, allow_pickle=True)
-        preprocessed_data_dict[key] = value
 
+            # Only load npy and npz files
+
+            if (preprocessed_file.find('npy') != -1):
+                value = np.load(my_file)
+                preprocessed_data_dict[key] = value
+            elif (preprocessed_file.find('npz') != -1):
+                value = np.load(my_file, allow_pickle=True)
+                value = value['arr_0'].item() # We need to extract the information at this point
+                                              # Otherwise, if we store the NPz file in a dict and
+                                              # we try to extract the information later, we get this 
+                                              # error: "ValueError": seek of closed file
+                preprocessed_data_dict[key] = value
+        
     return preprocessed_data_dict
 
 # Physical information functions
