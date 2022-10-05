@@ -196,6 +196,7 @@ def model_trainer(config, logger):
 
     data_train = ArgoverseMotionForecastingDataset(dataset_name=config.dataset_name,
                                                    root_folder=config.dataset.path,
+                                                   imgs_folder=config.dataset.imgs_folder,
                                                    obs_len=config.hyperparameters.obs_len,
                                                    pred_len=config.hyperparameters.pred_len,
                                                    distance_threshold=config.hyperparameters.distance_threshold,
@@ -221,6 +222,7 @@ def model_trainer(config, logger):
     logger.info("Initializing val dataset")
     data_val = ArgoverseMotionForecastingDataset(dataset_name=config.dataset_name,
                                                  root_folder=config.dataset.path,
+                                                 imgs_folder=config.dataset.imgs_folder,
                                                  obs_len=config.hyperparameters.obs_len,
                                                  pred_len=config.hyperparameters.pred_len,
                                                  distance_threshold=config.hyperparameters.distance_threshold,

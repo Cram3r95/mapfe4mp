@@ -249,11 +249,14 @@ def load_processed_files_from_npy(folder):
 
 def load_physical_information(num_seq_list, obs_traj_rel, first_obs, map_origin, 
                               dist_rasterized_map, object_class_id_list, data_imgs_folder,
-                              physical_context="dummies",debug_images=False):
+                              physical_context="dummies",relevant_centerlines=None,debug_images=False):
     """
     Get the physical context (rasterized map around the vehicle including trajectories), plausible
     goal points, or dummies
     """
+    pdb.set_trace()
+
+    phy_info = goal_points_functions.get_driveable_area_and_centerlines()
 
     batch_size = len(object_class_id_list)
     dist_around = abs(dist_rasterized_map[0])
@@ -274,9 +277,11 @@ def load_physical_information(num_seq_list, obs_traj_rel, first_obs, map_origin,
         obs_len = curr_obs_traj_rel.shape[0]
         curr_map_origin = map_origin[i][0]#.reshape(1,-1)
                                                      
-        filename = data_imgs_folder + str(curr_num_seq) + ".png"
+        filename = os.path.join(data_imgs_folder,str(curr_num_seq) + ".png")
 
         if physical_context == "visual":
+            # TODO: Not used at this moment, but could be interesting
+            # The img should be normalized between 0 and 1
             img = map_functions.plot_trajectories(filename, curr_obs_traj_rel, curr_first_obs, 
                                                   curr_map_origin, curr_object_class_id, dist_rasterized_map,
                                                   rot_angle=-1,obs_len=obs_len, smoothen=True, show=False)
@@ -300,8 +305,9 @@ def load_physical_information(num_seq_list, obs_traj_rel, first_obs, map_origin,
 
             goal_points = goal_points_functions.get_goal_points(filename, agent_obs_seq_global, curr_map_origin, dist_around)
             physical_context_list.append(goal_points)
-        # elif physical_context == "relevant_centerlines":
-            
+        elif physical_context == "plausible_area+relevant_centerlines":
+            pdb.set_trace()
+            print("test")
 
         t0_idx = t1_idx
 

@@ -174,7 +174,7 @@ def transform_px2real_world(px_points, origin_pos, real_world_size, img_size):
 
     return np.array(rw_points)
 
-def transform_real_world2px_square_image(rw_points, origin_pos, real_world_offset, img_size):
+def transform_real_world2px(rw_points, origin_pos, real_world_offset, img_size):
     """
     It is assumed squared image (e.g. 600 x 600 -> img_size = 600) and the same offset 
     in all directions (top, bottom, left, right) to facilitate the transformation.
@@ -430,4 +430,38 @@ def get_goal_points(filename, obs_seq, origin_pos, real_world_offset, NUM_GOAL_P
     final_samples_px = np.hstack((final_samples_y.reshape(-1,1), final_samples_x.reshape(-1,1))) # rows, columns
     rw_points = transform_px2real_world(final_samples_px, origin_pos, real_world_offset, img_size)
     # pdb.set_trace()
+    return rw_points
+
+def get_driveable_area_and_centerlines(root_folder, num_seq_list, obs_seq, origin_pos, real_world_offset, num_points=512):
+    """
+    """
+
+    split_folder = '/'.join(filename.split('/')[:-2])
+    goal_points_folder = split_folder + "/goal_points"
+    seq_id = filename.split('/')[-1].split('.')[0]
+
+    # 0. Load image and get past observations
+
+    img = cv2.imread(img_filename)
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+
+    img = cv2.imread(filename)
+    img = cv2.resize(img, dsize=(600,600))
+    height, width = img.shape[:2]
+    img_size = height
+    scale_x = scale_y = float(height/(2*real_world_offset))
+
+    cx = int(width/2)
+    cy = int(height/2)
+    car_px = (cy,cx)
+
+    ori = obs_seq[-1, :]
+
+    # 1. Get feasible area points (N samples)
+
+    # 1.0. (Optional) Observe random sampling in the whole feasible area
+
+    fe_y, fe_x = get_points(img, car_px, scale_x, rad=10000, color=255, N=1024, 
+                            sample_car=True, max_samples=None) # return rows, columns
+
     return rw_points

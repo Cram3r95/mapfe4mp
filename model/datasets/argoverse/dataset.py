@@ -23,6 +23,7 @@ import sys
 
 import numpy as np
 import torch
+
 from torch.utils.data import Dataset
 
 # Custom imports
@@ -31,6 +32,7 @@ import model.datasets.argoverse.dataset_utils as dataset_utils
 import model.datasets.argoverse.geometric_functions as geometric_functions
 import model.datasets.argoverse.data_augmentation_functions as data_augmentation_functions
 import model.datasets.argoverse.plot_functions as plot_functions
+import model.datasets.argoverse.goal_points_functions as goal_points_functions
 
 #######################################
 
@@ -62,7 +64,7 @@ rotation_angles_prob = [0.33,0.33,0.34]
 
 # Auxiliar variables
 
-data_imgs_folder = None
+DATA_IMGS_FOLDER = "dummy"
 PHYSICAL_CONTEXT = "dummy" # dummy, visual, oracle, goals, plausible_centerlines+area 
 
 dist_around = 40
@@ -223,12 +225,15 @@ def seq_collate(data):
     first_obs = obs_traj[0,:,:] # 1 x agents · batch_size x 2
 
     if (PHYSICAL_CONTEXT == "visual"  # batch_size x channels x height x width 
-     or PHYSICAL_CONTEXT == "goals"): # batch_size x num_goal_points x 2 (x|y) (real-world coordinates (HDmap))
+     or PHYSICAL_CONTEXT == "goals" # batch_size x num_goal_points x 2 (x|y) (real-world coordinates (HDmap))
+     or PHYSICAL_CONTEXT == "plausible_centerlines+area"): #  
         phy_info = dataset_utils.load_physical_information(num_seq_list, obs_traj_rel, first_obs, map_origin,
-                                                           dist_rasterized_map, object_class_id_list, data_imgs_folder,
-                                                           physical_context=PHYSICAL_CONTEXT,debug_images=False)
+                                                           dist_rasterized_map, object_class_id_list, DATA_IMGS_FOLDER,
+                                                           physical_context=PHYSICAL_CONTEXT,relevant_centerlines=relevant_centerlines,
+                                                           debug_images=False)
         phy_info = torch.from_numpy(phy_info).type(torch.float32)
         if PHYSICAL_CONTEXT == "visual": phy_info = phy_info.permute(0, 3, 1, 2)
+
     elif PHYSICAL_CONTEXT == "oracle":
         # Oracle centerlines from global (map) coordinates to absolute (around origin) coordinates
 
@@ -238,9 +243,7 @@ def seq_collate(data):
             phy_info = oracle_centerlines - np.expand_dims(map_origin,axis=1)
 
         phy_info = torch.stack(phy_info)
-    elif PHYSICAL_CONTEXT == "plausible_centerlines+area":
-        pdb.set_trace()
-        phy_info = "test"
+
     elif PHYSICAL_CONTEXT == "dummy": # dummy phy_info
         phy_info = np.random.randn(1,1,1,1)
         phy_info = torch.from_numpy(phy_info).type(torch.float32)
@@ -376,7 +379,7 @@ def process_window_sequence(idx, frame_data, frames, obs_len,
            
 class ArgoverseMotionForecastingDataset(Dataset):
     """Dataloder for the Trajectory datasets"""
-    def __init__(self, dataset_name, root_folder, obs_len=20, pred_len=30, distance_threshold=30,
+    def __init__(self, dataset_name, root_folder, imgs_folder, obs_len=20, pred_len=30, distance_threshold=30,
                  split='train', split_percentage=0.1, start_from_percentage=0.0, 
                  batch_size=16, class_balance=-1.0, obs_origin=1, data_augmentation=False, 
                  physical_context="dummy", extra_data_train=-1.0, preprocess_data=False, save_data=False):
@@ -402,6 +405,7 @@ class ArgoverseMotionForecastingDataset(Dataset):
 
         self.dataset_name = dataset_name
         self.root_folder = root_folder
+        self.imgs_folder = imgs_folder
         self.data_processed_folder = os.path.join(root_folder,
                                                   self.split,
                                                   f"data_processed_{str(int(split_percentage*100))}_percent")
@@ -710,9 +714,9 @@ class ArgoverseMotionForecastingDataset(Dataset):
         """
 
         if not self.init_global_variables:
-            global data_imgs_folder, APPLY_DATA_AUGMENTATION, PHYSICAL_CONTEXT, CURRENT_SPLIT
+            global DATA_IMGS_FOLDER, APPLY_DATA_AUGMENTATION, PHYSICAL_CONTEXT, CURRENT_SPLIT
 
-            data_imgs_folder = os.path.join(self.root_folder,self.split,"data_images")
+            DATA_IMGS_FOLDER = os.path.join(self.root_folder,self.split,self.imgs_folder)
             APPLY_DATA_AUGMENTATION = self.data_augmentation
             PHYSICAL_CONTEXT = self.physical_context
             CURRENT_SPLIT = self.split

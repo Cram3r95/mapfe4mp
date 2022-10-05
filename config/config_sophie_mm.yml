@@ -4,9 +4,10 @@
 
 use_gpu: 1
 device_gpu: 0 # Default CUDA device
-dataset_name: argoverse_motion_forecasting_dataset
+dataset_name: "argoverse_motion_forecasting_dataset"
 dataset:
-    path: data/datasets/argoverse/motion-forecasting/
+    path: "data/datasets/argoverse/motion-forecasting/"
+    imgs_folder: "map_features"
     split: "train"
     batch_size: 64
     num_workers: 0
