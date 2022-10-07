@@ -36,21 +36,22 @@ import model.datasets.argoverse.goal_points_functions as goal_points_functions
 
 #######################################
 
+# Global variables
+
+RAW_DATA_FORMAT = {
+    "TIMESTAMP": 0,
+    "TRACK_ID": 1,
+    "OBJECT_TYPE": 2,
+    "X": 3,
+    "Y": 4,
+    "CITY_NAME": 5,
+}
+
 # Data augmentation variables
 
 APPLY_DATA_AUGMENTATION = False
 DEBUG_DATA_AUGMENTATION = False
-CURRENT_SPLIT = None
 
-# decision = [0,1] # Not apply/apply
-# dropout_prob = [0.5,0.5] # Not applied/applied probability
-# gaussian_noise_prob = [0.5,0.5]
-# rotation_prob = [0.5,0.5]
-
-# points_dropout_percentage = 0.5
-# mu_noise,std_noise = 0,0.5
-# rotation_angles = [90,180,270]
-# rotation_angles_prob = [0.33,0.33,0.34]
 
 decision = [0,1] # Not apply/apply
 dropout_prob = [0.3,0.7] # Not applied/applied probability
@@ -64,6 +65,7 @@ rotation_angles_prob = [0.33,0.33,0.34]
 
 # Auxiliar variables
 
+CURRENT_SPLIT = "dummy"
 DATA_IMGS_FOLDER = "dummy"
 PHYSICAL_CONTEXT = "dummy" # dummy, visual, oracle, goals, plausible_centerlines+area 
 
@@ -106,10 +108,12 @@ def seq_collate(data):
                                                     # that means that obs_traj = 20 x 10 x 2, with batch_size = 2, and
                                                     # there are 3 agents in the first element of the batch and 7 agents in 
                                                     # the second element of the batch
-    batch_size = seq_start_end.shape[0]
+
+    object_cls = torch.cat(object_class_id_list, dim=0)
+    obj_id = torch.cat(object_id_list, dim=0)
+    map_origin = torch.stack(map_origin)
+
     obs_len = obs_traj.shape[0]
-    pred_len = pred_traj_gt.shape[0]
-    id_frame = torch.cat(seq_id_list, dim=0).permute(2, 0, 1) # seq_len - objs_in_curr_seq - 3
 
     # Data augmentation
 
@@ -227,22 +231,20 @@ def seq_collate(data):
     if (PHYSICAL_CONTEXT == "visual"  # batch_size x channels x height x width 
      or PHYSICAL_CONTEXT == "goals" # batch_size x num_goal_points x 2 (x|y) (real-world coordinates (HDmap))
      or PHYSICAL_CONTEXT == "plausible_centerlines+area"): #  
-        phy_info = dataset_utils.load_physical_information(num_seq_list, obs_traj_rel, first_obs, map_origin,
+        phy_info = dataset_utils.load_physical_information(num_seq_list, obs_traj, obs_traj_rel, pred_traj_gt, pred_traj_gt_rel, first_obs, map_origin,
                                                            dist_rasterized_map, object_class_id_list, DATA_IMGS_FOLDER,
                                                            physical_context=PHYSICAL_CONTEXT,relevant_centerlines=relevant_centerlines,
                                                            debug_images=False)
-        phy_info = torch.from_numpy(phy_info).type(torch.float32)
-        if PHYSICAL_CONTEXT == "visual": phy_info = phy_info.permute(0, 3, 1, 2)
+        if PHYSICAL_CONTEXT != "plausible_centerlines+area":
+            # Here we have a np.array, only number
+            phy_info = torch.from_numpy(phy_info).type(torch.float32)
+            if PHYSICAL_CONTEXT == "visual": phy_info = phy_info.permute(0, 3, 1, 2)
 
     elif PHYSICAL_CONTEXT == "oracle":
         # Oracle centerlines from global (map) coordinates to absolute (around origin) coordinates
 
-        try: # train, val TODO: Preprocess again the map data
-            phy_info = oracle_centerlines - map_origin 
-        except:
-            phy_info = oracle_centerlines - np.expand_dims(map_origin,axis=1)
-
-        phy_info = torch.stack(phy_info)
+        oracle_centerlines = torch.stack(oracle_centerlines, dim=0)
+        phy_info = oracle_centerlines - map_origin
 
     elif PHYSICAL_CONTEXT == "dummy": # dummy phy_info
         phy_info = np.random.randn(1,1,1,1)
@@ -251,9 +253,6 @@ def seq_collate(data):
     end = time.time()
     # print(f"Time consumed by load_images function: {end-start}\n")
 
-    object_cls = torch.cat(object_class_id_list, dim=0)
-    obj_id = torch.cat(object_id_list, dim=0)
-    map_origin = torch.stack(map_origin)
     num_seq_list = torch.stack(num_seq_list)
     norm = torch.stack(norm)
 
@@ -713,15 +712,17 @@ class ArgoverseMotionForecastingDataset(Dataset):
         32 because maybe there are not 34 csvs before this one)
         """
 
-        if not self.init_global_variables:
-            global DATA_IMGS_FOLDER, APPLY_DATA_AUGMENTATION, PHYSICAL_CONTEXT, CURRENT_SPLIT
+        global APPLY_DATA_AUGMENTATION, PHYSICAL_CONTEXT, DATA_IMGS_FOLDER, CURRENT_SPLIT
 
-            DATA_IMGS_FOLDER = os.path.join(self.root_folder,self.split,self.imgs_folder)
+        if not self.init_global_variables: # Execute only once
             APPLY_DATA_AUGMENTATION = self.data_augmentation
             PHYSICAL_CONTEXT = self.physical_context
-            CURRENT_SPLIT = self.split
 
             self.init_global_variables = True
+
+        if self.split != CURRENT_SPLIT: # We have changed to another split
+            DATA_IMGS_FOLDER = os.path.join(self.root_folder,self.split,self.imgs_folder)
+            CURRENT_SPLIT = self.split
 
         if self.class_balance >= 0.0: # Only during training
             if self.cont_seqs % self.batch_size == 0: # Get a new batch

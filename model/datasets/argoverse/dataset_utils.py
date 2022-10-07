@@ -13,16 +13,15 @@ Created on Sun Mar 06 23:47:19 2022
 import copy
 import os
 import csv
-import time
 import glob, glob2
 import pdb
-import random
 
 # DL & Math imports
 
 import numpy as np
 import torch
 import cv2
+import pandas as pd
 
 # Plot imports
 
@@ -34,6 +33,17 @@ import model.datasets.argoverse.goal_points_functions as goal_points_functions
 import model.datasets.argoverse.map_functions as map_functions
 
 #######################################
+
+# Global variables
+
+RAW_DATA_FORMAT = {
+    "TIMESTAMP": 0,
+    "TRACK_ID": 1,
+    "OBJECT_TYPE": 2,
+    "X": 3,
+    "Y": 4,
+    "CITY_NAME": 5,
+}
 
 # File functions
 
@@ -113,22 +123,17 @@ def apply_percentage_startfrom(file_id_list, num_files,
     """
     """
 
-    if shuffle: # Shuffling is actually not required during preprocessing. Once the split
-        # is loaded, then PyTorch will apply (or not) shuffling using its own class
-        rng = np.random.default_rng()
-        indeces = rng.choice(num_files, size=int(num_files*split_percentage), replace=False)
-        file_id_list = np.take(file_id_list, indeces, axis=0)
-    else:
-        start_from = int(start_from_percentage*num_files)
-        n_files = int(split_percentage*num_files)
-        file_id_list = file_id_list[start_from:start_from+n_files]
+    start_from = int(start_from_percentage*num_files)
+    n_files = int(split_percentage*num_files)
+    file_id_list = file_id_list[start_from:start_from+n_files]
 
-        if (start_from + n_files) >= num_files:
-            print(f"WARNING: Unable to analyze {n_files} from {start_from} file. \
-                    Analyzing remaining files to completion")
-            file_id_list = file_id_list[start_from:]
-        else:
-            file_id_list = file_id_list[start_from:start_from+n_files]
+    if (start_from + n_files) >= num_files:
+        print(f"WARNING: Unable to analyze {n_files} from {start_from} file. \
+                Analyzing remaining files to completion")
+        file_id_list = file_id_list[start_from:]
+    else:
+        file_id_list = file_id_list[start_from:start_from+n_files]
+        
     print("Num files to be analized: ", len(file_id_list)) 
 
     return file_id_list
@@ -247,16 +252,17 @@ def load_processed_files_from_npy(folder):
 
 # Physical information functions
 
-def load_physical_information(num_seq_list, obs_traj_rel, first_obs, map_origin, 
-                              dist_rasterized_map, object_class_id_list, data_imgs_folder,
-                              physical_context="dummies",relevant_centerlines=None,debug_images=False):
+def load_physical_information(num_seq_list, obs_traj, obs_traj_rel, pred_traj_gt, pred_traj_gt_rel,
+                              first_obs, map_origin, dist_rasterized_map, object_class_id_list, 
+                              data_imgs_folder, physical_context="dummies",relevant_centerlines=None,
+                              debug_images=False):
     """
     Get the physical context (rasterized map around the vehicle including trajectories), plausible
     goal points, or dummies
     """
-    pdb.set_trace()
 
-    phy_info = goal_points_functions.get_driveable_area_and_centerlines()
+    root_folder = os.path.join(*data_imgs_folder.split('/')[:-1])
+    obs_len = obs_traj_rel.shape[0]
 
     batch_size = len(object_class_id_list)
     dist_around = abs(dist_rasterized_map[0])
@@ -266,12 +272,20 @@ def load_physical_information(num_seq_list, obs_traj_rel, first_obs, map_origin,
     for i in range(batch_size):    
         curr_num_seq = int(num_seq_list[i].cpu().data.numpy())
         curr_object_class_id = object_class_id_list[i].cpu().data.numpy()
-         
+        agent_index = np.where(curr_object_class_id == 1)[0].item()
+
         t1_idx = len(object_class_id_list[i]) + t0_idx
         if i < batch_size - 1:
+            curr_obs_traj = obs_traj[:,t0_idx:t1_idx,:]
             curr_obs_traj_rel = obs_traj_rel[:,t0_idx:t1_idx,:]
+            curr_pred_traj_gt = pred_traj_gt[:,t0_idx:t1_idx,:]
+            curr_pred_traj_gt_rel = pred_traj_gt_rel[:,t0_idx:t1_idx,:]
         else:
+            curr_obs_traj = obs_traj[:,t0_idx:,:]
             curr_obs_traj_rel = obs_traj_rel[:,t0_idx:,:]
+            curr_pred_traj_gt = pred_traj_gt[:,t0_idx:,:]
+            curr_pred_traj_gt_rel = pred_traj_gt_rel[:,t0_idx:,:]
+
         curr_first_obs = first_obs[t0_idx:t1_idx,:]
 
         obs_len = curr_obs_traj_rel.shape[0]
@@ -280,7 +294,8 @@ def load_physical_information(num_seq_list, obs_traj_rel, first_obs, map_origin,
         filename = os.path.join(data_imgs_folder,str(curr_num_seq) + ".png")
 
         if physical_context == "visual":
-            # TODO: Not used at this moment, but could be interesting
+            # TODO: Not used at this moment, but could be interesting. 
+            # Use the new plot functions using Argoverse standard
             # The img should be normalized between 0 and 1
             img = map_functions.plot_trajectories(filename, curr_obs_traj_rel, curr_first_obs, 
                                                   curr_map_origin, curr_object_class_id, dist_rasterized_map,
@@ -295,19 +310,39 @@ def load_physical_information(num_seq_list, obs_traj_rel, first_obs, map_origin,
             
             plt.close("all")
             physical_context_list.append(img)
-        elif physical_context == "goals":
-            agent_index = np.where(curr_object_class_id == 1)[0].item()
-            agent_obs_seq = curr_obs_traj_rel[:,agent_index,:] # 20 x 2
-            agent_first_obs = curr_first_obs[agent_index,:] # 1 x 2
 
-            agent_obs_seq_abs = relative_to_abs(agent_obs_seq, agent_first_obs) # "abs" (around 0)
-            agent_obs_seq_global = agent_obs_seq_abs + curr_map_origin # abs (hdmap coordinates)
+        elif physical_context == "goals":
+            agent_obs_seq = curr_obs_traj[:,agent_index,:] # 20 x 2, "abs" (around 0)
+            agent_obs_seq_global = agent_obs_seq + curr_map_origin # abs (hdmap coordinates)
 
             goal_points = goal_points_functions.get_goal_points(filename, agent_obs_seq_global, curr_map_origin, dist_around)
             physical_context_list.append(goal_points)
-        elif physical_context == "plausible_area+relevant_centerlines":
-            pdb.set_trace()
-            print("test")
+
+        elif physical_context == "plausible_centerlines+area":
+            filename = os.path.join(data_imgs_folder,str(curr_num_seq) + "_binary_plausible_area_filtered.png")
+            curr_relevant_centerlines = relevant_centerlines[i]
+            agent_obs_seq = curr_obs_traj[:,agent_index,:]
+            agent_pred_gt_seq = curr_pred_traj_gt[:,agent_index,:]
+            agent_xy_abs = np.vstack((agent_obs_seq,agent_pred_gt_seq))
+
+            # Check if curr_map_origin is the same than last observation of current sequence
+
+            debug_last_obs = True
+
+            if debug_last_obs:
+                csv_filename = os.path.join(root_folder,"data",f"{curr_num_seq}.csv")
+                df = pd.read_csv(csv_filename, dtype={"TIMESTAMP": str})
+                agent_track = df[df["OBJECT_TYPE"] == "AGENT"].values
+                agent_xy = agent_track[:,[RAW_DATA_FORMAT["X"],RAW_DATA_FORMAT["Y"]]].astype("float")
+                last_obs = agent_xy[obs_len-1,:]
+
+                try:
+                    assert np.allclose(curr_map_origin, last_obs), "Curr map origin and last observation do not match!"
+                except:
+                    pdb.set_trace()
+
+            phy_info = goal_points_functions.get_driveable_area_and_centerlines(filename, agent_xy_abs, curr_relevant_centerlines, curr_map_origin, DEBUG=False)
+            physical_context_list.append(phy_info)
 
         t0_idx = t1_idx
 

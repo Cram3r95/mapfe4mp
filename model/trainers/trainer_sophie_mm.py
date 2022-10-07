@@ -30,7 +30,7 @@ from torch.utils.tensorboard import SummaryWriter
 
 # Custom imports
 
-from model.datasets.argoverse.dataset import ArgoverseMotionForecastingDataset, seq_collate
+from model.datasets.argoverse.dataset import PHYSICAL_CONTEXT, ArgoverseMotionForecastingDataset, seq_collate
 from model.models.sophie_mm import TrajectoryGenerator
 from model.modules.losses import l2_loss_multimodal, mse, pytorch_neg_multi_log_likelihood_batch, evaluate_feasible_area_prediction
 from model.modules.evaluation_metrics import displacement_error, final_displacement_error
@@ -243,7 +243,7 @@ def model_trainer(config, logger):
 
     # Initialize motion prediction generator and optimizer
 
-    generator = TrajectoryGenerator()
+    generator = TrajectoryGenerator(PHYSICAL_CONTEXT=hyperparameters.physical_context)
     generator.to(device)
     generator.apply(init_weights)
     generator.type(float_dtype).train() # train mode (if you compute metrics -> .eval() mode)
@@ -631,10 +631,23 @@ def generator_step(hyperparameters, batch, generator, optimizer_g,
     """
     # Load data in device
 
-    batch = [tensor.cuda(current_cuda) for tensor in batch if torch.is_tensor(tensor)]
+    if hyperparameters.physical_context != "plausible_centerlines+area":
+        # Here the physical info is a single tensor
 
-    (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel, non_linear_obj,
-     loss_mask, seq_start_end, object_cls, obj_id, map_origin, num_seq, norm, phy_info) = batch
+        batch = [tensor.cuda(current_cuda) for tensor in batch if torch.is_tensor(tensor)]
+
+        (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel, non_linear_obj,
+        loss_mask, seq_start_end, object_cls, obj_id, map_origin, num_seq, norm, phy_info) = batch
+    elif hyperparameters.physical_context == "plausible_centerlines+area":
+
+        # TODO: In order to improve this, seq_collate should return a dictionary instead of a tuple
+        # in order to avoid hardcoded positions
+        phy_info = batch[-1] # phy_info should be in the last position!
+
+        batch = [tensor.cuda(current_cuda) for tensor in batch if torch.is_tensor(tensor)]
+
+        (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel, non_linear_obj,
+        loss_mask, seq_start_end, object_cls, obj_id, map_origin, num_seq, norm) = batch
 
     # Take (if specified) data of only the AGENT of interest
 
@@ -757,10 +770,25 @@ def check_accuracy(hyperparameters, loader, generator,
 
     with torch.no_grad(): # Do not compute the gradients (only when we want to check the accuracy)
         for batch in loader:
-            batch = [tensor.cuda(current_cuda) for tensor in batch]
+            # Load data in device
 
-            (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel, non_linear_obj,
-             loss_mask, seq_start_end, object_cls, obj_id, map_origin, num_seq, norm, phy_info) = batch
+            if hyperparameters.physical_context != "plausible_centerlines+area":
+                # Here the physical info is a single tensor
+
+                batch = [tensor.cuda(current_cuda) for tensor in batch if torch.is_tensor(tensor)]
+
+                (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel, non_linear_obj,
+                 loss_mask, seq_start_end, object_cls, obj_id, map_origin, num_seq, norm, phy_info) = batch
+            elif hyperparameters.physical_context == "plausible_centerlines+area":
+
+                # TODO: In order to improve this, seq_collate should return a dictionary instead of a tuple
+                # in order to avoid hardcoded positions
+                phy_info = batch[-1] # phy_info should be in the last position!
+
+                batch = [tensor.cuda(current_cuda) for tensor in batch if torch.is_tensor(tensor)]
+
+                (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel, non_linear_obj,
+                 loss_mask, seq_start_end, object_cls, obj_id, map_origin, num_seq, norm) = batch
 
             # Take (if specified) data of only the AGENT of interest
 

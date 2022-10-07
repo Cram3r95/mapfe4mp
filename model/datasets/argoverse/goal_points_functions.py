@@ -14,6 +14,7 @@ import random
 import math
 import pdb
 import copy
+import os
 
 # DL & Math imports
 
@@ -362,8 +363,6 @@ def get_goal_points(filename, obs_seq, origin_pos, real_world_offset, NUM_GOAL_P
     # plot_fepoints(img, filename, agent_obs_px_x, agent_obs_px_y, car_px, 
     #               goals_px_x=fe_x, goals_px_y=fe_y, radius=radius_px, change_bg=True)
 
-    # pdb.set_trace()
-
     # 1.2. Filter points applying rotation
 
     mean_yaw = get_agent_yaw(torch.transpose(obs_seq,0,1)) # radians
@@ -429,39 +428,119 @@ def get_goal_points(filename, obs_seq, origin_pos, real_world_offset, NUM_GOAL_P
 
     final_samples_px = np.hstack((final_samples_y.reshape(-1,1), final_samples_x.reshape(-1,1))) # rows, columns
     rw_points = transform_px2real_world(final_samples_px, origin_pos, real_world_offset, img_size)
-    # pdb.set_trace()
+
     return rw_points
 
-def get_driveable_area_and_centerlines(root_folder, num_seq_list, obs_seq, origin_pos, real_world_offset, num_points=512):
+def get_driveable_area_and_centerlines(filename, agent_xy_abs, relevant_centerlines, origin_pos, 
+                                       OBS_LEN=20, IMG_ROWS=600, NUM_POINTS_PLAUSIBLE_AREA=512, DEBUG=False):
     """
     """
 
-    split_folder = '/'.join(filename.split('/')[:-2])
-    goal_points_folder = split_folder + "/goal_points"
-    seq_id = filename.split('/')[-1].split('.')[0]
+    # 0. Load variables for this sequence and get scales
 
-    # 0. Load image and get past observations
+    relevant_centerlines_filtered = relevant_centerlines["relevant_centerlines_filtered"]
+    center_plausible_area_filtered = relevant_centerlines["center_plausible_area_filtered"]
+    real_world_width = relevant_centerlines["real_world_width"]
+    real_world_height = relevant_centerlines["real_world_height"]
 
-    img = cv2.imread(img_filename)
-    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+    # rows = height (y in rw) and cols = width (x in rw) of an image
+
+    rows = IMG_ROWS # Default number of rows
+
+    ## Rescale the columns in order to have roughly the same scale in both axis
+
+    cols = math.ceil(rows*(real_world_width/real_world_height)) 
+    scale_x = float(cols/real_world_width) # px/m
+    scale_y = float(rows/real_world_height) # px/m
+    center_px = (int(rows/2),int(cols/2))
+
+    # 1. Load image with plausible binary area filtered
 
     img = cv2.imread(filename)
-    img = cv2.resize(img, dsize=(600,600))
-    height, width = img.shape[:2]
-    img_size = height
-    scale_x = scale_y = float(height/(2*real_world_offset))
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)  
+    img = cv2.resize(img, dsize=(cols,rows))
 
-    cx = int(width/2)
-    cy = int(height/2)
-    car_px = (cy,cx)
+    # 2. Get random points from the feasible area points (N samples)
 
-    ori = obs_seq[-1, :]
+    rad = 1000 # meters. Cause we want to observe all points around the AGENT
+    rad_px = rad * scale_x # m * (px/m) = px (pixels)
 
-    # 1. Get feasible area points (N samples)
+    fe_y, fe_x = get_points(img, center_px, scale_x, radius=rad_px, color=255, N=NUM_POINTS_PLAUSIBLE_AREA, 
+                            around_center=True) # return pixels as y/x (rows/columns)
 
-    # 1.0. (Optional) Observe random sampling in the whole feasible area
+    # 3. Transform the selected pixels to real-world points (global coordinates)
 
-    fe_y, fe_x = get_points(img, car_px, scale_x, rad=10000, color=255, N=1024, 
-                            sample_car=True, max_samples=None) # return rows, columns
+    final_samples_px = np.hstack((fe_y.reshape(-1,1), fe_x.reshape(-1,1))) # rows (y), columns (x)
+    rw_points = transform_px2real_world(final_samples_px, 
+                                        center_plausible_area_filtered, 
+                                        (real_world_width,real_world_height), 
+                                        (rows,cols))
 
-    return rw_points
+    # 3.1. Then, transform to absolute coordinates around the last observation (0,0) of the target agent,
+    #      which represents the origin in this case
+
+    origin = origin_pos.cpu().data.numpy()
+    plausible_area_abs = rw_points - origin
+
+    # 4. Transform relevant centerlines from global coordinates to absolute coordinates
+
+    relevant_centerlines_abs = []
+    for centerline in relevant_centerlines_filtered:
+        centerline = centerline - origin
+        relevant_centerlines_abs.append(centerline)
+
+    # 5. Debug (plot result)
+
+    if DEBUG:
+        split_folder = os.path.join(*filename.split('/')[:-2])
+        goal_points_folder = os.path.join(split_folder,"goal_points_smart")
+        if not os.path.exists(goal_points_folder):
+            print("Create output folder: ", goal_points_folder)
+            os.makedirs(goal_points_folder) # makedirs creates intermediate folders
+
+        fig, ax = plt.subplots()
+        plt.scatter(plausible_area_abs[:,0], plausible_area_abs[:,1], c="darkviolet", marker=".", s=20) # Points from the plausible area
+
+        plt.plot(agent_xy_abs[:OBS_LEN,0], agent_xy_abs[:OBS_LEN,1], "o", color="b") # Agent's obs
+        plt.plot(agent_xy_abs[OBS_LEN:,0], agent_xy_abs[OBS_LEN:,1], "o", color="r") # Agent's gt
+
+        last_gt = agent_xy_abs[-1,:]
+        last_obs_patch = plt.Circle((0,0), 0.5, color='yellow',zorder=10)
+        last_gt_patch = plt.Circle((last_gt[0],last_gt[1]), 0.5, color='green',zorder=10)
+        ax.add_patch(last_obs_patch)
+        ax.add_patch(last_gt_patch)
+
+        # 2.1.2. Plot the different centerlines
+
+        for centerline in relevant_centerlines_abs:
+            plt.plot(
+                    centerline[:, 0],
+                    centerline[:, 1],
+                    "--",
+                    color="black",
+                    alpha=1,
+                    linewidth=3,
+                    zorder=15,
+                    )
+
+            plt.plot(
+                    centerline[-1, 0],
+                    centerline[-1, 1],
+                    "o",
+                    color="cornflowerblue",
+                    alpha=1,
+                    markersize=20,
+                    zorder=20,
+                    )
+
+        num_seq = int(filename.split('/')[-1].split('_')[0])
+        filename_all_info = os.path.join(goal_points_folder,f"{num_seq}_all_info.png")
+        plt.savefig(filename_all_info, bbox_inches='tight', facecolor=fig.get_facecolor(), edgecolor='none', pad_inches=0)
+
+        plt.close('all')
+
+    phy_info = dict()
+    phy_info["plausible_area_abs"] = plausible_area_abs
+    phy_info["relevant_centerlines_abs"] = relevant_centerlines_abs
+
+    return phy_info
