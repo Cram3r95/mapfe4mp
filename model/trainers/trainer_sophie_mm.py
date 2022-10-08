@@ -642,7 +642,7 @@ def generator_step(hyperparameters, batch, generator, optimizer_g,
 
         # TODO: In order to improve this, seq_collate should return a dictionary instead of a tuple
         # in order to avoid hardcoded positions
-        phy_info = batch[-1] # phy_info should be in the last position!
+        # phy_info = batch[-1] # phy_info should be in the last position!
 
         batch = [tensor.cuda(current_cuda) for tensor in batch if torch.is_tensor(tensor)]
 
@@ -788,7 +788,7 @@ def check_accuracy(hyperparameters, loader, generator,
                 batch = [tensor.cuda(current_cuda) for tensor in batch if torch.is_tensor(tensor)]
 
                 (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel, non_linear_obj,
-                 loss_mask, seq_start_end, object_cls, obj_id, map_origin, num_seq, norm) = batch
+                loss_mask, seq_start_end, object_cls, obj_id, map_origin, num_seq, norm) = batch
 
             # Take (if specified) data of only the AGENT of interest
 

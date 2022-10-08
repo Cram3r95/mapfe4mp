@@ -82,7 +82,7 @@ GENERATE_QUALITATIVE_RESULTS = True
 PLOT_WORST_SCENES = False
 LIMIT_QUALITATIVE_RESULTS = 150
 
-COMPUTE_METRICS = True
+COMPUTE_METRICS = False
 
 def generate_csv(results_path,ade_list,fde_list,num_seq_list,traj_kind_list,sort=False):
     """
@@ -347,7 +347,7 @@ def main(args):
         config.device_gpu = args.device_gpu
 
     config.dataset.split = args.split 
-    config.dataset.split_percentage = 1.0 # To generate the final results, must be 1
+    config.dataset.split_percentage = 0.01 # To generate the final results, must be 1
     config.dataset.batch_size = 1 # Better to build the h5 results file
     config.dataset.num_workers = 0
     config.dataset.class_balance = -1.0 # Do not consider class balance in the split test
@@ -366,6 +366,7 @@ def main(args):
 
     data_split = ArgoverseMotionForecastingDataset(dataset_name=config.dataset_name,
                                                    root_folder=config.dataset.path,
+                                                   imgs_folder=config.dataset.imgs_folder,
                                                    obs_len=config.hyperparameters.obs_len,
                                                    pred_len=config.hyperparameters.pred_len,
                                                    distance_threshold=config.hyperparameters.distance_threshold,
@@ -455,4 +456,10 @@ python evaluate/argoverse/generate_results_rel-rel.py \
 python evaluate/argoverse/generate_results_rel-rel.py \
 --model_path "save/argoverse/sophie_mm/100.0_percent/exp-2022-09-26_06h/argoverse_motion_forecasting_dataset_0_with_model.pt" \
 --device_gpu 0 --split "test"
+"""
+
+"""
+python evaluate/argoverse/generate_results_rel-rel.py \
+--model_path "save/argoverse/sophie_mm/1.0_percent/test_dummy_4/argoverse_motion_forecasting_dataset_0_with_model.pt" \
+--device_gpu 0 --split "val"
 """

@@ -228,6 +228,9 @@ def seq_collate(data):
 
     first_obs = obs_traj[0,:,:] # 1 x agents · batch_size x 2
 
+    # phy_info = np.random.randn(1,1,1,1)
+    # phy_info = torch.from_numpy(phy_info).type(torch.float32)
+
     if (PHYSICAL_CONTEXT == "visual"  # batch_size x channels x height x width 
      or PHYSICAL_CONTEXT == "goals" # batch_size x num_goal_points x 2 (x|y) (real-world coordinates (HDmap))
      or PHYSICAL_CONTEXT == "plausible_centerlines+area"): #  
@@ -578,9 +581,11 @@ class ArgoverseMotionForecastingDataset(Dataset):
             preprocess_data_dict = dataset_utils.load_processed_files_from_npy(self.data_processed_folder)
 
             variable_name_list = social_variables_names + physical_variables_names
-
-            assert len(variable_name_list) == len(preprocess_data_dict.keys()), \
-                   "The number of loaded files from the folder does not match the number of variables you want"
+            try:
+                assert len(variable_name_list) == len(preprocess_data_dict.keys()), \
+                    "The number of loaded files from the folder does not match the number of variables you want"
+            except:
+                pdb.set_trace()
 
             seq_list, seq_list_rel, loss_mask_list, non_linear_obj, num_objs_in_seq, \
             seq_id_list, object_class_id_list, object_id_list, ego_vehicle_origin, num_seq_list, \

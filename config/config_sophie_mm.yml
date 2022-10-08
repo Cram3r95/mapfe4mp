@@ -35,9 +35,10 @@ hyperparameters:
     use_rel_disp: &use_rel_disp True # If True, use dx/dy (equivalent to velocities) 
                                      # to encode/decode. 
                                      # Otherwise, use absolute coordinates
-    # physical_context: "dummy"
+
+    physical_context: "dummy"
     # physical_context: "plausible_centerlines+area" # dummy, visual, goals, oracle, plausible_centerlines+area
-    physical_context: "oracle" # dummy, visual, goals, oracle, plausible_centerlines+area
+    # physical_context: "oracle" # dummy, visual, goals, oracle, plausible_centerlines+area
 
     num_modes: 6 # Multimodality
     obs_origin: 20 # This frame will be the origin, tipically the first observation (1) or last observation 
@@ -72,10 +73,10 @@ hyperparameters:
     clipping_threshold_g: 1.1
     
     save_root_dir: "save/argoverse"
-    exp_name: "oracle_without_dropout" # If no specific exp_name is used, fill with current day and hour
+    exp_name: "test_dummy_5" # If no specific exp_name is used, fill with current day and hour
     output_dir: # To be filled in the code (save_root_dir/model_name/split_percentage/exp)
     checkpoint_start_from:
-    exp_description: "oracle_without_dropout"
+    exp_description:
     tensorboard_active: True
 
 # Model
