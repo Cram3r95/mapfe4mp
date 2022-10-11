@@ -111,6 +111,23 @@ def calculate_mse_loss(gt, pred, loss_f, w_loss=None):
 def calculate_nll_loss(gt, pred, loss_f, confidences):
     """
     NLL = Negative Log-Likelihood
+
+    Compute NLL w.r.t. the groundtruth
+    """
+    time, bs, _ = gt.shape
+    gt = gt.permute(1,0,2)
+    avails = torch.ones(bs,time).cuda(current_cuda)
+    loss = loss_f(
+        gt, 
+        pred,
+        confidences,
+        avails
+    )
+    return loss
+
+def calculate_nll_centerlines_loss(gt, pred, loss_f, confidences):
+    """
+    NLL = Negative Log-Likelihood
     """
     time, bs, _ = gt.shape
     gt = gt.permute(1,0,2)
@@ -642,7 +659,7 @@ def generator_step(hyperparameters, batch, generator, optimizer_g,
 
         # TODO: In order to improve this, seq_collate should return a dictionary instead of a tuple
         # in order to avoid hardcoded positions
-        # phy_info = batch[-1] # phy_info should be in the last position!
+        phy_info = batch[-1] # phy_info should be in the last position!
 
         batch = [tensor.cuda(current_cuda) for tensor in batch if torch.is_tensor(tensor)]
 
@@ -708,11 +725,11 @@ def generator_step(hyperparameters, batch, generator, optimizer_g,
             loss_ade, loss_fde = calculate_mse_loss(pred_traj_gt, pred_traj_fake, loss_f["mse"])
             loss_fa = evaluate_feasible_area_prediction(pred_traj_fake, pred_traj_gt, map_origin, num_seq, 
                                                         absolute_root_folder, split)
-            pdb.set_trace()
+
             loss = hyperparameters.loss_ade_weight*loss_ade + \
                    hyperparameters.loss_fde_weight*loss_fde + \
                    hyperparameters.loss_fa_weight*loss_fa 
-            pdb.set_trace()
+
             losses["G_mse_ade_loss"] = loss_ade.item()
             losses["G_mse_fde_loss"] = loss_fde.item()
             losses["G_fa_loss"] = loss_fa.item()

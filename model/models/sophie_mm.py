@@ -299,6 +299,67 @@ class Multimodal_DecoderLSTM(nn.Module):
 
         return pred_traj_fake_rel, conf
 
+class Unimodal_DecoderLSTM(nn.Module):
+    def __init__(self, PHYSICAL_CONTEXT="dummy"):
+        super().__init__()
+
+        self.data_dim = DATA_DIM
+        self.pred_len = PRED_LEN
+
+        if PHYSICAL_CONTEXT == "dummy":
+            self.h_dim = H_DIM
+        elif PHYSICAL_CONTEXT == "plausible_centerlines+area":
+            # self.h_dim = H_DIM*2
+            self.h_dim = H_DIM*3
+            # self.h_dim = H_DIM
+        else:
+            self.h_dim = H_DIM*2
+
+        self.mlp_dim = MLP_DIM
+        self.embedding_dim = EMBEDDING_DIM
+        self.num_modes = NUM_MODES
+
+        self.spatial_embedding = nn.Linear(self.data_dim, self.embedding_dim)
+        self.decoder = nn.LSTM(self.embedding_dim, self.h_dim, 1)
+
+        self.hidden2pos = nn.Linear(self.h_dim, self.data_dim) # TODO: More complex?
+    
+    def forward(self, last_obs, last_obs_rel, state_tuple):
+        """
+        last_obs (1, b, 2)
+        last_obs_rel (1, b, 2)
+        state_tuple: h and c
+            h : c : (1, b, self.h_dim)
+        """
+        
+        state_tuple_h, state_tuple_c = state_tuple
+        state_tuple_h_ = torch.clone(state_tuple_h) # bs x 384
+        state_tuple_c_ = torch.clone(state_tuple_c) # bs x 384 (randn)
+
+        batch_size, data_dim = last_obs.shape
+        last_obs_rel = last_obs_rel.view(1,batch_size,1,data_dim)
+
+        pred_traj_fake_rel = []
+        decoder_input = F.tanh(self.spatial_embedding(last_obs_rel.contiguous().view(batch_size, -1))) 
+        if APPLY_DROPOUT: decoder_input = F.dropout(decoder_input, p=DROPOUT, training=self.training)
+        decoder_input = decoder_input.contiguous().view(1, batch_size, self.embedding_dim)
+
+        for _ in range(self.pred_len):
+            output, (state_tuple_h_, state_tuple_c_) = self.decoder(decoder_input, (state_tuple_h_, state_tuple_c_)) 
+
+            rel_pos = self.hidden2pos(state_tuple_h_.contiguous().view(-1, self.h_dim))
+
+            decoder_input = F.tanh(self.spatial_embedding(rel_pos.contiguous().view(batch_size, -1)))
+            if APPLY_DROPOUT: decoder_input = F.dropout(decoder_input, p=DROPOUT, training=self.training)
+            decoder_input = decoder_input.contiguous().view(1, batch_size, self.embedding_dim)           
+            pred_traj_fake_rel.append(rel_pos.contiguous().view(batch_size,-1))
+
+        pred_traj_fake_rel = torch.stack(pred_traj_fake_rel, dim=0)
+        pred_traj_fake_rel = pred_traj_fake_rel.view(self.pred_len, batch_size, -1)
+        pred_traj_fake_rel = pred_traj_fake_rel.permute(1,0,2) # batch_size, pred_len, data_dim
+
+        return pred_traj_fake_rel
+
 class TemporalDecoderLSTM(nn.Module):
     """
     """
@@ -330,7 +391,7 @@ class TemporalDecoderLSTM(nn.Module):
         state_tuple_c_ = torch.clone(state_tuple_c)
  
         pred_traj_fake_rel = []
-        decoder_input = F.leaky_relu(self.spatial_embedding(self.ln1(traj_rel.contiguous().view(num_agents, -1))))
+        decoder_input = F.tanh(self.spatial_embedding(self.ln1(traj_rel.contiguous().view(num_agents, -1))))
         decoder_input = decoder_input.contiguous().view(1, num_agents, self.embedding_dim)
 
         for _ in range(self.pred_len):
@@ -341,10 +402,11 @@ class TemporalDecoderLSTM(nn.Module):
             traj_rel[-1] = rel_pos
             pred_traj_fake_rel.append(rel_pos.contiguous().view(num_agents,-1))
 
-            decoder_input = F.leaky_relu(self.spatial_embedding(self.ln1(traj_rel.contiguous().view(num_agents, -1))))
+            decoder_input = F.tanh(self.spatial_embedding(self.ln1(traj_rel.contiguous().view(num_agents, -1))))
             decoder_input = decoder_input.contiguous().view(1, num_agents, self.embedding_dim)
-        
+
         pred_traj_fake_rel = torch.stack(pred_traj_fake_rel, dim=0)
+        pred_traj_fake_rel = pred_traj_fake_rel.permute(1,0,2)
 
         return pred_traj_fake_rel
 
@@ -449,11 +511,13 @@ class TrajectoryGenerator(nn.Module):
         self.mlp_decoder_context = make_mlp(mlp_decoder_context_dims,
                                             activation_function="Tanh")
 
-        # self.decoder = Multimodal_DecoderLSTM(PHYSICAL_CONTEXT=self.physical_context)
-        self.decoder = TemporalDecoderLSTM()
-        self.confidences = nn.Sequential(nn.Linear(self.pred_len*self.data_dim,32),
-                                         nn.Tanh(),
-                                         nn.Linear(32,1)) 
+        if self.physical_context == "plausible_centerlines+area":
+            self.decoder = Unimodal_DecoderLSTM(PHYSICAL_CONTEXT=self.physical_context)
+            self.confidences = nn.Sequential(nn.Linear(self.pred_len*self.data_dim,32),
+                                             nn.ReLU(),
+                                             nn.Linear(32,1))     
+        else:
+            self.decoder = Multimodal_DecoderLSTM(PHYSICAL_CONTEXT=self.physical_context)
 
     def forward(self, obs_traj, obs_traj_rel, seq_start_end, agent_idx, phy_info=None):
         """
@@ -497,28 +561,7 @@ class TrajectoryGenerator(nn.Module):
 
             ## Predict trajectories
 
-            # GOOD (with multimodal decoder)
-            # pred_traj_fake_rel, conf = self.decoder(last_pos, last_pos_rel, state_tuple)
-
-            pred_traj_fake_rel = []
-            # for mode in range(NUM_MODES):
-            for mode in range(NUM_MODES):
-                # curr_pred_traj_fake_rel = self.decoder(last_pos, last_pos_rel, state_tuple) # Unimodal
-                curr_pred_traj_fake_rel = self.decoder(traj_agent_abs, traj_agent_abs_rel, state_tuple) # Temporal unimodal
-                # pdb.set_trace()
-
-                pred_traj_fake_rel.append(curr_pred_traj_fake_rel)
-            pdb.set_trace()
-            pred_traj_fake_rel = torch.stack(pred_traj_fake_rel,dim=0)
-            pred_traj_fake_rel = pred_traj_fake_rel.view(batch_size, self.num_modes, self.pred_len, -1) # batch_size, num_modes, pred_len, data_dim
-
-            # Compute confidences
-
-            conf = self.confidences(pred_traj_fake_rel.contiguous().view(batch_size,self.num_modes,-1))
-            conf = torch.softmax(conf.view(batch_size,-1), dim=1) # batch_size, num_modes
-            # conf = (torch.ones(batch_size,NUM_MODES)/NUM_MODES).cuda(obs_traj.device)
-            if not torch.allclose(torch.sum(conf, dim=1), conf.new_ones((batch_size,))):
-                pdb.set_trace()
+            pred_traj_fake_rel, conf = self.decoder(last_pos, last_pos_rel, state_tuple)
 
         ## Include map information
         
@@ -535,5 +578,85 @@ class TrajectoryGenerator(nn.Module):
             ## Predict trajectories
 
             pred_traj_fake_rel, conf = self.decoder(last_pos, last_pos_rel, state_tuple)
+
+        elif self.physical_context == "plausible_centerlines+area":
+            # Static map info
+
+            plausible_area_array = np.array([curr_phy_info["plausible_area_abs"] for curr_phy_info in phy_info]).astype(np.float32)
+            plausible_area = torch.from_numpy(plausible_area_array).type(torch.float).cuda(obs_traj.device)
+
+            # TODO: Sort this points??
+            static_map_info = self.bn(plausible_area.view(batch_size,-1))
+            encoded_static_map_info = self.plausible_area_encoder(static_map_info)
+            
+            # Dynamic map info (one centerline per iteration -> Max Num_Modes iterations)
+
+            num_relevant_centerlines = [len(curr_phy_info["relevant_centerlines_abs"]) for curr_phy_info in phy_info]
+            aux_indeces_list = []
+            for num_ in num_relevant_centerlines:
+                if num_ >= NUM_MODES: # Limit to the first NUM_MODES centerlines. We assume
+                                      # the oracle is here. TODO: Force this from the preprocessing 
+                    aux_indeces = np.arange(NUM_MODES)
+                    aux_indeces_list.append(aux_indeces)
+                else: # We have less centerlines than NUM_MODES
+                    quotient = int(NUM_MODES / num_)
+                    remainder = NUM_MODES % num_
+
+                    aux_indeces = np.arange(num_)
+                    aux_indeces = np.tile(aux_indeces,quotient)
+
+                    if remainder != 0:
+                        aux_indeces_ = np.arange(remainder)
+                        aux_indeces = np.hstack((aux_indeces,aux_indeces_))
+                    
+                    assert len(aux_indeces) == NUM_MODES, "Number of centerlines does not match the number of required modes"
+                    aux_indeces_list.append(aux_indeces)
+
+            centerlines_indeces = np.array(aux_indeces_list)
+
+            pred_traj_fake_rel = []
+        
+            for mode in range(NUM_MODES):
+                current_centerlines_indeces = centerlines_indeces[:,mode]
+                current_centerlines_list = []
+                for i in range(batch_size):
+                    current_centerline = phy_info[i]["relevant_centerlines_abs"][current_centerlines_indeces[i]]
+                    current_centerlines_list.append(current_centerline)
+
+                current_centerlines = torch.from_numpy(np.array(current_centerlines_list)).type(torch.float).cuda(obs_traj.device)
+                encoded_centerlines_info = self.centerline_encoder(current_centerlines)
+
+                # Concatenate social info, static map info and current centerline info
+
+                mlp_decoder_context_input = torch.cat([encoded_social_info.contiguous().view(-1,self.h_dim), # bs x 128
+                                                       encoded_static_map_info.contiguous().view(-1,self.h_dim), # bs x 128 
+                                                       encoded_centerlines_info.contiguous().view(-1,self.h_dim)], # bs x 128
+                                                       dim=1)
+
+                # mlp_decoder_context_input = torch.cat([encoded_social_info.contiguous().view(-1,self.h_dim),
+                #                                        encoded_centerlines_info.contiguous().view(-1,self.h_dim)],
+                #                                        dim=1)
+
+                decoder_h = mlp_decoder_context_input.unsqueeze(0)
+                decoder_c = torch.randn(tuple(decoder_h.shape)).cuda(obs_traj.device)
+                # decoder_c = torch.zeros(tuple(decoder_h.shape)).cuda(obs_traj.device)
+                state_tuple = (decoder_h, decoder_c)
+
+                ## Predict trajectories
+
+                curr_pred_traj_fake_rel = self.decoder(last_pos, last_pos_rel, state_tuple)
+                # curr_pred_traj_fake_rel = self.decoder(traj_agent_abs, traj_agent_abs_rel, state_tuple)
+                curr_pred_traj_fake_rel = curr_pred_traj_fake_rel.unsqueeze(0)
+                pred_traj_fake_rel.append(curr_pred_traj_fake_rel)
+
+            pred_traj_fake_rel = torch.cat(pred_traj_fake_rel,dim=0)
+            pred_traj_fake_rel = pred_traj_fake_rel.permute(1,0,2,3) # batch_size, num_modes, pred_len, data_dim
+
+            # Compute confidences
+
+            conf = self.confidences(pred_traj_fake_rel.contiguous().view(batch_size,self.num_modes,-1))
+            conf = torch.softmax(conf.view(batch_size,-1), dim=1) # batch_size, num_modes
+            if not torch.allclose(torch.sum(conf, dim=1), conf.new_ones((batch_size,))):
+                pdb.set_trace()
 
         return pred_traj_fake_rel, conf

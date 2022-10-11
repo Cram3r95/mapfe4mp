@@ -5,7 +5,7 @@
 
 """
 Created on Sun Mar 06 23:47:19 2022
-@author: Carlos Gómez-Huélamo and Miguel Eduardo Ortiz Huamaní
+@author: Carlos Gómez-Huélamo
 """
 
 # General purpose imports
@@ -15,6 +15,7 @@ import os
 import csv
 import glob, glob2
 import pdb
+import time
 
 # DL & Math imports
 
@@ -327,7 +328,7 @@ def load_physical_information(num_seq_list, obs_traj, obs_traj_rel, pred_traj_gt
 
             # Check if curr_map_origin is the same than last observation of current sequence
 
-            debug_last_obs = True
+            debug_last_obs = False
 
             if debug_last_obs:
                 csv_filename = os.path.join(root_folder,"data",f"{curr_num_seq}.csv")
@@ -341,8 +342,11 @@ def load_physical_information(num_seq_list, obs_traj, obs_traj_rel, pred_traj_gt
                 except:
                     pdb.set_trace()
 
+            start = time.time()
             phy_info = goal_points_functions.get_driveable_area_and_centerlines(filename, agent_xy_abs, curr_relevant_centerlines, curr_map_origin, DEBUG=False)
             physical_context_list.append(phy_info)
+            end = time.time()
+            # print("Time consumed by goal function: ", end-start)
 
         t0_idx = t1_idx
 
@@ -382,10 +386,16 @@ def relative_to_abs_multimodal(rel_traj, start_pos):
     - abs_traj: pytorch tensor of shape (seq_len, batch, 2) (around 0,0, not map coordinates)
     """
 
+    # THIS IS WRONG!!!!!!!!!!!!
+    # BUT THE BEST MODEL IS WITH CUMSUM ALONG DIM=1
     displacement = torch.cumsum(rel_traj, dim=1) # Sum along the seq_len dimension!
     start_pos = torch.unsqueeze(torch.unsqueeze(start_pos, dim=1), dim=1) # batch, 1 (only one position) x 1 (same for all modes) x 2
     abs_traj = displacement + start_pos
 
-    # pdb.set_trace()
-
     return abs_traj
+
+    # displacement = torch.cumsum(rel_traj, dim=2) # Sum along the seq_len dimension!
+    # start_pos = torch.unsqueeze(torch.unsqueeze(start_pos, dim=1), dim=1) # batch, 1 (only one position) x 1 (same for all modes) x 2
+    # abs_traj = displacement + start_pos
+
+    # return abs_traj

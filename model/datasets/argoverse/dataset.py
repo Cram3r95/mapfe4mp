@@ -86,7 +86,7 @@ def seq_collate(data):
     data is computed.
     """
 
-    start = time.time()
+    start_1 = time.time()
 
     (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel,
      non_linear_obj, loss_mask, seq_id_list, object_class_id_list, 
@@ -224,12 +224,9 @@ def seq_collate(data):
 
     # Get physical information (image or goal points. Otherwise, use dummies)
 
-    start = time.time()
+    start_2 = time.time()
 
     first_obs = obs_traj[0,:,:] # 1 x agents · batch_size x 2
-
-    # phy_info = np.random.randn(1,1,1,1)
-    # phy_info = torch.from_numpy(phy_info).type(torch.float32)
 
     if (PHYSICAL_CONTEXT == "visual"  # batch_size x channels x height x width 
      or PHYSICAL_CONTEXT == "goals" # batch_size x num_goal_points x 2 (x|y) (real-world coordinates (HDmap))
@@ -253,8 +250,8 @@ def seq_collate(data):
         phy_info = np.random.randn(1,1,1,1)
         phy_info = torch.from_numpy(phy_info).type(torch.float32)
 
-    end = time.time()
-    # print(f"Time consumed by load_images function: {end-start}\n")
+    end_2 = time.time()
+    # print(f">>>>>>>>>>>>>> Time consumed by load physical information function: {end_2-start_2}\n")
 
     num_seq_list = torch.stack(num_seq_list)
     norm = torch.stack(norm)

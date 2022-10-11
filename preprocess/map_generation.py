@@ -5,7 +5,7 @@
 
 """
 Created on Fri Feb 25 12:19:38 2022
-@author: Carlos Gómez-Huélamo and Miguel Eduardo Ortiz Huamaní
+@author: Carlos Gómez-Huélamo
 """
 
 # General purpose imports

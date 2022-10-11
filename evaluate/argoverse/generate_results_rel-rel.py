@@ -59,16 +59,9 @@ parser.add_argument('--model_path', required=True, type=str)
 parser.add_argument("--device_gpu", required=True, default=0, type=int)
 parser.add_argument("--split", required=True, default="val", type=str)
 
-# N.B. If you cannot appreciate the difference between groundtruth and our prediction, probably
-# is because the map does not cover the whole groundtruth because the AGENT is driving at high 
-# speed. In this case, increase the dist_around value (e.g. 60, 80, etc.) and in plot_functions
-# represent only the predictions, not map+predictions: 
-# 
-# full_img_cv = cv2.add(img1_bg,img2_fg) -> full_img_cv = img_lanes
-
 avm = ArgoverseMap()
 
-LIMIT_FILES = -1 # From 1 to num_files.
+LIMIT_FILES = 150 # From 1 to num_files.
                  # -1 by default to analyze all files of the specified split percentage
 
 OBS_ORIGIN = 20
@@ -82,7 +75,7 @@ GENERATE_QUALITATIVE_RESULTS = True
 PLOT_WORST_SCENES = False
 LIMIT_QUALITATIVE_RESULTS = 150
 
-COMPUTE_METRICS = False
+COMPUTE_METRICS = True
 
 def generate_csv(results_path,ade_list,fde_list,num_seq_list,traj_kind_list,sort=False):
     """
@@ -185,10 +178,23 @@ def evaluate(loader, generator, config, split, current_cuda, pred_len, results_p
         
             # Load batch in device
 
-            batch = [tensor.cuda(current_cuda) for tensor in batch]
+            if config.hyperparameters.physical_context != "plausible_centerlines+area":
+                # Here the physical info is a single tensor
 
-            (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel, non_linear_obj,
-             loss_mask, seq_start_end, object_cls, obj_id, map_origin, num_seq, norm, phy_info) = batch
+                batch = [tensor.cuda(current_cuda) for tensor in batch if torch.is_tensor(tensor)]
+
+                (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel, non_linear_obj,
+                loss_mask, seq_start_end, object_cls, obj_id, map_origin, num_seq, norm, phy_info) = batch
+            elif config.hyperparameters.physical_context == "plausible_centerlines+area":
+
+                # TODO: In order to improve this, seq_collate should return a dictionary instead of a tuple
+                # in order to avoid hardcoded positions
+                phy_info = batch[-1] # phy_info should be in the last position!
+
+                batch = [tensor.cuda(current_cuda) for tensor in batch if torch.is_tensor(tensor)]
+
+                (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel, non_linear_obj,
+                loss_mask, seq_start_end, object_cls, obj_id, map_origin, num_seq, norm) = batch
 
             seq_id = num_seq.cpu().item()
             print(f"{seq_id}.csv")
@@ -236,6 +242,7 @@ def evaluate(loader, generator, config, split, current_cuda, pred_len, results_p
                 ## Get predictions in absolute -> map coordinates
 
                 pred_traj_fake = dataset_utils.relative_to_abs_multimodal(pred_traj_fake_rel, obs_traj[-1,agent_idx,:])
+
                 pred_traj_fake_global = pred_traj_fake + map_origin
 
                 conf_array = conf.cpu().numpy().reshape(-1)
@@ -290,6 +297,15 @@ def evaluate(loader, generator, config, split, current_cuda, pred_len, results_p
 
                 filename = f"data/datasets/argoverse/motion-forecasting/{split}/data_images/{seq_id}.png"
 
+                # Custom plot (not advisable)
+
+                # N.B. If you cannot appreciate the difference between groundtruth and our prediction, probably
+                # is because the map does not cover the whole groundtruth because the AGENT is driving at high 
+                # speed. In this case, increase the dist_around value (e.g. 60, 80, etc.) and in plot_functions
+                # represent only the predictions, not map+predictions: 
+                # 
+                # full_img_cv = cv2.add(img1_bg,img2_fg) -> full_img_cv = img_lanes
+
                 # Argoverse standard plot
 
                 plot_functions.viz_predictions_all(seq_id,
@@ -306,7 +322,7 @@ def evaluate(loader, generator, config, split, current_cuda, pred_len, results_p
                                                save=True,
                                                ade_metric=ade_min,
                                                fde_metric=fde_min)
-
+            # pdb.set_trace()
             pred_traj_fake_global_aux = pred_traj_fake_global.squeeze(0).view(ARGOVERSE_NUM_MODES, PRED_LEN, 2)
             output_predictions[seq_id] = pred_traj_fake_global_aux.cpu().numpy()
             output_probabilities[seq_id] = conf_array
@@ -345,9 +361,13 @@ def main(args):
         config = Prodict.from_dict(config)
         config.base_dir = BASE_DIR
         config.device_gpu = args.device_gpu
-
+    
     config.dataset.split = args.split 
-    config.dataset.split_percentage = 0.01 # To generate the final results, must be 1
+
+    # config.dataset.split_percentage = 1.0 # To generate the final results, must be 1
+    # In general, the algorithm used to generate the test results should have been trained with the whole
+    # dataset (100 %)
+
     config.dataset.batch_size = 1 # Better to build the h5 results file
     config.dataset.num_workers = 0
     config.dataset.class_balance = -1.0 # Do not consider class balance in the split test
@@ -439,19 +459,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
     main(args)
 
-
-"""
-python evaluate/argoverse/generate_results_rel-rel.py \
---model_path "save/argoverse/sophie_mm/100.0_percent/exp-2022-08-26_06h/argoverse_motion_forecasting_dataset_0_with_model.pt" \
---device_gpu 0 --split "val"
-"""
-
-"""
-python evaluate/argoverse/generate_results_rel-rel.py \
---model_path "save/argoverse/sophie_mm/100.0_percent/exp-2022-08-26_06h/argoverse_motion_forecasting_dataset_0_with_model.pt" \
---device_gpu 0 --split "test"
-"""
-
+# BEST AT THIS MOMENT, BUT TRAINED WITH WRONG REL2ABS!
 """
 python evaluate/argoverse/generate_results_rel-rel.py \
 --model_path "save/argoverse/sophie_mm/100.0_percent/exp-2022-09-26_06h/argoverse_motion_forecasting_dataset_0_with_model.pt" \
@@ -460,6 +468,12 @@ python evaluate/argoverse/generate_results_rel-rel.py \
 
 """
 python evaluate/argoverse/generate_results_rel-rel.py \
---model_path "save/argoverse/sophie_mm/1.0_percent/test_dummy_4/argoverse_motion_forecasting_dataset_0_with_model.pt" \
---device_gpu 0 --split "val"
+--model_path "save/argoverse/sophie_mm/1.0_percent/test_only_social/argoverse_motion_forecasting_dataset_0_with_model.pt" \
+--device_gpu 2 --split "val"
+"""
+
+"""
+python evaluate/argoverse/generate_results_rel-rel.py \
+--model_path "save/argoverse/sophie_mm/1.0_percent/test_with_centerlines/argoverse_motion_forecasting_dataset_0_with_model.pt" \
+--device_gpu 2 --split "val"
 """

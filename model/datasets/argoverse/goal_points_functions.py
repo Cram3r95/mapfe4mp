@@ -15,6 +15,7 @@ import math
 import pdb
 import copy
 import os
+import time
 
 # DL & Math imports
 
@@ -49,6 +50,8 @@ def get_points(img, center_px, scale_x, radius=100, color=255, N=1024, around_ce
     
     ## Sample points around the specified center given a certain radius
     
+    # TODO: Optimize this
+    # Should not be considered if the plausible area has been previously filtered
     if around_center:
         final_points = [[a,b] for a,b in zip(px_y,px_x) if (math.sqrt(pow(a - center_px[0],2)+
                                                                       pow(b - center_px[1],2)) < radius)]
@@ -435,9 +438,13 @@ def get_driveable_area_and_centerlines(filename, agent_xy_abs, relevant_centerli
                                        OBS_LEN=20, IMG_ROWS=600, NUM_POINTS_PLAUSIBLE_AREA=512, DEBUG=False):
     """
     """
+    DEBUG_TIME = False
+
+    if DEBUG_TIME: print("-------------")
 
     # 0. Load variables for this sequence and get scales
 
+    start = time.time()
     relevant_centerlines_filtered = relevant_centerlines["relevant_centerlines_filtered"]
     center_plausible_area_filtered = relevant_centerlines["center_plausible_area_filtered"]
     real_world_width = relevant_centerlines["real_world_width"]
@@ -453,32 +460,44 @@ def get_driveable_area_and_centerlines(filename, agent_xy_abs, relevant_centerli
     scale_x = float(cols/real_world_width) # px/m
     scale_y = float(rows/real_world_height) # px/m
     center_px = (int(rows/2),int(cols/2))
+    end = time.time()
+    if DEBUG_TIME: print("Time consumed by loading seq info: ", end-start)
 
     # 1. Load image with plausible binary area filtered
 
+    start = time.time()
     img = cv2.imread(filename)
     img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)  
     img = cv2.resize(img, dsize=(cols,rows))
+    end = time.time()
+    if DEBUG_TIME: print("Time consumed by cv2: ", end-start)
 
     # 2. Get random points from the feasible area points (N samples)
 
+    start = time.time()
     rad = 1000 # meters. Cause we want to observe all points around the AGENT
     rad_px = rad * scale_x # m * (px/m) = px (pixels)
-
+    
     fe_y, fe_x = get_points(img, center_px, scale_x, radius=rad_px, color=255, N=NUM_POINTS_PLAUSIBLE_AREA, 
-                            around_center=True) # return pixels as y/x (rows/columns)
+                            around_center=False) # return pixels as y/x (rows/columns)
+    end = time.time()
+    if DEBUG_TIME: print("Time consumed by getting points: ", end-start)
 
     # 3. Transform the selected pixels to real-world points (global coordinates)
 
+    start = time.time()
     final_samples_px = np.hstack((fe_y.reshape(-1,1), fe_x.reshape(-1,1))) # rows (y), columns (x)
     rw_points = transform_px2real_world(final_samples_px, 
                                         center_plausible_area_filtered, 
                                         (real_world_width,real_world_height), 
                                         (rows,cols))
+    end = time.time()
+    if DEBUG_TIME: print("Time consumed by transform px 2 realworld: ", end-start)
 
     # 3.1. Then, transform to absolute coordinates around the last observation (0,0) of the target agent,
     #      which represents the origin in this case
 
+    start = time.time()
     origin = origin_pos.cpu().data.numpy()
     plausible_area_abs = rw_points - origin
 
@@ -542,5 +561,7 @@ def get_driveable_area_and_centerlines(filename, agent_xy_abs, relevant_centerli
     phy_info = dict()
     phy_info["plausible_area_abs"] = plausible_area_abs
     phy_info["relevant_centerlines_abs"] = relevant_centerlines_abs
+    end = time.time()
+    if DEBUG_TIME: print("Time consumed by storing map information: ", end-start)
 
     return phy_info

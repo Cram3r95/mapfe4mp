@@ -314,181 +314,6 @@ def plot_trajectories_custom(filename,results_path,obs_traj,map_origin,object_cl
 
 ## Plot standard Argoverse
 
-def viz_predictions(
-        seq_id: int,
-        results_path: str,
-        input_abs: np.ndarray, # Around 0,0
-        output_abs: np.ndarray, # Around 0,0
-        target_abs: np.ndarray, # Around 0,0
-        city_names: np.ndarray,
-        map_origin,
-        avm,
-        centerlines: np.ndarray = np.array([]),
-        show: bool = False,
-        save: bool = False,
-        ade_metric: float = None,
-        fde_metric: float = None,
-) -> None:
-    """Visualize predicted trjectories.
-    Args:
-        OBS: Track = Sequence
-
-        input_ (numpy array): Input Trajectory with shape (num_tracks x obs_len x 2)
-        output (numpy array): Top-k predicted trajectories, each with shape (num_tracks x pred_len x 2)
-        target (numpy array): Ground Truth Trajectory with shape (num_tracks x pred_len x 2)
-        centerlines (numpy array of list of centerlines): Centerlines (Oracle/Top-k) for each trajectory
-        city_names (numpy array): city names for each trajectory
-        show (bool): if True, show
-    """
-
-    query_search_range_manhattan_ = 5
-
-    num_tracks = input_abs.shape[0]
-    obs_len = input_abs.shape[1]
-    pred_len = target_abs.shape[1]
-
-    # Transform to global coordinates
-
-    input_ = input_abs + map_origin
-    output = output_abs + map_origin
-    target = target_abs + map_origin
-
-    fig = plt.figure(0, figsize=(8, 7))
-
-    if ade_metric and fde_metric:
-        font = {
-                'family': 'serif',
-                'color':  'blue',
-                'weight': 'normal',
-                'size': 16,
-               }
-        plt.title(f"minADE: {round(ade_metric,3)} ; minFDE: {round(fde_metric,3)}", \
-                  fontdict=font, backgroundcolor= 'silver')
-
-    for i in range(num_tracks): # Sequences (.csv)
-        # Observation
-        plt.plot(
-            input_[i, :, 0],
-            input_[i, :, 1],
-            color="#ECA154",
-            label="Observed",
-            alpha=1,
-            linewidth=3,
-            zorder=15,
-        )
-        # Last observation
-        plt.plot(
-            input_[i, -1, 0],
-            input_[i, -1, 1],
-            "o",
-            color="#ECA154",
-            label="Observed",
-            alpha=1,
-            linewidth=3,
-            zorder=15,
-            markersize=9,
-        )
-        # Groundtruth prediction
-        plt.plot(
-            target[i, :, 0],
-            target[i, :, 1],
-            color="#d33e4c",
-            label="Target",
-            alpha=1,
-            linewidth=3,
-            zorder=20,
-        )
-        # Groundtruth end-point
-        plt.plot(
-            target[i, -1, 0],
-            target[i, -1, 1],
-            "o",
-            color="#d33e4c",
-            label="Target",
-            alpha=1,
-            linewidth=3,
-            zorder=20,
-            markersize=9,
-        )
-        # Centerlines (Optional)
-        if len(centerlines) > 0:
-            for j in range(len(centerlines[i])):
-                plt.plot(
-                    centerlines[i][j][:, 0],
-                    centerlines[i][j][:, 1],
-                    "--",
-                    color="grey",
-                    alpha=1,
-                    linewidth=1,
-                    zorder=0,
-                )
-        # Multimodal prediction
-        for num_mode in range(output.shape[0]):
-            # Prediction
-            plt.plot(
-                output[num_mode, :, 0],
-                output[num_mode, :, 1],
-                color="#007672",
-                label="Predicted",
-                alpha=1,
-                linewidth=3,
-                zorder=15,
-            )
-            # Prediction endpoint
-            plt.plot(
-                output[num_mode, -1, 0],
-                output[num_mode, -1, 1],
-                "o",
-                color="#007672",
-                label="Predicted",
-                alpha=1,
-                linewidth=3,
-                zorder=15,
-                markersize=9,
-            )
-            for k in range(pred_len):
-                lane_ids = avm.get_lane_ids_in_xy_bbox(
-                    output[num_mode, k, 0],
-                    output[num_mode, k, 1],
-                    city_names[i],
-                    query_search_range_manhattan=2.5,
-                )
-        # Identify lanes using input data
-        for j in range(obs_len):
-            lane_ids = avm.get_lane_ids_in_xy_bbox(
-                input_[i, j, 0],
-                input_[i, j, 1],
-                city_names[i],
-                query_search_range_manhattan=query_search_range_manhattan_,
-            )
-            # Paint lanes
-            [avm.draw_lane(lane_id, city_names[i]) for lane_id in lane_ids]
-        # Identify lanes using prediction data
-        for j in range(pred_len):
-            lane_ids = avm.get_lane_ids_in_xy_bbox(
-                target[i, j, 0],
-                target[i, j, 1],
-                city_names[i],
-                query_search_range_manhattan=query_search_range_manhattan_,
-            )
-            # Paint lanes
-            [avm.draw_lane(lane_id, city_names[i]) for lane_id in lane_ids]
-
-        plt.axis("equal")
-        plt.xticks([])
-        plt.yticks([])
-        handles, labels = plt.gca().get_legend_handles_labels()
-        by_label = OrderedDict(zip(labels, handles))
-        if show:
-            plt.show()
-
-        if save:
-            filename = os.path.join(results_path,"data_images_trajs",str(seq_id)+".png")
-            plt.savefig(filename, bbox_inches='tight', facecolor=fig.get_facecolor(), edgecolor='none', pad_inches=0)
-
-        plt.cla()
-        plt.close('all')
-
 def viz_predictions_all(
         seq_id: int,
         results_path: str,
@@ -545,9 +370,7 @@ def viz_predictions_all(
     y_min = map_origin[1] - dist_rasterized_map
     y_max = map_origin[1] + dist_rasterized_map
 
-    plt.axis("off")
-
-    if ade_metric and fde_metric:
+    if ade_metric and fde_metric: # Debug 
         font = {
                 'family': 'serif',
                 'color':  'blue',
@@ -556,6 +379,8 @@ def viz_predictions_all(
                }
         plt.title(f"minADE: {round(ade_metric,3)} ; minFDE: {round(fde_metric,3)}", \
                   fontdict=font, backgroundcolor= 'silver')
+    else:
+        plt.axis("off")
 
     for i in range(num_agents): # Sequences (.csv)
         object_type = translate_object_type(int(object_class_list[i]))

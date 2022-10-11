@@ -61,8 +61,8 @@ config.dataset.start_from_percentage = 0.0
 
 # Preprocess data
                          # Split, Process, Split percentage
-splits_to_process = dict({"train":[True,0.01], # 0.01 (1 %), 0.1 (10 %), 1.0 (100 %)
-                          "val":[True,0.01],
+splits_to_process = dict({"train":[True,1.0], # 0.01 (1 %), 0.1 (10 %), 1.0 (100 %)
+                          "val":[True,1.0],
                           "test":[False,1.0]})
 modes_centerlines = ["test"] # "train","test" 
 # if train -> compute the best candidate (oracle), only using the "competition" algorithm
@@ -163,6 +163,7 @@ for split_name,features in splits_to_process.items():
             aux_time = float(0)
             
             map_info = dict()
+            oracle_centerlines_list = []
 
             for i, file_id in enumerate(file_id_list):
                 # print(f"File {file_id} -> {i+1}/{len(file_id_list)}")
@@ -580,7 +581,7 @@ for split_name,features in splits_to_process.items():
 
                                     assert interpolated_centerline.shape[0] == 40
 
-                                    candidate_centerlines_list.append(interpolated_centerline)
+                                    oracle_centerlines_list.append(interpolated_centerline)
                                 except:
                                     # TODO: Take the closest max_points if the previous algorithm fails
                                     
@@ -590,7 +591,7 @@ for split_name,features in splits_to_process.items():
               
                             else:
                                 # print("The algorithm has the exact number of points")
-                                candidate_centerlines_list.append(oracle_centerline_filtered)
+                                oracle_centerlines_list.append(oracle_centerline_filtered)
                                 
                             end_ = time.time()
                             # print("Time consumed by L2 norm: ", end_-start_)
@@ -605,6 +606,7 @@ for split_name,features in splits_to_process.items():
                             Estimated time to finish ({files_remaining} files): {round(time_per_iteration*files_remaining/60)} min")
                     print("Wrong centerlines: ", wrong_centerlines) 
 
+            # Save only the oracle (best possible centerline) as a np.array -> num_sequences x 40 x 2 
             if mode == "train":
                 if debug:
                     filename = os.path.join(BASE_DIR,config.dataset.path,split_name,
@@ -612,7 +614,9 @@ for split_name,features in splits_to_process.items():
                 else:
                     filename = os.path.join(BASE_DIR,config.dataset.path,split_name,
                                             f"data_processed_{str(int(features[1]*100))}_percent","oracle_centerlines.npy")
-                with open(filename, 'wb') as my_file: np.save(my_file, map_info)
+                with open(filename, 'wb') as my_file: np.save(my_file, oracle_centerlines_list)
+
+            # Save N centerlines per sequence. Note that the number of variables per sequence may vary
             elif mode == "test":
                 filename = os.path.join(BASE_DIR,config.dataset.path,split_name,
                                         f"data_processed_{str(int(features[1]*100))}_percent","relevant_centerlines.npz")
