@@ -47,7 +47,7 @@ scaler = GradScaler()
 current_cuda = None
 absolute_root_folder = None
 
-USE_SCALER = True
+USE_SCALER = False
 CHECK_ACCURACY_TRAIN = False
 CHECK_ACCURACY_VAL = True
 MAX_TIME_TO_CHECK_TRAIN = 120 # minutes
@@ -91,13 +91,33 @@ def get_dtypes(use_gpu):
 
 # Aux functions losses
 
-def calculate_mse_loss(gt, pred, loss_f, w_loss=None):
+def calculate_mse_gt_loss(gt, pred, loss_f, w_loss=None):
     """
     gt: (pred_len, batch_size, data_dim)
     pred: (batch_size, num_modes, pred_len, data_dim)
     """
-
+    
     batch_size, num_modes, pred_len, data_dim = pred.shape
+    pred = pred.permute(1,2,0,3)
+    loss_ade = torch.zeros(1).to(pred)
+    loss_fde = torch.zeros(1).to(pred)
+
+    for i in range(num_modes):
+        loss_ade += loss_f(pred[i,:,:,:], gt, w_loss)
+        loss_fde += loss_f(pred[i][-1].unsqueeze(0), gt[-1].unsqueeze(0), w_loss)
+
+    return loss_ade/num_modes, loss_fde/num_modes
+
+def calculate_mse_centerlines_loss(relevant_centerlines, pred, loss_f, w_loss=None):
+    """
+    relevant_centerlines: (num_modes, batch_size, pred_len, data_dim)
+    pred: (batch_size, num_modes, pred_len, data_dim)
+    """
+    pdb.set_trace()
+    batch_size, num_modes, pred_len, data_dim = pred.shape
+
+
+
     pred = pred.permute(1,2,0,3)
     loss_ade = torch.zeros(1).to(pred)
     loss_fde = torch.zeros(1).to(pred)
@@ -113,21 +133,6 @@ def calculate_nll_loss(gt, pred, loss_f, confidences):
     NLL = Negative Log-Likelihood
 
     Compute NLL w.r.t. the groundtruth
-    """
-    time, bs, _ = gt.shape
-    gt = gt.permute(1,0,2)
-    avails = torch.ones(bs,time).cuda(current_cuda)
-    loss = loss_f(
-        gt, 
-        pred,
-        confidences,
-        avails
-    )
-    return loss
-
-def calculate_nll_centerlines_loss(gt, pred, loss_f, confidences):
-    """
-    NLL = Negative Log-Likelihood
     """
     time, bs, _ = gt.shape
     gt = gt.permute(1,0,2)
@@ -665,6 +670,8 @@ def generator_step(hyperparameters, batch, generator, optimizer_g,
 
         (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel, non_linear_obj,
         loss_mask, seq_start_end, object_cls, obj_id, map_origin, num_seq, norm) = batch
+    
+    batch_size = seq_start_end.shape[0]
 
     # Take (if specified) data of only the AGENT of interest
 
@@ -683,7 +690,59 @@ def generator_step(hyperparameters, batch, generator, optimizer_g,
     with autocast():
         # Forward (If agent_idx != None, model prediction refers only to target agent)
 
-        pred_traj_fake_rel, conf = generator(obs_traj, obs_traj_rel, seq_start_end, agent_idx, phy_info)
+        relevant_centerlines = []
+        if hyperparameters.physical_context == "plausible_centerlines+area":
+            # TODO: Encapsulate this as a function
+
+            # Plausible area (discretized)
+
+            plausible_area_array = np.array([curr_phy_info["plausible_area_abs"] for curr_phy_info in phy_info]).astype(np.float32)
+            plausible_area = torch.from_numpy(plausible_area_array).type(torch.float).cuda(obs_traj.device)
+
+            # Compute relevant centerlines
+
+            num_relevant_centerlines = [len(curr_phy_info["relevant_centerlines_abs"]) for curr_phy_info in phy_info]
+            aux_indeces_list = []
+            for num_ in num_relevant_centerlines:
+                if num_ >= hyperparameters.num_modes: # Limit to the first hyperparameters.num_modes centerlines. We assume
+                                                    # the oracle is here. TODO: Force this from the preprocessing 
+                    aux_indeces = np.arange(hyperparameters.num_modes)
+                    aux_indeces_list.append(aux_indeces)
+                else: # We have less centerlines than hyperparameters.num_modes
+                    quotient = int(hyperparameters.num_modes / num_)
+                    remainder = hyperparameters.num_modes % num_
+
+                    aux_indeces = np.arange(num_)
+                    aux_indeces = np.tile(aux_indeces,quotient)
+
+                    if remainder != 0:
+                        aux_indeces_ = np.arange(remainder)
+                        aux_indeces = np.hstack((aux_indeces,aux_indeces_))
+                    
+                    assert len(aux_indeces) == hyperparameters.num_modes, "Number of centerlines does not match the number of required modes"
+                    aux_indeces_list.append(aux_indeces)
+
+            centerlines_indeces = np.array(aux_indeces_list)
+
+            relevant_centerlines = []
+            for mode in range(hyperparameters.num_modes):
+
+                # Dynamic map info (one centerline per iteration -> Max Num_Modes iterations)
+
+                current_centerlines_indeces = centerlines_indeces[:,mode]
+                current_centerlines_list = []
+                for i in range(batch_size):
+                    current_centerline = phy_info[i]["relevant_centerlines_abs"][current_centerlines_indeces[i]]
+                    current_centerlines_list.append(current_centerline)
+
+                current_centerlines = torch.from_numpy(np.array(current_centerlines_list)).type(torch.float).cuda(obs_traj.device)
+                relevant_centerlines.append(current_centerlines.unsqueeze(0))
+
+            relevant_centerlines = torch.cat(relevant_centerlines,dim=0)
+
+            pred_traj_fake_rel, conf = generator(obs_traj, obs_traj_rel, seq_start_end, agent_idx, phy_info=plausible_area, relevant_centerlines=relevant_centerlines)
+        else:
+            pred_traj_fake_rel, conf = generator(obs_traj, obs_traj_rel, seq_start_end, agent_idx, phy_info=phy_info, relevant_centerlines=None)
 
         if hyperparameters.output_single_agent:
             pred_traj_fake = relative_to_abs_multimodal(pred_traj_fake_rel, obs_traj[-1,agent_idx,:])
@@ -694,7 +753,7 @@ def generator_step(hyperparameters, batch, generator, optimizer_g,
 
         if hyperparameters.output_single_agent:
             obs_traj = obs_traj[:,agent_idx, :]
-            pred_traj_gt = pred_traj_gt[:,agent_idx, :]
+            pred_traj_gt = pred_traj_gt[:, agent_idx, :]
             obs_traj_rel = obs_traj_rel[:, agent_idx, :]
 
         # TODO: Check if in other configurations the losses are computed using relative or absolute
@@ -705,11 +764,11 @@ def generator_step(hyperparameters, batch, generator, optimizer_g,
         if hyperparameters.loss_type_g == "mse" or hyperparameters.loss_type_g == "mse_w":
             _,b,_ = pred_traj_gt_rel.shape
 
-            if hyperparameters.loss_type_g == "mse_w":
+            if "mse_w" in hyperparameters.loss_type_g:
                 w_loss = w_loss[:b, :]
-                loss_ade, loss_fde = calculate_mse_loss(pred_traj_gt, pred_traj_fake, loss_f, w_loss)
+                loss_ade, loss_fde = calculate_mse_gt_loss(pred_traj_gt, pred_traj_fake, loss_f, w_loss)
             else:
-                loss_ade, loss_fde = calculate_mse_loss(pred_traj_gt, pred_traj_fake, loss_f)
+                loss_ade, loss_fde = calculate_mse_gt_loss(pred_traj_gt, pred_traj_fake, loss_f)
 
             loss = hyperparameters.loss_ade_weight*loss_ade + \
                    hyperparameters.loss_fde_weight*loss_fde
@@ -722,7 +781,7 @@ def generator_step(hyperparameters, batch, generator, optimizer_g,
             losses["G_nll_loss"] = loss.item()
 
         elif hyperparameters.loss_type_g == "mse+fa" or hyperparameters.loss_type_g == "mse_w+fa":
-            loss_ade, loss_fde = calculate_mse_loss(pred_traj_gt, pred_traj_fake, loss_f["mse"])
+            loss_ade, loss_fde = calculate_mse_gt_loss(pred_traj_gt, pred_traj_fake, loss_f["mse"])
             loss_fa = evaluate_feasible_area_prediction(pred_traj_fake, pred_traj_gt, map_origin, num_seq, 
                                                         absolute_root_folder, split)
 
@@ -737,21 +796,29 @@ def generator_step(hyperparameters, batch, generator, optimizer_g,
         elif hyperparameters.loss_type_g == "mse+nll" or hyperparameters.loss_type_g == "mse_w+nll":
             _,b,_ = pred_traj_gt_rel.shape
 
-            if hyperparameters.loss_type_g == "mse_w":
+            if "mse_w" in hyperparameters.loss_type_g:
                 w_loss = w_loss[:b, :]
-                loss_ade, loss_fde = calculate_mse_loss(pred_traj_gt, pred_traj_fake, loss_f["mse"], w_loss)
+                pdb.set_trace()
+                loss_ade, loss_fde = calculate_mse_gt_loss(pred_traj_gt, pred_traj_fake, loss_f["mse"], w_loss)
+                if relevant_centerlines:
+                    loss_ade_centerlines = calculate_mse_centerlines_loss(relevant_centerlines, pred_traj_fake, loss_f["mse"], w_loss)
             else:
-                loss_ade, loss_fde = calculate_mse_loss(pred_traj_gt, pred_traj_fake, loss_f["mse"])
+                loss_ade, loss_fde = calculate_mse_gt_loss(pred_traj_gt, pred_traj_fake, loss_f["mse"])
+                if relevant_centerlines:
+                    loss_ade_centerlines = calculate_mse_centerlines_loss(relevant_centerlines, pred_traj_fake, loss_f["mse"])
 
             loss_nll = calculate_nll_loss(pred_traj_gt, pred_traj_fake, loss_f["nll"], conf)
+            
 
             loss = hyperparameters.loss_ade_weight*loss_ade + \
                    hyperparameters.loss_fde_weight*loss_fde + \
-                   hyperparameters.loss_nll_weight*loss_nll 
+                   hyperparameters.loss_nll_weight*loss_nll #+ \
+                #    hyperparameters.loss_ade_centerlines_weight*loss_ade_centerlines 
 
             losses["G_mse_ade_loss"] = loss_ade.item()
             losses["G_mse_fde_loss"] = loss_fde.item()
             losses["G_nll_loss"] = loss_nll.item()
+            # losses["G_mse_ade_centerlines_loss"] = loss_nll.item()
         
         losses[f"G_total_loss"] = loss.item()
 
@@ -807,11 +874,73 @@ def check_accuracy(hyperparameters, loader, generator,
                 (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel, non_linear_obj,
                 loss_mask, seq_start_end, object_cls, obj_id, map_origin, num_seq, norm) = batch
 
+            batch_size = seq_start_end.shape[0]
+
             # Take (if specified) data of only the AGENT of interest
 
             agent_idx = None
             if hyperparameters.output_single_agent:
                 agent_idx = torch.where(object_cls==1)[0].cpu().numpy()
+
+            # Forward (If agent_idx != None, model prediction refers only to target agent)
+
+            if hyperparameters.physical_context == "plausible_centerlines+area":
+                # TODO: Encapsulate this as a function
+
+                # Plausible area (discretized)
+
+                plausible_area_array = np.array([curr_phy_info["plausible_area_abs"] for curr_phy_info in phy_info]).astype(np.float32)
+                plausible_area = torch.from_numpy(plausible_area_array).type(torch.float).cuda(obs_traj.device)
+
+                # Compute relevant centerlines
+
+                num_relevant_centerlines = [len(curr_phy_info["relevant_centerlines_abs"]) for curr_phy_info in phy_info]
+                aux_indeces_list = []
+                for num_ in num_relevant_centerlines:
+                    if num_ >= hyperparameters.num_modes: # Limit to the first hyperparameters.num_modes centerlines. We assume
+                                                        # the oracle is here. TODO: Force this from the preprocessing 
+                        aux_indeces = np.arange(hyperparameters.num_modes)
+                        aux_indeces_list.append(aux_indeces)
+                    else: # We have less centerlines than hyperparameters.num_modes
+                        quotient = int(hyperparameters.num_modes / num_)
+                        remainder = hyperparameters.num_modes % num_
+
+                        aux_indeces = np.arange(num_)
+                        aux_indeces = np.tile(aux_indeces,quotient)
+
+                        if remainder != 0:
+                            aux_indeces_ = np.arange(remainder)
+                            aux_indeces = np.hstack((aux_indeces,aux_indeces_))
+                        
+                        assert len(aux_indeces) == hyperparameters.num_modes, "Number of centerlines does not match the number of required modes"
+                        aux_indeces_list.append(aux_indeces)
+
+                centerlines_indeces = np.array(aux_indeces_list)
+
+                relevant_centerlines = []
+                for mode in range(hyperparameters.num_modes):
+
+                    # Dynamic map info (one centerline per iteration -> Max Num_Modes iterations)
+
+                    current_centerlines_indeces = centerlines_indeces[:,mode]
+                    current_centerlines_list = []
+                    for i in range(batch_size):
+                        current_centerline = phy_info[i]["relevant_centerlines_abs"][current_centerlines_indeces[i]]
+                        current_centerlines_list.append(current_centerline)
+
+                    current_centerlines = torch.from_numpy(np.array(current_centerlines_list)).type(torch.float).cuda(obs_traj.device)
+                    relevant_centerlines.append(current_centerlines.unsqueeze(0))
+
+                relevant_centerlines = torch.cat(relevant_centerlines,dim=0)
+
+                pred_traj_fake_rel, conf = generator(obs_traj, obs_traj_rel, seq_start_end, agent_idx, phy_info=plausible_area, relevant_centerlines=relevant_centerlines)
+            else:
+                pred_traj_fake_rel, conf = generator(obs_traj, obs_traj_rel, seq_start_end, agent_idx, phy_info=phy_info, relevant_centerlines=None)
+
+            if hyperparameters.output_single_agent:
+                pred_traj_fake = relative_to_abs_multimodal(pred_traj_fake_rel, obs_traj[-1,agent_idx,:])
+            else:
+                pred_traj_fake = relative_to_abs_multimodal(pred_traj_fake_rel, obs_traj[-1])
 
             # Mask and linear
 
@@ -827,20 +956,11 @@ def check_accuracy(hyperparameters, loader, generator,
                 loss_mask = loss_mask[:, hyperparameters.obs_len:]
                 linear_obj = 1 - non_linear_obj
 
-            # Forward (If agent_idx != None, model prediction refers only to target agent)
-
-            pred_traj_fake_rel, conf = generator(obs_traj, obs_traj_rel, seq_start_end, agent_idx, phy_info)
-
-            if hyperparameters.output_single_agent:
-                pred_traj_fake = relative_to_abs_multimodal(pred_traj_fake_rel, obs_traj[-1,agent_idx,:])
-            else:
-                pred_traj_fake = relative_to_abs_multimodal(pred_traj_fake_rel, obs_traj[-1])
-
             # Single agent trajectories
 
             if hyperparameters.output_single_agent:
                 obs_traj = obs_traj[:,agent_idx, :]
-                pred_traj_gt = pred_traj_gt[:,agent_idx, :]
+                pred_traj_gt = pred_traj_gt[:, agent_idx, :]
                 obs_traj_rel = obs_traj_rel[:, agent_idx, :]
                 pred_traj_gt_rel = pred_traj_gt_rel[:, agent_idx, :]
 

@@ -42,6 +42,7 @@ def get_points(img, center_px, scale_x, radius=100, color=255, N=1024, around_ce
     
     points_feasible_area = len(feasible_area[0])
     sample_index = rng.choice(points_feasible_area, size=N, replace=False)
+    sample_index = np.sort(sample_index) # Sort indeces in order to have to pixels sorted (from top-left to bottom right)
 
     sampling_points = sampling_points[:,sample_index]
     
@@ -467,10 +468,19 @@ def get_driveable_area_and_centerlines(filename, agent_xy_abs, relevant_centerli
 
     start = time.time()
     img = cv2.imread(filename)
-    img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)  
+    end = time.time()
+    time_cv2 = end-start
+
+    start = time.time()
+    # img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)  
+    end = time.time()
+    time_cvtcolor = end-start
+
+    start = time.time()
     img = cv2.resize(img, dsize=(cols,rows))
     end = time.time()
-    if DEBUG_TIME: print("Time consumed by cv2: ", end-start)
+    time_resize = end-start
+    if DEBUG_TIME: print("Time consumed by cv2: ", time_cv2, time_cvtcolor, time_resize)
 
     # 2. Get random points from the feasible area points (N samples)
 

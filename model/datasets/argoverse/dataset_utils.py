@@ -128,8 +128,8 @@ def apply_percentage_startfrom(file_id_list, num_files,
     n_files = int(split_percentage*num_files)
     file_id_list = file_id_list[start_from:start_from+n_files]
 
-    if (start_from + n_files) >= num_files:
-        print(f"WARNING: Unable to analyze {n_files} from {start_from} file. \
+    if (start_from + n_files) > num_files:
+        print(f"WARNING: Unable to analyze {n_files} from file {start_from} \
                 Analyzing remaining files to completion")
         file_id_list = file_id_list[start_from:]
     else:
@@ -386,16 +386,8 @@ def relative_to_abs_multimodal(rel_traj, start_pos):
     - abs_traj: pytorch tensor of shape (seq_len, batch, 2) (around 0,0, not map coordinates)
     """
 
-    # THIS IS WRONG!!!!!!!!!!!!
-    # BUT THE BEST MODEL IS WITH CUMSUM ALONG DIM=1
-    displacement = torch.cumsum(rel_traj, dim=1) # Sum along the seq_len dimension!
+    displacement = torch.cumsum(rel_traj, dim=2) # Sum along the seq_len dimension!
     start_pos = torch.unsqueeze(torch.unsqueeze(start_pos, dim=1), dim=1) # batch, 1 (only one position) x 1 (same for all modes) x 2
     abs_traj = displacement + start_pos
 
     return abs_traj
-
-    # displacement = torch.cumsum(rel_traj, dim=2) # Sum along the seq_len dimension!
-    # start_pos = torch.unsqueeze(torch.unsqueeze(start_pos, dim=1), dim=1) # batch, 1 (only one position) x 1 (same for all modes) x 2
-    # abs_traj = displacement + start_pos
-
-    # return abs_traj

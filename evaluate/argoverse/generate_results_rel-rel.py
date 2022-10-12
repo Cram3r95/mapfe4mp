@@ -61,7 +61,7 @@ parser.add_argument("--split", required=True, default="val", type=str)
 
 avm = ArgoverseMap()
 
-LIMIT_FILES = 150 # From 1 to num_files.
+LIMIT_FILES = -1 # From 1 to num_files.
                  # -1 by default to analyze all files of the specified split percentage
 
 OBS_ORIGIN = 20
@@ -459,21 +459,9 @@ if __name__ == '__main__':
     args = parser.parse_args()
     main(args)
 
-# BEST AT THIS MOMENT, BUT TRAINED WITH WRONG REL2ABS!
+# Best model at this moment
 """
 python evaluate/argoverse/generate_results_rel-rel.py \
---model_path "save/argoverse/sophie_mm/100.0_percent/exp-2022-09-26_06h/argoverse_motion_forecasting_dataset_0_with_model.pt" \
---device_gpu 0 --split "test"
-"""
-
-"""
-python evaluate/argoverse/generate_results_rel-rel.py \
---model_path "save/argoverse/sophie_mm/1.0_percent/test_only_social/argoverse_motion_forecasting_dataset_0_with_model.pt" \
---device_gpu 2 --split "val"
-"""
-
-"""
-python evaluate/argoverse/generate_results_rel-rel.py \
---model_path "save/argoverse/sophie_mm/1.0_percent/test_with_centerlines/argoverse_motion_forecasting_dataset_0_with_model.pt" \
---device_gpu 2 --split "val"
+--model_path "save/argoverse/sophie_mm/100.0_percent/test_oracle_check_rel2absmm/argoverse_motion_forecasting_dataset_0_with_model.pt" \
+--device_gpu 0 --split "val"
 """

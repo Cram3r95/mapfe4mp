@@ -2,6 +2,7 @@ import os
 import math
 import random
 import copy
+import time
 import numpy as np
 import pdb
 from model.datasets.argoverse.dataset import PHYSICAL_CONTEXT
@@ -519,7 +520,7 @@ class TrajectoryGenerator(nn.Module):
         else:
             self.decoder = Multimodal_DecoderLSTM(PHYSICAL_CONTEXT=self.physical_context)
 
-    def forward(self, obs_traj, obs_traj_rel, seq_start_end, agent_idx, phy_info=None):
+    def forward(self, obs_traj, obs_traj_rel, seq_start_end, agent_idx, phy_info=None, relevant_centerlines=None):
         """
         """
 
@@ -582,70 +583,35 @@ class TrajectoryGenerator(nn.Module):
         elif self.physical_context == "plausible_centerlines+area":
             # Static map info
 
-            plausible_area_array = np.array([curr_phy_info["plausible_area_abs"] for curr_phy_info in phy_info]).astype(np.float32)
-            plausible_area = torch.from_numpy(plausible_area_array).type(torch.float).cuda(obs_traj.device)
-
-            # TODO: Sort this points??
+            plausible_area = torch.clone(phy_info)
             static_map_info = self.bn(plausible_area.view(batch_size,-1))
             encoded_static_map_info = self.plausible_area_encoder(static_map_info)
-            
-            # Dynamic map info (one centerline per iteration -> Max Num_Modes iterations)
-
-            num_relevant_centerlines = [len(curr_phy_info["relevant_centerlines_abs"]) for curr_phy_info in phy_info]
-            aux_indeces_list = []
-            for num_ in num_relevant_centerlines:
-                if num_ >= NUM_MODES: # Limit to the first NUM_MODES centerlines. We assume
-                                      # the oracle is here. TODO: Force this from the preprocessing 
-                    aux_indeces = np.arange(NUM_MODES)
-                    aux_indeces_list.append(aux_indeces)
-                else: # We have less centerlines than NUM_MODES
-                    quotient = int(NUM_MODES / num_)
-                    remainder = NUM_MODES % num_
-
-                    aux_indeces = np.arange(num_)
-                    aux_indeces = np.tile(aux_indeces,quotient)
-
-                    if remainder != 0:
-                        aux_indeces_ = np.arange(remainder)
-                        aux_indeces = np.hstack((aux_indeces,aux_indeces_))
-                    
-                    assert len(aux_indeces) == NUM_MODES, "Number of centerlines does not match the number of required modes"
-                    aux_indeces_list.append(aux_indeces)
-
-            centerlines_indeces = np.array(aux_indeces_list)
 
             pred_traj_fake_rel = []
         
             for mode in range(NUM_MODES):
-                current_centerlines_indeces = centerlines_indeces[:,mode]
-                current_centerlines_list = []
-                for i in range(batch_size):
-                    current_centerline = phy_info[i]["relevant_centerlines_abs"][current_centerlines_indeces[i]]
-                    current_centerlines_list.append(current_centerline)
 
-                current_centerlines = torch.from_numpy(np.array(current_centerlines_list)).type(torch.float).cuda(obs_traj.device)
+                # Dynamic map info (one centerline per iteration -> Max Num_Modes iterations)
+
+                current_centerlines = relevant_centerlines[mode,:,:,:]
+
                 encoded_centerlines_info = self.centerline_encoder(current_centerlines)
 
                 # Concatenate social info, static map info and current centerline info
 
-                mlp_decoder_context_input = torch.cat([encoded_social_info.contiguous().view(-1,self.h_dim), # bs x 128
-                                                       encoded_static_map_info.contiguous().view(-1,self.h_dim), # bs x 128 
-                                                       encoded_centerlines_info.contiguous().view(-1,self.h_dim)], # bs x 128
+                mlp_decoder_context_input = torch.cat([encoded_social_info.contiguous().view(-1,self.h_dim), 
+                                                       encoded_static_map_info.contiguous().view(-1,self.h_dim),
+                                                       encoded_centerlines_info.contiguous().view(-1,self.h_dim)], 
                                                        dim=1)
-
-                # mlp_decoder_context_input = torch.cat([encoded_social_info.contiguous().view(-1,self.h_dim),
-                #                                        encoded_centerlines_info.contiguous().view(-1,self.h_dim)],
-                #                                        dim=1)
 
                 decoder_h = mlp_decoder_context_input.unsqueeze(0)
                 decoder_c = torch.randn(tuple(decoder_h.shape)).cuda(obs_traj.device)
-                # decoder_c = torch.zeros(tuple(decoder_h.shape)).cuda(obs_traj.device)
+
                 state_tuple = (decoder_h, decoder_c)
 
                 ## Predict trajectories
 
                 curr_pred_traj_fake_rel = self.decoder(last_pos, last_pos_rel, state_tuple)
-                # curr_pred_traj_fake_rel = self.decoder(traj_agent_abs, traj_agent_abs_rel, state_tuple)
                 curr_pred_traj_fake_rel = curr_pred_traj_fake_rel.unsqueeze(0)
                 pred_traj_fake_rel.append(curr_pred_traj_fake_rel)
 

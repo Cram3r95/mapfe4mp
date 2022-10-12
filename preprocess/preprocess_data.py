@@ -305,19 +305,19 @@ for split_name,features in splits_to_process.items():
                                 else: # If we have reached the end, travel backwards 
                                     # TODO: Interpolate frontwards
                                     back_num_points = (closest_wp_first+num_points+1) - relevant_centerline.shape[0]
-                                    print("back: ", back_num_points)
+                                    # print("back: ", back_num_points)
                                     relevant_centerline_filtered = relevant_centerline[closest_wp_first-back_num_points:,:]
                                 
                                 if relevant_centerline_filtered.shape[0] != max_points:
                                     try:
                                         interpolated_centerline = map_features_utils_instance.interpolate_centerline(split_name,
-                                                                                                                    file_id,
-                                                                                                                    relevant_centerline_filtered,
-                                                                                                                    agent_xy,
-                                                                                                                    obs_len,
-                                                                                                                    obs_len + pred_len,
-                                                                                                                    max_points=max_points,
-                                                                                                                    viz=viz)
+                                                                                                                     file_id,
+                                                                                                                     relevant_centerline_filtered,
+                                                                                                                     agent_xy,
+                                                                                                                     obs_len,
+                                                                                                                     obs_len + pred_len,
+                                                                                                                     max_points=max_points,
+                                                                                                                     viz=viz)
 
                                         assert interpolated_centerline.shape[0] == 40
 
