@@ -256,7 +256,7 @@ def load_processed_files_from_npy(folder):
 def load_physical_information(num_seq_list, obs_traj, obs_traj_rel, pred_traj_gt, pred_traj_gt_rel,
                               first_obs, map_origin, dist_rasterized_map, object_class_id_list, 
                               data_imgs_folder, physical_context="dummies",relevant_centerlines=None,
-                              debug_images=False):
+                              DEBUG_IMAGES=False, DEBUG_TIME=False):
     """
     Get the physical context (rasterized map around the vehicle including trajectories), plausible
     goal points, or dummies
@@ -301,7 +301,7 @@ def load_physical_information(num_seq_list, obs_traj, obs_traj_rel, pred_traj_gt
             img = map_functions.plot_trajectories(filename, curr_obs_traj_rel, curr_first_obs, 
                                                   curr_map_origin, curr_object_class_id, dist_rasterized_map,
                                                   rot_angle=-1,obs_len=obs_len, smoothen=True, show=False)
-            if debug_images:
+            if DEBUG_IMAGES:
                 print("frames path: ", data_imgs_folder)
                 print("curr seq: ", str(curr_num_seq))
                 filename = data_imgs_folder + "seq_" + str(curr_num_seq) + ".png"
@@ -343,7 +343,9 @@ def load_physical_information(num_seq_list, obs_traj, obs_traj_rel, pred_traj_gt
                     pdb.set_trace()
 
             start = time.time()
-            phy_info = goal_points_functions.get_driveable_area_and_centerlines(filename, agent_xy_abs, curr_relevant_centerlines, curr_map_origin, DEBUG=False)
+            phy_info = goal_points_functions.get_driveable_area_and_centerlines(filename, agent_xy_abs, curr_relevant_centerlines, 
+                                                                                curr_map_origin, IMG_ROWS=400, DEBUG=DEBUG_IMAGES,
+                                                                                DEBUG_TIME=DEBUG_TIME)
             physical_context_list.append(phy_info)
             end = time.time()
             # print("Time consumed by goal function: ", end-start)

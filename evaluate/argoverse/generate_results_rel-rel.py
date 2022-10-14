@@ -76,6 +76,7 @@ PLOT_WORST_SCENES = False
 LIMIT_QUALITATIVE_RESULTS = 150
 
 COMPUTE_METRICS = True
+SAVE_METRICS = False
 
 def generate_csv(results_path,ade_list,fde_list,num_seq_list,traj_kind_list,sort=False):
     """
@@ -211,6 +212,9 @@ def evaluate(loader, generator, config, split, current_cuda, pred_len, results_p
 
             # Get predictions
 
+            relevant_centerlines = []
+
+            # TODO: Not used at this moment
             if config.hyperparameters.num_modes == 1: # The model is unimodal # TODO: -> conf here is 1/6
 
                 pred_traj_fake_rel_list = []
@@ -235,9 +239,60 @@ def evaluate(loader, generator, config, split, current_cuda, pred_len, results_p
             else: # The model is multimodal
                 assert config.hyperparameters.num_modes == ARGOVERSE_NUM_MODES
 
-                ## Get predictions (relative displacements)
+                if config.hyperparameters.physical_context == "plausible_centerlines+area":
+                    # TODO: Encapsulate this as a function
 
-                pred_traj_fake_rel, conf = generator(obs_traj, obs_traj_rel, seq_start_end, agent_idx, phy_info)
+                    # Plausible area (discretized)
+
+                    plausible_area_array = np.array([curr_phy_info["plausible_area_abs"] for curr_phy_info in phy_info]).astype(np.float32)
+                    plausible_area = torch.from_numpy(plausible_area_array).type(torch.float).cuda(obs_traj.device)
+
+                    # Compute relevant centerlines
+
+                    num_relevant_centerlines = [len(curr_phy_info["relevant_centerlines_abs"]) for curr_phy_info in phy_info]
+                    aux_indeces_list = []
+                    for num_ in num_relevant_centerlines:
+                        if num_ >= config.hyperparameters.num_modes: # Limit to the first config.hyperparameters.num_modes centerlines. We assume
+                                                            # the oracle is here. TODO: Force this from the preprocessing 
+                            aux_indeces = np.arange(config.hyperparameters.num_modes)
+                            aux_indeces_list.append(aux_indeces)
+                        else: # We have less centerlines than config.hyperparameters.num_modes
+                            quotient = int(config.hyperparameters.num_modes / num_)
+                            remainder = config.hyperparameters.num_modes % num_
+
+                            aux_indeces = np.arange(num_)
+                            aux_indeces = np.tile(aux_indeces,quotient)
+
+                            if remainder != 0:
+                                aux_indeces_ = np.arange(remainder)
+                                aux_indeces = np.hstack((aux_indeces,aux_indeces_))
+                            
+                            assert len(aux_indeces) == config.hyperparameters.num_modes, "Number of centerlines does not match the number of required modes"
+                            aux_indeces_list.append(aux_indeces)
+
+                    centerlines_indeces = np.array(aux_indeces_list)
+
+                    relevant_centerlines = []
+                    for mode in range(config.hyperparameters.num_modes):
+
+                        # Dynamic map info (one centerline per iteration -> Max Num_Modes iterations)
+
+                        current_centerlines_indeces = centerlines_indeces[:,mode]
+                        current_centerlines_list = []
+                        for i in range(loader.batch_size):
+                            current_centerline = phy_info[i]["relevant_centerlines_abs"][current_centerlines_indeces[i]]
+                            current_centerlines_list.append(current_centerline)
+
+                        current_centerlines = torch.from_numpy(np.array(current_centerlines_list)).type(torch.float).cuda(obs_traj.device)
+                        relevant_centerlines.append(current_centerlines.unsqueeze(0))
+
+                    relevant_centerlines = torch.cat(relevant_centerlines,dim=0)
+
+                    ## Get predictions (relative displacements)
+
+                    pred_traj_fake_rel, conf = generator(obs_traj, obs_traj_rel, seq_start_end, agent_idx, phy_info=plausible_area, relevant_centerlines=relevant_centerlines)
+                else:
+                    pred_traj_fake_rel, conf = generator(obs_traj, obs_traj_rel, seq_start_end, agent_idx, phy_info=phy_info, relevant_centerlines=relevant_centerlines)
 
                 ## Get predictions in absolute -> map coordinates
 
@@ -295,34 +350,27 @@ def evaluate(loader, generator, config, split, current_cuda, pred_len, results_p
 
                 curr_object_class_id_list = object_cls
 
-                filename = f"data/datasets/argoverse/motion-forecasting/{split}/data_images/{seq_id}.png"
-
-                # Custom plot (not advisable)
-
-                # N.B. If you cannot appreciate the difference between groundtruth and our prediction, probably
-                # is because the map does not cover the whole groundtruth because the AGENT is driving at high 
-                # speed. In this case, increase the dist_around value (e.g. 60, 80, etc.) and in plot_functions
-                # represent only the predictions, not map+predictions: 
-                # 
-                # full_img_cv = cv2.add(img1_bg,img2_fg) -> full_img_cv = img_lanes
-
                 # Argoverse standard plot
 
+                relevant_centerlines_abs = relevant_centerlines.cpu().numpy() + map_origin.cpu().numpy()
+
                 plot_functions.viz_predictions_all(seq_id,
-                                               results_path,
-                                               obs_traj.permute(1,0,2).cpu().numpy(), # All obstacles
-                                               pred_traj_fake.squeeze(0).cpu().numpy(), # Only AGENT (MM prediction)
-                                               pred_traj_gt.permute(1,0,2).cpu().numpy(), # All obstacles
-                                               curr_object_class_id_list.cpu().numpy(),
-                                               city_name,
-                                               curr_map_origin.cpu().numpy(),
-                                               avm,
-                                               dist_rasterized_map=50,
-                                               show=False,
-                                               save=True,
-                                               ade_metric=ade_min,
-                                               fde_metric=fde_min)
-            # pdb.set_trace()
+                                                   results_path,
+                                                   obs_traj.permute(1,0,2).cpu().numpy(), # All obstacles
+                                                   pred_traj_fake.squeeze(0).cpu().numpy(), # Only AGENT (MM prediction)
+                                                   pred_traj_gt.permute(1,0,2).cpu().numpy(), # All obstacles
+                                                   curr_object_class_id_list.cpu().numpy(),
+                                                   city_name,
+                                                   curr_map_origin.cpu().numpy(),
+                                                   avm,
+                                                   dist_rasterized_map=50,
+                                                   relevant_centerlines_abs=relevant_centerlines_abs,
+                                                   show=False,
+                                                   save=True,
+                                                   ade_metric=ade_min,
+                                                   fde_metric=fde_min,
+                                                   worst_scenes=worst_scenes)
+
             pred_traj_fake_global_aux = pred_traj_fake_global.squeeze(0).view(ARGOVERSE_NUM_MODES, PRED_LEN, 2)
             output_predictions[seq_id] = pred_traj_fake_global_aux.cpu().numpy()
             output_probabilities[seq_id] = conf_array
@@ -368,7 +416,11 @@ def main(args):
     # In general, the algorithm used to generate the test results should have been trained with the whole
     # dataset (100 %)
 
+    # TODO: FIX THIS AND ALLOW BATCH_SIZE > 1 TO REDUCE THE TIME TO GENERATE THE RESULTS
     config.dataset.batch_size = 1 # Better to build the h5 results file
+
+    assert config.dataset.batch_size == 1, "At this moment the result generator is designed for batch size 1"
+
     config.dataset.num_workers = 0
     config.dataset.class_balance = -1.0 # Do not consider class balance in the split test
     config.dataset.shuffle = False
@@ -423,14 +475,14 @@ def main(args):
         print("Create results path folder: ", results_path)
         os.makedirs(results_path) # os.makedirs create intermediate directories. os.mkdir only the last one
 
-    # Get worst scenes in order to plot and analyze
+    # Get worst scenes (only if metrics from split = 100 % has been previously computed) in order to plot and analyze
 
-    metrics_sorted_csv = os.path.join(results_path,"metrics_sorted_ade.csv")
-    
-    if os.path.isfile(metrics_sorted_csv) and PLOT_WORST_SCENES:
-        worst_scenes = get_worst_scenes(metrics_sorted_csv)
-    else:
-        worst_scenes = None
+    worst_scenes = None
+    if int(config.dataset.split_percentage * 100) == 100:
+        metrics_sorted_csv = os.path.join(results_path,"metrics_sorted_ade.csv")
+        
+        if os.path.isfile(metrics_sorted_csv) and PLOT_WORST_SCENES:
+            worst_scenes = get_worst_scenes(metrics_sorted_csv)
 
     print(f"Evaluate model in {config.dataset.split} split")
     output_predictions, output_probabilities, ade_list, fde_list, traj_kind_list, num_seq_list = \
@@ -448,7 +500,7 @@ def main(args):
 
         generate_forecasting_h5(output_predictions, results_path, probabilities=output_probabilities)
 
-    elif COMPUTE_METRICS and not PLOT_WORST_SCENES: # val or train
+    elif COMPUTE_METRICS and SAVE_METRICS and not PLOT_WORST_SCENES: # val or train
 
         # Write results (ade and fde with the corresponding trajectory type) in CSV
 
@@ -463,5 +515,11 @@ if __name__ == '__main__':
 """
 python evaluate/argoverse/generate_results_rel-rel.py \
 --model_path "save/argoverse/sophie_mm/100.0_percent/test_oracle_check_rel2absmm/argoverse_motion_forecasting_dataset_0_with_model.pt" \
+--device_gpu 0 --split "val"
+"""
+
+"""
+python evaluate/argoverse/generate_results_rel-rel.py \
+--model_path "save/argoverse/sophie_mm/100.0_percent/test_with_centerlines_and_pa/argoverse_motion_forecasting_dataset_0_with_model.pt" \
 --device_gpu 0 --split "val"
 """

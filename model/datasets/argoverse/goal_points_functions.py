@@ -21,7 +21,10 @@ import time
 
 import numpy as np
 import torch
+import torchvision
 import cv2
+
+from PIL import Image
 from sklearn import linear_model
 
 # Plot imports
@@ -30,25 +33,34 @@ import matplotlib.pyplot as plt
 
 #######################################
 
-def get_points(img, center_px, scale_x, radius=100, color=255, N=1024, around_center=True, max_samples=None):
+def get_points(img, center_px, scale_x, radius=100, color=255, N=1024, around_center=True, max_samples=None, DEBUG_TIME=False):
     """
     """
 
+    start = time.time()
     feasible_area = np.where(img == color)
+    end = time.time()
+    if DEBUG_TIME: print(">> Time consumed by np.where: ", end-start)
+    start = time.time()
     sampling_points = np.vstack(feasible_area)
-
-    rng = np.random.default_rng()
-    num_samples = N
+    end = time.time()
+    if DEBUG_TIME: print(">> Time consumed by sampling: ", end-start)
     
-    points_feasible_area = len(feasible_area[0])
-    sample_index = rng.choice(points_feasible_area, size=N, replace=False)
+    # rng = np.random.default_rng()
+    num_samples = N
+    start = time.time()
+    # points_feasible_area = len(feasible_area[0])
+    # sample_index = rng.choice(points_feasible_area, size=N, replace=False)
+    sample_index = np.random.randint(low=0,high=sampling_points.shape[1],size=num_samples)
     sample_index = np.sort(sample_index) # Sort indeces in order to have to pixels sorted (from top-left to bottom right)
 
     sampling_points = sampling_points[:,sample_index]
     
     px_y = sampling_points[0,:] # rows (pixels)
     px_x = sampling_points[1,:] # columns (pixels)
-    
+    end = time.time()
+    if DEBUG_TIME: print(">> Time consumed by sorting: ", end-start)
+
     ## Sample points around the specified center given a certain radius
     
     # TODO: Optimize this
@@ -167,75 +179,17 @@ def transform_px2real_world(px_points, origin_pos, real_world_size, img_size):
 
     rw_points = []
 
-    for px_point in px_points:
-        x = m_x * px_point[1] + i_x # Get x-real_world from columns
-        y = m_y * px_point[0] + i_y # Get y-real_world from rows
+    x = m_x * px_points[:,1] + i_x # Get x-real_world from columns
+    y = m_y * px_points[:,0] + i_y # Get x-real_world from columns
 
-        if x > x_max or y < y_min:
-            pdb.set_trace()
-            
-        rw_point = [x,y]
-        rw_points.append(rw_point)
+    if np.where(x > x_max)[0].size > 0 or np.where(y > y_max)[0].size > 0:
+        pdb.set_trace()
 
-    return np.array(rw_points)
+    rw_points = np.hstack((x.reshape(-1,1),y.reshape(-1,1)))
+
+    return rw_points
 
 def transform_real_world2px(rw_points, origin_pos, real_world_offset, img_size):
-    """
-    It is assumed squared image (e.g. 600 x 600 -> img_size = 600) and the same offset 
-    in all directions (top, bottom, left, right) to facilitate the transformation.
-    """
-
-    xcenter, ycenter = origin_pos[0], origin_pos[1]
-    x_min = xcenter - real_world_offset
-    x_max = xcenter + real_world_offset
-    y_min = ycenter - real_world_offset
-    y_max = ycenter + real_world_offset
-
-    m_x = float(img_size / (2 * real_world_offset)) # slope
-    m_y = float(-img_size / (2 * real_world_offset))
-
-    i_x = float(-(img_size / (2 * real_world_offset)) * x_min) # intercept
-    i_y = float((img_size / (2 * real_world_offset)) * y_max)
-
-    px_points = []
-
-    for rw_point in rw_points:
-        x = m_x * rw_point[0] + i_x
-        y = m_y * rw_point[1] + i_y
-        px_point = [x,y] 
-        px_points.append(px_point)
-
-    return np.array(px_points)
-
-def transform_px2real_world_square_image(px_points, origin_pos, real_world_offset, img_size):
-    """
-    It is assumed squared image (e.g. 600 x 600 -> img_size = 600) and the same offset 
-    in all directions (top, bottom, left, right) to facilitate the transformation.
-    """
-
-    xcenter, ycenter = origin_pos[0], origin_pos[1]
-    x_min = xcenter - real_world_offset
-    x_max = xcenter + real_world_offset
-    y_min = ycenter - real_world_offset
-    y_max = ycenter + real_world_offset
-
-    m_x = float((2 * real_world_offset) / img_size) # slope
-    m_y = float(-(2 * real_world_offset) / img_size) # slope
-
-    i_x = x_min # intersection
-    i_y = y_max
-
-    rw_points = []
-
-    for px_point in px_points:
-        x = m_x * px_point[1] + i_x # Get x-real_world from columns
-        y = m_y * px_point[0] + i_y # Get y-real_world from rows
-        rw_point = [x,y]
-        rw_points.append(rw_point)
-
-    return np.array(rw_points)
-
-def transform_real_world2px_square_image(rw_points, origin_pos, real_world_offset, img_size):
     """
     It is assumed squared image (e.g. 600 x 600 -> img_size = 600) and the same offset 
     in all directions (top, bottom, left, right) to facilitate the transformation.
@@ -436,10 +390,11 @@ def get_goal_points(filename, obs_seq, origin_pos, real_world_offset, NUM_GOAL_P
     return rw_points
 
 def get_driveable_area_and_centerlines(filename, agent_xy_abs, relevant_centerlines, origin_pos, 
-                                       OBS_LEN=20, IMG_ROWS=600, NUM_POINTS_PLAUSIBLE_AREA=512, DEBUG=False):
+                                       OBS_LEN=20, IMG_ROWS=600, NUM_POINTS_PLAUSIBLE_AREA=512, DEBUG=False, DEBUG_TIME=False):
     """
     """
-    DEBUG_TIME = False
+
+    start_total = time.time()
 
     if DEBUG_TIME: print("-------------")
 
@@ -461,35 +416,38 @@ def get_driveable_area_and_centerlines(filename, agent_xy_abs, relevant_centerli
     scale_x = float(cols/real_world_width) # px/m
     scale_y = float(rows/real_world_height) # px/m
     center_px = (int(rows/2),int(cols/2))
+
     end = time.time()
     if DEBUG_TIME: print("Time consumed by loading seq info: ", end-start)
 
     # 1. Load image with plausible binary area filtered
 
     start = time.time()
-    img = cv2.imread(filename)
+    img_gray = cv2.imread(filename, cv2.IMREAD_GRAYSCALE)
     end = time.time()
     time_cv2 = end-start
 
-    start = time.time()
-    # img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)  
-    end = time.time()
-    time_cvtcolor = end-start
+    # start = time.time()
+    # # img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)  
+    # # img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    # end = time.time()
+    # time_cvtcolor = end-start
 
     start = time.time()
-    img = cv2.resize(img, dsize=(cols,rows))
+    img_gray = cv2.resize(img_gray, dsize=(cols,rows))
     end = time.time()
     time_resize = end-start
-    if DEBUG_TIME: print("Time consumed by cv2: ", time_cv2, time_cvtcolor, time_resize)
-
+    # if DEBUG_TIME: print("Time consumed by cv2: ", time_cv2, time_cvtcolor, time_resize)
+    if DEBUG_TIME: print("Time consumed by cv2: ", time_cv2, time_resize)
+    
     # 2. Get random points from the feasible area points (N samples)
 
     start = time.time()
     rad = 1000 # meters. Cause we want to observe all points around the AGENT
-    rad_px = rad * scale_x # m * (px/m) = px (pixels)
+    rad_px = rad * scale_x # m * (px/m) = px (pixels) # TODO: Only valid if the image is squared
     
-    fe_y, fe_x = get_points(img, center_px, scale_x, radius=rad_px, color=255, N=NUM_POINTS_PLAUSIBLE_AREA, 
-                            around_center=False) # return pixels as y/x (rows/columns)
+    fe_y, fe_x = get_points(img_gray, center_px, scale_x, radius=rad_px, color=255, N=NUM_POINTS_PLAUSIBLE_AREA, 
+                            around_center=False, DEBUG_TIME=DEBUG_TIME) # return pixels as y/x (rows/columns)
     end = time.time()
     if DEBUG_TIME: print("Time consumed by getting points: ", end-start)
 
@@ -517,6 +475,15 @@ def get_driveable_area_and_centerlines(filename, agent_xy_abs, relevant_centerli
     for centerline in relevant_centerlines_filtered:
         centerline = centerline - origin
         relevant_centerlines_abs.append(centerline)
+
+    phy_info = dict()
+    phy_info["plausible_area_abs"] = plausible_area_abs
+    phy_info["relevant_centerlines_abs"] = relevant_centerlines_abs
+    end = time.time()
+    if DEBUG_TIME: print("Time consumed by storing map information: ", end-start)
+    
+    end_total = time.time()
+    if DEBUG_TIME: print("Total seq time: ", end_total-start_total)
 
     # 5. Debug (plot result)
 
@@ -567,11 +534,5 @@ def get_driveable_area_and_centerlines(filename, agent_xy_abs, relevant_centerli
         plt.savefig(filename_all_info, bbox_inches='tight', facecolor=fig.get_facecolor(), edgecolor='none', pad_inches=0)
 
         plt.close('all')
-
-    phy_info = dict()
-    phy_info["plausible_area_abs"] = plausible_area_abs
-    phy_info["relevant_centerlines_abs"] = relevant_centerlines_abs
-    end = time.time()
-    if DEBUG_TIME: print("Time consumed by storing map information: ", end-start)
 
     return phy_info

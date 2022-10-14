@@ -457,7 +457,7 @@ class MapFeaturesUtils:
 
         return vel_f_averaged, acc_f_averaged
 
-    def interpolate_centerline(self,split,seq_id,centerline,agent_xy,obs_len,seq_len,max_points=40,viz=False):
+    def interpolate_centerline(self,centerline,max_points=40,agent_xy=None,obs_len=None,seq_len=None,split=None,seq_id=None,viz=False):
         """
         """
 
@@ -470,15 +470,10 @@ class MapFeaturesUtils:
             new_cx = sp.interpolate.interp1d(points,cx,kind='cubic')(new_points)
             new_cy = sp.interpolate.interp1d(points,cy,kind='cubic')(new_points)
         except:
+            pdb.set_trace()
             return
 
         interp_centerline = np.hstack([new_cx.reshape(-1,1),new_cy.reshape(-1,1)])
-
-        output_dir = os.path.join(BASE_DIR,f"data/datasets/argoverse/motion-forecasting/{split}/map_features")
-
-        if not os.path.exists(output_dir):
-            print("Create output folder: ", output_dir)
-            os.makedirs(output_dir) # makedirs creates intermediate folders
 
         if viz:
             fig, ax = plt.subplots(figsize=(8,8), facecolor="white")
@@ -550,6 +545,12 @@ class MapFeaturesUtils:
                     markersize=5,
                     zorder=15,
                 )
+
+            output_dir = os.path.join(BASE_DIR,f"data/datasets/argoverse/motion-forecasting/{split}/map_features")
+
+            if not os.path.exists(output_dir):
+                print("Create output folder: ", output_dir)
+                os.makedirs(output_dir) # makedirs creates intermediate folders
 
             filename = os.path.join(output_dir,f"{seq_id}_interpolated_oracle.png")
 
@@ -818,7 +819,7 @@ class MapFeaturesUtils:
             dist_around = min_dist_around
 
         if algorithm == "competition":
-        # Compute algorithms using Argoverse Forecasting baseline
+        # Compute centerlines (oracle or N) using Argoverse Forecasting baseline
 
             # Get all lane candidates within a bubble
 
@@ -884,7 +885,7 @@ class MapFeaturesUtils:
                     [obs_pred_lanes[0]], city_name)
 
         elif algorithm == "map_api": 
-        # Compute algorithms using Argoverse Map API
+        # Compute centerlines using Argoverse Map API
 
             # Get all lane candidates within a bubble
             manhattan_threshold = 5.0

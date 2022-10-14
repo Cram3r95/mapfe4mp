@@ -34,6 +34,9 @@ import model.datasets.argoverse.goal_points_functions as goal_points_functions
 
 #######################################
 
+# https://matplotlib.org/stable/api/markers_api.html
+# https://matplotlib.org/stable/gallery/color/named_colors.html
+
 COLORS = "darkviolet"
 COLORS_MM = ["darkviolet", "orange", "chartreuse"]
 
@@ -80,239 +83,7 @@ def change_bg_color(img):
 
     return img
 
-# Main plot function
-
-def plot_trajectories_custom(filename,results_path,obs_traj,map_origin,object_class_id_list,dist_rasterized_map,
-                      rot_angle=-1,obs_len=20,smoothen=False,save=False,data_aug=False,
-                      pred_trajectories=torch.zeros((0)),ade_metric=None,fde_metric=None,change_bg=False):
-    """
-    N.B. All inputs must be torch tensors in CPU, not GPU (in order to plot the trajectories)!
-
-    It is assumed batch_size = 1, that is, all variables must represent a single sequence!
-
-    Plot until obs_len points per trajectory. If obs_len != None, we
-    must distinguish between observation (color with a marker) and prediction (same color with another marker)
-    """
-
-    mode = "k1" # unimodal (by default)
-
-    seq_len = obs_traj.shape[0]
-    if seq_len == obs_len:
-        plot_len = 1
-    elif seq_len > obs_len:
-        plot_len = 2
-
-    if len(pred_trajectories.shape) > 1: # != torch.zeros((0))
-        if pred_trajectories.shape[1] == 1: # Output from our model (pred_len x 1 x 2 -> Unimodal)
-            plot_len = 3
-        else: # Output from our model (pred_len x N x 2 -> Multimodal)
-            plot_len = plot_len + pred_trajectories.shape[1] 
-            mode = f"k{pred_trajectories.shape[1]}"
-
-    xcenter, ycenter = map_origin[0].item(), map_origin[1].item()
-
-    x_min = xcenter + dist_rasterized_map[0]
-    x_max = xcenter + dist_rasterized_map[1]
-    y_min = ycenter + dist_rasterized_map[2]
-    y_max = ycenter + dist_rasterized_map[3]
-
-    plot_object_trajectories = True
-    plot_object_heads = True
-
-    fig, ax = plt.subplots(figsize=(6,6), facecolor="white", frameon=False)
-    plt.xlim(x_min, x_max)
-    plt.ylim(y_min, y_max)
-    plt.axis("off") # Comment if you want to generate images with axis
-    if ade_metric and fde_metric:
-        font = {
-                'family': 'serif',
-                'color':  'blue',
-                'weight': 'normal',
-                'size': 16,
-               }
-        plt.title(f"minADE: {round(ade_metric,3)} ; minFDE: {round(fde_metric,3)}", \
-                  fontdict=font, backgroundcolor= 'silver')
-    t0 = time.time()
-
-    object_type_tracker: Dict[int, int] = defaultdict(int)
-
-    seq_list = []
-
-    for i in range(len(object_class_id_list)):
-        abs_traj_ = obs_traj[:,i,:].view(-1,2).unsqueeze(dim=1) # obs_len/seq_len x 1 (emulating batch) x 2 (rel-rel)
-        obj_id = object_class_id_list[i]
-        seq_list.append([obj_id,abs_traj_])
-
-        if obj_id == 1: # Agent
-            if seq_len == obs_len:
-                obs_ = abs_traj_
-            elif seq_len > obs_len:
-                obs_ = abs_traj_[:obs_len,:,:]
-
-            if len(pred_trajectories.shape) > 1: # != torch.zeros((0))
-                if pred_trajectories.shape[1] == 1: # Output from our model (pred_len x 1 x 2 -> Unimodal
-                    agent_traj_with_pred = torch.cat((obs_,pred_trajectories),dim=0)
-                    agent_pred_abs = agent_traj_with_pred[obs_len:,:]
-                else: # Output from our model (pred_len x N x 2 -> Multimodal)
-                    agent_pred_abs = []
-
-                    for t in range(pred_trajectories.shape[1]): # num_modes
-                        pred_traj_ = pred_trajectories[:,t,:].unsqueeze(dim=1) # 30 x 1 x 2 (each mode)
-                        agent_traj_with_pred = torch.cat((obs_,pred_traj_),dim=0)
-                        agent_pred_abs_ = agent_traj_with_pred[obs_len:,:]
-
-                        agent_pred_abs.append(agent_pred_abs_)
-
-    # Plot all the tracks up till current frame
-
-    for seq_id in seq_list:
-        object_type = translate_object_type(int(seq_id[0]))
-        seq_abs = seq_id[1]
-
-        if seq_len > obs_len:
-            obs_x, obs_y = seq_abs[:obs_len,0,0] + xcenter, seq_abs[:obs_len,0,1] + ycenter
-            pred_gt_x, pred_gt_y = seq_abs[obs_len:,0,0] + xcenter, seq_abs[obs_len:,0,1] + ycenter
-        elif seq_len == obs_len:
-            obs_x, obs_y = seq_abs[:,0,0] + xcenter, seq_abs[:,0,1] + ycenter
-
-        i_mm = 0
-
-        if plot_object_trajectories:
-            for i in range(plot_len):
-                if i == 0: # obs
-                    marker_type_index = 0
-                    cor_x, cor_y = obs_x, obs_y 
-                elif i == 1 and (seq_len > obs_len): # pred (gt)
-                    marker_type_index = 1
-                    cor_x, cor_y = pred_gt_x, pred_gt_y
-                elif i >= 2 and object_type == "AGENT": # pred (model) At this moment, only target AGENT
-                    marker_type_index = 2
-                    if pred_trajectories.shape[1] == 1: # Unimodal
-                        cor_x, cor_y = agent_pred_abs[:,0,0] + xcenter, agent_pred_abs[:,0,1] + ycenter
-                    else: # Multimodal
-                        agent_pred_abs_ = agent_pred_abs[i_mm]
-                        cor_x, cor_y = agent_pred_abs_[:,0,0] + xcenter, agent_pred_abs_[:,0,1] + ycenter
-                        i_mm += 1
-                else:
-                    continue
-
-                colour,linewidth,marker_type,marker_size,transparency = MARKER_DICT[object_type][marker_type_index]
-
-                if smoothen:
-                    if cor_x.device.type != "cpu": cor_x = cor_x.to("cpu")
-                    if cor_y.device.type != "cpu": cor_y = cor_y.to("cpu")
-
-                    polyline = np.column_stack((cor_x, cor_y))
-                    num_points = cor_x.shape[0] * 3
-                    smooth_polyline = interpolate_polyline(polyline, num_points)
-
-                    cor_x, cor_y = smooth_polyline[:,0], smooth_polyline[:,1]
-
-                    plt.plot(
-                        cor_x,
-                        cor_y,
-                        "-",
-                        color=colour,
-                        label=object_type if not object_type_tracker[object_type] else "",
-                        alpha=transparency,
-                        linewidth=linewidth,
-                        zorder=ZORDER[object_type],
-                    )
-                else:
-                    if cor_x.device.type != "cpu": cor_x = cor_x.to("cpu")
-                    if cor_y.device.type != "cpu": cor_y = cor_y.to("cpu")
-                    plt.scatter(cor_x, cor_y, c=colour, s=scatter_size, alpha=transparency)
-
-                if plot_object_heads:
-                    final_pos_x, final_pos_y = cor_x[-1], cor_y[-1]
-                    
-                    plt.plot(
-                        final_pos_x,
-                        final_pos_y,
-                        marker_type,
-                        color=colour,
-                        label=object_type if not object_type_tracker[object_type] else "",
-                        alpha=transparency,
-                        markersize=marker_size,
-                        zorder=ZORDER[object_type],
-                    )
-
-        object_type_tracker[object_type] += 1
-
-    # Merge local driveable information and trajectories information
-    
-    ## Read map
-
-    img_map = cv2.imread(filename)
-    if rot_angle == 90:
-        img_map = cv2.rotate(img_map, cv2.ROTATE_90_CLOCKWISE)
-    elif rot_angle == 180:
-        img_map = cv2.rotate(img_map, cv2.ROTATE_180)
-    elif rot_angle == 270 or rot_angle == -90:
-        img_map = cv2.rotate(img_map, cv2.ROTATE_90_COUNTERCLOCKWISE)
-    else: # -1 (default)
-        rot_angle = 0
-
-    ## Foreground (Trajectories)
-
-    ### TODO: Is it possible to optimize this saving without padding? save -> read -> destroy
-
-    plt.savefig("evaluate/argoverse/aux.png", bbox_inches='tight', facecolor=fig.get_facecolor(), 
-                edgecolor='none', pad_inches=0)
-    img_trajectories = cv2.imread("evaluate/argoverse/aux.png")
-    os.system("rm -rf evaluate/argoverse/aux.png")
-    img_trajectories = cv2.resize(img_trajectories, img_map.shape[:2][::-1]) # ::-1 to invert (we need width,height, not height,width!) 
-    img2gray = cv2.cvtColor(img_trajectories,cv2.COLOR_BGR2GRAY)
-    ret,mask = cv2.threshold(img2gray,253,255,cv2.THRESH_BINARY_INV)
-    img2_fg = cv2.bitwise_and(img_trajectories,img_trajectories,mask=mask)
-
-    ## Background (Map lanes)
-
-    mask_inv = cv2.bitwise_not(mask)
-    img1_bg = cv2.bitwise_and(img_map,img_map,mask=mask_inv)
-
-    ## Merge
- 
-    if abs(dist_rasterized_map[0]) == 40: # Right now the preprocessed map images are generated
-        # based on a [40,-40,40,-40] top view image. Then, we can merge the information
-        full_img_cv = cv2.add(img1_bg,img2_fg)
-    else: # TODO: Preprocess here the map? That would be too slow ...
-        full_img_cv = img_trajectories 
-
-    if save:
-        curr_seq = filename.split('/')[-1].split('.')[0]
-
-        output_dir = os.path.join(results_path,"data_images_trajs/")
-        # results_path = os.path.join(*filename.split('/')[:-2],"data_images_trajs/")
-        if not os.path.exists(output_dir):
-            print("Create trajs folder: ", output_dir)
-            os.makedirs(output_dir) # makedirs creates intermediate folders
- 
-        if data_aug:
-            filename2 = output_dir + curr_seq + "_" + str(rot_angle) + "_aug" + ".png"
-        elif len(agent_traj_with_pred) != 1:
-            filename2 = output_dir + curr_seq + f"_qualitative_{mode}" + ".png"
-        else:
-            filename2 = output_dir + curr_seq + "_original" + ".png"
-
-        cv2.imwrite(filename2,full_img_cv)
-
-        if change_bg:
-            full_img_cv_inverted = change_bg_color(full_img_cv)
-
-            aux = filename2.split('.png')[0]
-            filename2_inv = aux+"_inverted.png"
-            cv2.imwrite(filename2_inv,full_img_cv_inverted)
-
-    resized_full_img_cv = cv2.resize(full_img_cv,(224,224))
-    norm_resized_full_img_cv = resized_full_img_cv / 255.0
-    
-    plt.cla()
-    plt.close('all')
-
-    return norm_resized_full_img_cv
-
-## Plot standard Argoverse
+# Main plot function (Standard visualization in Argoverse)
 
 def viz_predictions_all(
         seq_id: int,
@@ -322,14 +93,15 @@ def viz_predictions_all(
         target_abs: np.ndarray, # Around 0,0
         object_class_list: np.ndarray,
         city_name: str,
-        map_origin,
+        map_origin: np.ndarray,
         avm,
         dist_rasterized_map: int = None,
-        centerlines: np.ndarray = np.array([]),
+        relevant_centerlines_abs: np.ndarray = np.array([]),
         show: bool = False,
         save: bool = False,
         ade_metric: float = None,
         fde_metric: float = None,
+        worst_scenes: list = [],
 ) -> None:
     """Visualize predicted trjectories.
     Args:
@@ -440,17 +212,32 @@ def viz_predictions_all(
 
         # Centerlines (Optional)
         
-        if len(centerlines) > 0:
-            for j in range(len(centerlines[i])):
+        # TODO: Prepare this code to deal with batch size != 1
+        if len(relevant_centerlines_abs) > 0:
+            for j in range(len(relevant_centerlines_abs[:,0,:,:])):
+                centerline = relevant_centerlines_abs[j,0,:,:]
                 plt.plot(
-                    centerlines[i][j][:, 0],
-                    centerlines[i][j][:, 1],
+                    centerline[:, 0],
+                    centerline[:, 1],
                     "--",
-                    color="grey",
+                    color="black",
                     alpha=1,
                     linewidth=1,
-                    zorder=0,
+                    zorder=16,
                 )
+
+                # Goal point (end point of plausible centerline)
+
+                plt.plot(
+                    centerline[-1, 0],
+                    centerline[-1, 1],
+                    "*",
+                    color="black",
+                    alpha=1,
+                    linewidth=1,
+                    zorder=16,
+                )
+
         if object_type == "AGENT":
             # Multimodal prediction (only AGENT of interest)
             for num_mode in range(output.shape[0]):
@@ -502,12 +289,17 @@ def viz_predictions_all(
         plt.show()
 
     if save:
-        output_dir = os.path.join(results_path,"data_images_trajs/")
+        if worst_scenes:
+            subfolder = "data_images_worst_trajs"
+        else:
+            subfolder = "data_images_trajs"
+
+        output_dir = os.path.join(results_path,subfolder)
         if not os.path.exists(output_dir):
             print("Create trajs folder: ", output_dir)
             os.makedirs(output_dir) # makedirs creates intermediate folders
 
-        filename = os.path.join(results_path,"data_images_trajs",str(seq_id)+".png")
+        filename = os.path.join(results_path,subfolder,str(seq_id)+".png")
         plt.savefig(filename, bbox_inches='tight', facecolor=fig.get_facecolor(), edgecolor='none', pad_inches=0)
 
     plt.cla()

@@ -25,11 +25,14 @@ from prodict import Prodict
 
 import pandas as pd
 import numpy as np
+import cv2
 
 from sklearn.metrics.pairwise import euclidean_distances
 
 # Plot imports
 
+import matplotlib
+matplotlib.use('agg')
 import matplotlib.pyplot as plt
 
 # Custom imports
@@ -61,9 +64,9 @@ config.dataset.start_from_percentage = 0.0
 
 # Preprocess data
                          # Split, Process, Split percentage
-splits_to_process = dict({"train":[True,1.0], # 0.01 (1 %), 0.1 (10 %), 1.0 (100 %)
-                          "val":[True,1.0],
-                          "test":[False,1.0]})
+splits_to_process = dict({"train":[True,0.01], # 0.01 (1 %), 0.1 (10 %), 1.0 (100 %)
+                          "val":  [True,0.01],
+                          "test": [False,1.0]})
 modes_centerlines = ["test"] # "train","test" 
 # if train -> compute the best candidate (oracle), only using the "competition" algorithm
 # if test, return N plausible candidates. Choose between "competition", "map_api" and "get_around" algorithms
@@ -165,6 +168,13 @@ for split_name,features in splits_to_process.items():
             map_info = dict()
             oracle_centerlines_list = []
 
+            # output_dir = os.path.join(BASE_DIR,f"data/datasets/argoverse/motion-forecasting/{split_name}/map_features")
+            output_dir = os.path.join(BASE_DIR,f"data/datasets/argoverse/motion-forecasting/{split_name}/map_features_gray")
+
+            if not os.path.exists(output_dir):
+                print("Create trajs folder: ", output_dir)
+                os.makedirs(output_dir) # makedirs creates intermediate folders
+
             for i, file_id in enumerate(file_id_list):
                 # print(f"File {file_id} -> {i+1}/{len(file_id_list)}")
 
@@ -196,8 +206,6 @@ for split_name,features in splits_to_process.items():
                     # Map features extraction
 
                     if file_id != -1:
-                    # if file_id == 1:
-                    # if file_id < 3:
                         map_features, map_feature_helpers = map_features_utils_instance.compute_map_features(
                                 agent_track,
                                 file_id,
@@ -310,16 +318,21 @@ for split_name,features in splits_to_process.items():
                                 
                                 if relevant_centerline_filtered.shape[0] != max_points:
                                     try:
-                                        interpolated_centerline = map_features_utils_instance.interpolate_centerline(split_name,
-                                                                                                                     file_id,
-                                                                                                                     relevant_centerline_filtered,
-                                                                                                                     agent_xy,
-                                                                                                                     obs_len,
-                                                                                                                     obs_len + pred_len,
+                                        # start = time.time()
+
+                                        interpolated_centerline = map_features_utils_instance.interpolate_centerline(relevant_centerline_filtered,
                                                                                                                      max_points=max_points,
+                                                                                                                     agent_xy=agent_xy,
+                                                                                                                     obs_len=obs_len,
+                                                                                                                     seq_len=obs_len+pred_len,
+                                                                                                                     split=split_name,
+                                                                                                                     seq_id=file_id,
                                                                                                                      viz=viz)
 
-                                        assert interpolated_centerline.shape[0] == 40
+                                        # end = time.time()
+                                        # print("Time consumed by interpolation: ", end-start)
+
+                                        assert interpolated_centerline.shape[0] == max_points
 
                                         relevant_centerlines_filtered.append(interpolated_centerline)
                                     except:
@@ -378,11 +391,14 @@ for split_name,features in splits_to_process.items():
                             plt.ylim(ymin, ymax)
                             plt.axis("off")
 
-                            output_dir = os.path.join(BASE_DIR,f"data/datasets/argoverse/motion-forecasting/{split_name}/map_features")
                             filename = os.path.join(output_dir,f"{file_id}_binary_plausible_area_filtered.png")
                             # plt.savefig(filename, bbox_inches='tight', facecolor=fig.get_facecolor(), edgecolor='none', pad_inches=0)
-                            
-                            # plt.close('all')
+                            fig.tight_layout(pad=0)
+                            fig.canvas.draw()
+                            img_gray = cv2.cvtColor(np.asarray(fig.canvas.buffer_rgba()), cv2.COLOR_RGBA2GRAY)
+
+                            cv2.imwrite(filename, img_gray)
+                            plt.close('all')
 
                             plt.arrow(
                                 agent_xy[obs_len-1,0], # Arrow origin
@@ -461,8 +477,8 @@ for split_name,features in splits_to_process.items():
                                     zorder=15,
                                 )
 
-                            plt.savefig(filename, bbox_inches='tight', facecolor=fig.get_facecolor(), edgecolor='none', pad_inches=0)
-                            plt.close('all')
+                            # plt.savefig(filename, bbox_inches='tight', facecolor=fig.get_facecolor(), edgecolor='none', pad_inches=0)
+                            # plt.close('all')
 
                             # plt.xlabel("Map X")
                             # plt.ylabel("Map Y")
@@ -570,16 +586,19 @@ for split_name,features in splits_to_process.items():
                             
                             if oracle_centerline_filtered.shape[0] != max_points:
                                 try:
-                                    interpolated_centerline = map_features_utils_instance.interpolate_centerline(split_name,
-                                                                                                                 file_id,
-                                                                                                                 oracle_centerline_filtered,
-                                                                                                                 agent_xy,
-                                                                                                                 obs_len,
-                                                                                                                 obs_len + pred_len,
+                                    # start = time.time()
+                                    interpolated_centerline = map_features_utils_instance.interpolate_centerline(relevant_centerline_filtered,
                                                                                                                  max_points=max_points,
+                                                                                                                 agent_xy=agent_xy,
+                                                                                                                 obs_len=obs_len,
+                                                                                                                 seq_len=obs_len+pred_len,
+                                                                                                                 split=split_name,
+                                                                                                                 seq_id=file_id,
                                                                                                                  viz=viz)
-
-                                    assert interpolated_centerline.shape[0] == 40
+                                    # end = time.time()
+                                    # print("Time consumed by interpolation: ", end-start)
+                                    pdb.set_trace()
+                                    assert interpolated_centerline.shape[0] == max_points
 
                                     oracle_centerlines_list.append(interpolated_centerline)
                                 except:
@@ -606,20 +625,20 @@ for split_name,features in splits_to_process.items():
                             Estimated time to finish ({files_remaining} files): {round(time_per_iteration*files_remaining/60)} min")
                     print("Wrong centerlines: ", wrong_centerlines) 
 
-            # Save only the oracle (best possible centerline) as a np.array -> num_sequences x 40 x 2 
-            if mode == "train":
-                if debug:
-                    filename = os.path.join(BASE_DIR,config.dataset.path,split_name,
-                                            f"data_processed_{str(int(features[1]*100))}_percent","debug_oracle_centerlines.npy")
-                else:
-                    filename = os.path.join(BASE_DIR,config.dataset.path,split_name,
-                                            f"data_processed_{str(int(features[1]*100))}_percent","oracle_centerlines.npy")
-                with open(filename, 'wb') as my_file: np.save(my_file, oracle_centerlines_list)
+            # Save only the oracle (best possible centerline) as a np.array -> num_sequences x max_points x 2 
+            # if mode == "train":
+            #     if debug:
+            #         filename = os.path.join(BASE_DIR,config.dataset.path,split_name,
+            #                                 f"data_processed_{str(int(features[1]*100))}_percent","debug_oracle_centerlines.npy")
+            #     else:
+            #         filename = os.path.join(BASE_DIR,config.dataset.path,split_name,
+            #                                 f"data_processed_{str(int(features[1]*100))}_percent","oracle_centerlines.npy")
+            #     with open(filename, 'wb') as my_file: np.save(my_file, oracle_centerlines_list)
 
-            # Save N centerlines per sequence. Note that the number of variables per sequence may vary
-            elif mode == "test":
-                filename = os.path.join(BASE_DIR,config.dataset.path,split_name,
-                                        f"data_processed_{str(int(features[1]*100))}_percent","relevant_centerlines.npz")
-                with open(filename, 'wb') as my_file: np.savez(my_file, map_info)
+            # # Save N centerlines per sequence. Note that the number of variables per sequence may vary
+            # elif mode == "test":
+            #     filename = os.path.join(BASE_DIR,config.dataset.path,split_name,
+            #                             f"data_processed_{str(int(features[1]*100))}_percent","relevant_centerlines.npz")
+            #     with open(filename, 'wb') as my_file: np.savez(my_file, map_info)
             
             

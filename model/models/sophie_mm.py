@@ -520,7 +520,7 @@ class TrajectoryGenerator(nn.Module):
         else:
             self.decoder = Multimodal_DecoderLSTM(PHYSICAL_CONTEXT=self.physical_context)
 
-    def forward(self, obs_traj, obs_traj_rel, seq_start_end, agent_idx, phy_info=None, relevant_centerlines=None):
+    def forward(self, obs_traj, obs_traj_rel, seq_start_end, agent_idx, phy_info=None, relevant_centerlines=[]):
         """
         """
 
