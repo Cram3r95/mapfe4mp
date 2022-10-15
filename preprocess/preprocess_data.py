@@ -65,7 +65,7 @@ config.dataset.start_from_percentage = 0.0
 # Preprocess data
                          # Split, Process, Split percentage
 splits_to_process = dict({"train":[True,0.01], # 0.01 (1 %), 0.1 (10 %), 1.0 (100 %)
-                          "val":  [True,0.01],
+                          "val":  [False,0.01],
                           "test": [False,1.0]})
 modes_centerlines = ["test"] # "train","test" 
 # if train -> compute the best candidate (oracle), only using the "competition" algorithm
