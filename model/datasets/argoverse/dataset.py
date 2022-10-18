@@ -228,13 +228,15 @@ def seq_collate(data):
 
     first_obs = obs_traj[0,:,:] # 1 x agents · batch_size x 2
 
+    DEBUG_TIME = False
+
     if (PHYSICAL_CONTEXT == "visual"  # batch_size x channels x height x width 
      or PHYSICAL_CONTEXT == "goals" # batch_size x num_goal_points x 2 (x|y) (real-world coordinates (HDmap))
      or PHYSICAL_CONTEXT == "plausible_centerlines+area"): #  
         phy_info = dataset_utils.load_physical_information(num_seq_list, obs_traj, obs_traj_rel, pred_traj_gt, pred_traj_gt_rel, first_obs, map_origin,
                                                            dist_rasterized_map, object_class_id_list, DATA_IMGS_FOLDER,
                                                            physical_context=PHYSICAL_CONTEXT,relevant_centerlines=relevant_centerlines,
-                                                           DEBUG_IMAGES=False, DEBUG_TIME=True)
+                                                           DEBUG_IMAGES=False, DEBUG_TIME=DEBUG_TIME)
         if PHYSICAL_CONTEXT != "plausible_centerlines+area":
             # Here we have a np.array, only number
             phy_info = torch.from_numpy(phy_info).type(torch.float32)
@@ -251,8 +253,9 @@ def seq_collate(data):
         phy_info = torch.from_numpy(phy_info).type(torch.float32)
 
     end_2 = time.time()
-    print(f">>>>>>>>>>>>>> Time consumed by load physical information function: {end_2-start_2}\n")
-    pdb.set_trace()
+
+    if DEBUG_TIME: print(f">>>>>>>>>>>>>> Time consumed by load physical information function: {end_2-start_2}\n")
+    # pdb.set_trace()
     num_seq_list = torch.stack(num_seq_list)
     norm = torch.stack(norm)
 

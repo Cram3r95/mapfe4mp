@@ -61,7 +61,7 @@ parser.add_argument("--split", required=True, default="val", type=str)
 
 avm = ArgoverseMap()
 
-LIMIT_FILES = -1 # From 1 to num_files.
+LIMIT_FILES = 150 # From 1 to num_files.
                  # -1 by default to analyze all files of the specified split percentage
 
 OBS_ORIGIN = 20
@@ -353,7 +353,7 @@ def evaluate(loader, generator, config, split, current_cuda, pred_len, results_p
                 # Argoverse standard plot
 
                 relevant_centerlines_abs = relevant_centerlines.cpu().numpy() + map_origin.cpu().numpy()
-
+                pdb.set_trace()
                 plot_functions.viz_predictions_all(seq_id,
                                                    results_path,
                                                    obs_traj.permute(1,0,2).cpu().numpy(), # All obstacles
@@ -495,7 +495,7 @@ def main(args):
         print("Create results path folder: ", results_path)
         os.makedirs(results_path) # os.makedirs create intermediate directories. os.mkdir only the last one
 
-    if config.dataset.split == "test":
+    if config.dataset.split == "test" and SAVE_METRICS:
         # Generate h5 file for Argoverse Motion-Forecasting competition (only test split)   
 
         generate_forecasting_h5(output_predictions, results_path, probabilities=output_probabilities)
@@ -518,8 +518,9 @@ python evaluate/argoverse/generate_results_rel-rel.py \
 --device_gpu 0 --split "val"
 """
 
+# Bad at this moment (check the input centerlines)
 """
 python evaluate/argoverse/generate_results_rel-rel.py \
 --model_path "save/argoverse/sophie_mm/100.0_percent/test_with_centerlines_and_pa/argoverse_motion_forecasting_dataset_0_with_model.pt" \
---device_gpu 0 --split "val"
+--device_gpu 2 --split "test"
 """

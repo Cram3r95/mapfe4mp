@@ -271,6 +271,26 @@ class MapFeaturesUtils:
         ]
         return sorted_lane_seqs, sorted_scores
 
+    def sort_lanes_based_on_point_in_polygon_score_custom(self, centerlines,xy_seq,city_name,avm):
+        """
+        """
+
+        lane_seq_polygon = [Polygon(centerline) for centerline in centerlines]
+
+        polygons = list(lane_seq_polygon)
+
+        list_contains = []
+
+        for polygon in polygons:
+            point_in_polygon_score = 0
+            for xy in xy_seq:
+                if polygon.contains(Point(xy)):
+                    point_in_polygon_score += 1
+            list_contains.append(point_in_polygon_score)
+
+        print("list_contains: ", list_contains)
+        pdb.set_trace()
+
     def get_heuristic_centerlines_for_test_set(
             self,
             lane_seqs: List[List[int]],
@@ -343,16 +363,31 @@ class MapFeaturesUtils:
         acceleration of the agent in the last observation point
         """
 
-        x = agent_seq[:obs_len,0]
-        y = agent_seq[:obs_len,1]
+        # https://en.wikipedia.org/wiki/Speed_limits_in_the_United_States_by_jurisdiction
+        # 1 miles per hour (mph) ~= 1.609 kilometers per hour (kph)
+        # Common speed limits in the USA (in highways): 70 - 80 mph -> (112 kph - 129 kph) -> (31.29 m/s - 35.76 m/s)
+        # The average is around 120 kph -> 33.33 m/s, so if the vehicle is accelerating strongly (in the observation has reached the 
+        # maximum velocity), we assume the GT will be without acceleration (e.g. Seq 188893 in train). The maximum prediction horizon
+        # should be around 100 m.
+
+        #                            | (Limit of observation)
+        #                            v
+        # ... . . .  .  .  .    .    .    .     .     .      .      .      .      .      .      .      .  
+        # [     Observation data     ][                       Groundtruth data                         ]
+
+        x = agent_seq[:,0]
+        y = agent_seq[:,1]
         xy = np.vstack((x, y))
 
+        extended_xy_f = np.array([])
+        num_points_trajectory = agent_seq.shape[0]
+
         if filter == "savgol":
-            xy_f = savgol_filter(xy, window_length=int(obs_len/4), polyorder=3, axis=1)
+            xy_f = savgol_filter(xy, window_length=int(num_points_trajectory/4), polyorder=3, axis=1)
         elif filter == "cubic_spline":
-            points = np.arange(obs_len)
-            upsampled_num_points_ = upsampling_factor*obs_len # We upsample the frequency to estimate more
-            # points from the given observation data
+            points = np.arange(agent_seq.shape[0])
+            upsampled_num_points_ = upsampling_factor*num_points_trajectory # We upsample the frequency to estimate more
+                                                                            # points from the given observation data
             period = period / upsampling_factor
 
             upsampled_points = np.linspace(points.min(), points.max(), upsampled_num_points_)
@@ -362,10 +397,10 @@ class MapFeaturesUtils:
 
             xy_f = np.vstack((up_x,up_y))
 
-            obs_len = upsampled_num_points_
+            num_points_trajectory = upsampled_num_points_
         elif filter == "savgol+cubic_spline":
-            points = np.arange(obs_len)
-            upsampled_num_points_ = upsampling_factor*obs_len # We upsample the frequency to estimate more
+            points = np.arange(num_points_trajectory)
+            upsampled_num_points_ = upsampling_factor*num_points_trajectory # We upsample the frequency to estimate more
             # points from the given observation data
             period = period / upsampling_factor
 
@@ -374,22 +409,28 @@ class MapFeaturesUtils:
             up_x = sp.interpolate.interp1d(points,x,kind='cubic')(upsampled_points)
             up_y = sp.interpolate.interp1d(points,y,kind='cubic')(upsampled_points)
 
-            obs_len = upsampled_num_points_
+            num_points_trajectory = upsampled_num_points_
 
             xy_f = np.vstack((up_x,up_y))
-            xy_f = savgol_filter(xy_f, window_length=int(obs_len/4), polyorder=3, axis=1)
+            xy_f = savgol_filter(xy_f, window_length=int(num_points_trajectory/4), polyorder=3, axis=1)
         elif filter == "least_squares":
-            t = np.linspace(1,obs_len, obs_len)
-            px = np.poly1d(np.polyfit(t,x,3))
-            py = np.poly1d(np.polyfit(t,y,3))
+            polynomial_order = 2
+            # print("Polynomial order: ", polynomial_order)
+            t = np.linspace(1, num_points_trajectory, num_points_trajectory)
+            px = np.poly1d(np.polyfit(t,x,polynomial_order))
+            py = np.poly1d(np.polyfit(t,y,polynomial_order))
 
             xy_f = np.vstack((px(t),py(t)))
+
+            seq_len = 50
+            t2 = np.linspace(1, seq_len, seq_len)
+            extended_xy_f = np.vstack((px(t2),py(t2)))
         else: # No filter, original data
             xy_f = xy
 
         obs_seq_f = xy_f
 
-        vel_f = np.zeros((obs_len-1))
+        vel_f = np.zeros((num_points_trajectory-1))
         for i in range(1,obs_seq_f.shape[1]):
             x_pre, y_pre = obs_seq_f[:,i-1]
             x_curr, y_curr = obs_seq_f[:,i]
@@ -399,7 +440,7 @@ class MapFeaturesUtils:
             curr_vel = dist / period
             vel_f[i-1] = curr_vel
         
-        acc_f = np.zeros((obs_len-2))
+        acc_f = np.zeros((num_points_trajectory-2))
         for i in range(1,len(vel_f)):
             vel_pre = vel_f[i-1]
             vel_curr = vel_f[i]
@@ -410,52 +451,113 @@ class MapFeaturesUtils:
             acc_f[i-1] = curr_acc
 
         min_weight = 1
-        max_weight = 2
+        max_weight = 4
 
-        vel_f_averaged = np.average(vel_f,weights=np.linspace(min_weight,max_weight,len(vel_f))) 
+        if filter == "least_squares":
+            # Theoretically, if the points are computed using Least Squares with a Polynomial with order >= 2,
+            # the velocity in the last observation should be fine, since you are taking into account the 
+            # acceleration (either negative or positive)
+
+            vel_f_averaged = vel_f[-1]
+        else:
+            vel_f_averaged = np.average(vel_f,weights=np.linspace(min_weight,max_weight,len(vel_f))) 
+
         acc_f_averaged = np.average(acc_f,weights=np.linspace(min_weight,max_weight,len(acc_f)))
+        acc_f_averaged_aux = acc_f_averaged
+        if vel_f_averaged > 35 and acc_f_averaged > 5:
+            acc_f_averaged = 0 # The vehicle cannot drive faster in this problem!
+                               # This is an assumption!
 
         if debug:
             print("Filter: ", filter)
             # print("xy_f: ", xy_f)
+            print("Min weight, max weight: ", min_weight, max_weight)
             print("Vel: ", vel_f)
+            print("vel averaged: ", vel_f_averaged)
             print("Acc: ", acc_f)
+            print("acc averaged: ", acc_f_averaged)
 
             obs_len = 20
             pred_len = 30
             freq = 10
 
             dist_around_wo_acc = vel_f_averaged * (pred_len/freq)
-            dist_around_acc = vel_f_averaged * (pred_len/freq) + 1/2 * acc_f_averaged * (pred_len/freq)**2
+
+            dist_around_acc = vel_f_averaged * (pred_len/freq) + 1/2 * acc_f_averaged_aux * (pred_len/freq)**2
 
             print("Estimated horizon without acceleration: ", dist_around_wo_acc)
             print("Estimated horizon with acceleration: ", dist_around_acc)
 
-            plt.plot(
-                    xy_f[0, :],
-                    xy_f[1, :],
-                    ".",
-                    color="b",
-                    alpha=1,
-                    linewidth=3,
-                    zorder=15,
-                )
+            if extended_xy_f.size > 0:
+                fig, (ax1, ax2) = plt.subplots(1, 2)
 
-            for i in range(xy_f.shape[1]):
-                plt.text(xy_f[0,i],xy_f[1,i],i)
+                ax1.plot(
+                        xy_f[0, :],
+                        xy_f[1, :],
+                        ".",
+                        color="b",
+                        alpha=1,
+                        linewidth=3,
+                        zorder=15,
+                    )
 
-            x_min = min(xy_f[0,:])
-            x_max = max(xy_f[0,:])
-            y_min = min(xy_f[1,:])
-            y_max = max(xy_f[1,:])
+                for i in range(xy_f.shape[1]):
+                    plt.text(xy_f[0,i],xy_f[1,i],i)
 
-            plt.xlim(x_min, x_max)
-            plt.ylim(y_min, y_max)
+                x_min = min(xy_f[0,:])
+                x_max = max(xy_f[0,:])
+                y_min = min(xy_f[1,:])
+                y_max = max(xy_f[1,:])
 
-        min_weight = 1
-        max_weight = 2
+                plt.xlim(x_min, x_max)
+                plt.ylim(y_min, y_max)
 
-        return vel_f_averaged, acc_f_averaged
+                ax2.plot(
+                        extended_xy_f[0, :],
+                        extended_xy_f[1, :],
+                        ".",
+                        color="r",
+                        alpha=1,
+                        linewidth=3,
+                        zorder=15,
+                    )
+
+                for i in range(extended_xy_f.shape[1]):
+                    plt.text(extended_xy_f[0,i],extended_xy_f[1,i],i)
+
+                x_min = min(extended_xy_f[0,:])
+                x_max = max(extended_xy_f[0,:])
+                y_min = min(extended_xy_f[1,:])
+                y_max = max(extended_xy_f[1,:])
+
+                plt.xlim(x_min, x_max)
+                plt.ylim(y_min, y_max)
+            else:
+                plt.plot(
+                        xy_f[0, :],
+                        xy_f[1, :],
+                        ".",
+                        color="b",
+                        alpha=1,
+                        linewidth=3,
+                        zorder=15,
+                    )
+
+                for i in range(xy_f.shape[1]):
+                    plt.text(xy_f[0,i],xy_f[1,i],i)
+
+                x_min = min(xy_f[0,:])
+                x_max = max(xy_f[0,:])
+                y_min = min(xy_f[1,:])
+                y_max = max(xy_f[1,:])
+
+                plt.xlim(x_min, x_max)
+                plt.ylim(y_min, y_max)
+
+        xy_f = xy_f.T # TODO: Check the above xy_f and transform from 2 x 20 to 20 x 2 (easy to read)
+        extended_xy_f = extended_xy_f.T
+
+        return vel_f_averaged, acc_f_averaged, xy_f, extended_xy_f
 
     def interpolate_centerline(self,centerline,max_points=40,agent_xy=None,obs_len=None,seq_len=None,split=None,seq_id=None,viz=False):
         """
@@ -568,16 +670,6 @@ class MapFeaturesUtils:
 
         lane_dir_vector = agent_xy[obs_len-1,:] - agent_xy[obs_len-2,:]
         yaw = math.atan2(lane_dir_vector[1],lane_dir_vector[0])
-
-        # yaw_aux = math.pi/2 - yaw # In order to align the data with the vertical axis
-        # R = map_features_utils_instance.rotz2D(yaw)
-        # start_oracle = oracle_centerline[0,:]
-
-        # oracle_centerline_aux = []
-        # oracle_centerline_aux.append(np.dot(R,oracle_centerline.T).T)
-        # agent_xy_aux = np.dot(R,agent_xy.T).T
-
-        # map_features_utils_instance.debug_centerline_and_agent(oracle_centerline_aux, agent_xy_aux, obs_len, obs_len+pred_len, split_name, file_id)
 
         return lane_dir_vector, yaw
 
@@ -740,13 +832,6 @@ class MapFeaturesUtils:
 
         plt.savefig(filename, bbox_inches='tight', facecolor=fig.get_facecolor(), edgecolor='none', pad_inches=0)
 
-    def apply_rot(self,pos,R):
-        """
-        Multiply the rotation matrix by the position
-        """
-        pdb.set_trace()
-        return np.dot(R,pos)
-
     def get_closest_wp(self, pos, centerline):
         """
         """
@@ -807,16 +892,42 @@ class MapFeaturesUtils:
 
         traj_len = xy.shape[0]
         agent_traj = copy.deepcopy(xy)
+        
         if debug: # If debug, compute the centerlines with only the observation data 
                   # (even with train and val)
             xy = xy[:obs_len,:]
 
-        vel, acc = self.get_agent_velocity_and_acceleration(xy[:obs_len,:],
-                                                                filter="least_squares")
-        dist_around = vel * (pred_len/freq) + 1/2 * acc * (pred_len/freq)**2
+        # Filter agent's trajectory (smooth)
 
+        vel, acc, xy_filtered, extended_xy_filtered = self.get_agent_velocity_and_acceleration(xy,
+                                                                                               filter="least_squares",
+                                                                                               debug=True)
+                                                                                               
+        dist_around = vel * (pred_len/freq) + 1/2 * acc * (pred_len/freq)**2
+        # print("dist around: ", dist_around)
         if dist_around < min_dist_around:
             dist_around = min_dist_around
+
+        ## Roughly compute the distance travelled with naive polynomial extension
+
+        distance_travelled = 0
+        max_dist = 100 # Hypothesis: max distance in 3 s
+
+        index_max_dist = -1
+
+        for i in range(extended_xy_filtered.shape[0]-1):
+            if i >= obs_len:
+                dist = np.linalg.norm((extended_xy_filtered[i+1,:] - extended_xy_filtered[i,:]))
+                distance_travelled += dist
+
+                if distance_travelled > max_dist and index_max_dist == -1:
+                    index_max_dist = i
+
+        reference_point = extended_xy_filtered[index_max_dist,:]
+
+        # Compute agent's orientation
+
+        lane_dir_vector, yaw = self.get_yaw(xy_filtered, obs_len)
 
         if algorithm == "competition":
         # Compute centerlines (oracle or N) using Argoverse Forecasting baseline
@@ -824,7 +935,7 @@ class MapFeaturesUtils:
             # Get all lane candidates within a bubble
 
             curr_lane_candidates = avm.get_lane_ids_in_xy_bbox(
-                xy[-1, 0], xy[-1, 1], city_name, self._MANHATTAN_THRESHOLD)
+                xy_filtered[-1, 0], xy_filtered[-1, 1], city_name, self._MANHATTAN_THRESHOLD)
 
             # Keep expanding the bubble until at least 1 lane is found
 
@@ -832,7 +943,7 @@ class MapFeaturesUtils:
                 and self._MANHATTAN_THRESHOLD < max_search_radius):
                 self._MANHATTAN_THRESHOLD *= 2
                 curr_lane_candidates = avm.get_lane_ids_in_xy_bbox(
-                    xy[-1, 0], xy[-1, 1], city_name, self._MANHATTAN_THRESHOLD)
+                    xy_filtered[-1, 0], xy_filtered[-1, 1], city_name, self._MANHATTAN_THRESHOLD)
 
             assert len(curr_lane_candidates) > 0, "No nearby lanes found!!"
 
@@ -874,12 +985,12 @@ class MapFeaturesUtils:
 
             # Sort lanes based on point in polygon score
             obs_pred_lanes, scores = self.sort_lanes_based_on_point_in_polygon_score(
-                obs_pred_lanes, xy, city_name, avm)
+                obs_pred_lanes, xy_filtered, city_name, avm)
 
             # If the best centerline is not along the direction of travel, re-sort
             if mode == "test":
                 candidate_centerlines = self.get_heuristic_centerlines_for_test_set(
-                    obs_pred_lanes, xy, city_name, avm, max_candidates, scores)
+                    obs_pred_lanes, xy_filtered, city_name, avm, max_candidates, scores)
             else:
                 candidate_centerlines = avm.get_cl_from_lane_seq(
                     [obs_pred_lanes[0]], city_name)
@@ -889,12 +1000,12 @@ class MapFeaturesUtils:
 
             # Get all lane candidates within a bubble
             manhattan_threshold = 5.0
-            curr_lane_candidates = avm.get_lane_ids_in_xy_bbox(xy[-1, 0], xy[-1, 1], city_name, manhattan_threshold)
+            curr_lane_candidates = avm.get_lane_ids_in_xy_bbox(xy_filtered[-1, 0], xy_filtered[-1, 1], city_name, manhattan_threshold)
 
             # Keep expanding the bubble until at least 1 lane is found
             while len(curr_lane_candidates) < 1 and manhattan_threshold < max_search_radius:
                 manhattan_threshold *= 2
-                curr_lane_candidates = avm.get_lane_ids_in_xy_bbox(xy[-1, 0], xy[-1, 1], city_name, manhattan_threshold)
+                curr_lane_candidates = avm.get_lane_ids_in_xy_bbox(xy_filtered[-1, 0], xy_filtered[-1, 1], city_name, manhattan_threshold)
 
             assert len(curr_lane_candidates) > 0, "No nearby lanes found!!"
 
@@ -904,7 +1015,7 @@ class MapFeaturesUtils:
                 
             dfs_threshold_front = dist_around
             dfs_threshold_back = dist_around
-            
+
             # DFS to get all successor and predecessor candidates
             obs_pred_lanes: List[List[int]] = []
             for lane in curr_lane_candidates:
@@ -921,31 +1032,42 @@ class MapFeaturesUtils:
             obs_pred_lanes = remove_overlapping_lane_seq(obs_pred_lanes)
 
             # Remove unnecessary extended predecessors
-            obs_pred_lanes = avm.remove_extended_predecessors(obs_pred_lanes, xy, city_name)
+            obs_pred_lanes = avm.remove_extended_predecessors(obs_pred_lanes, xy_filtered, city_name)
 
             # Getting candidate centerlines
             candidate_cl = avm.get_cl_from_lane_seq(obs_pred_lanes, city_name)
 
             # Reduce the number of candidates based on distance travelled along the centerline
-            candidate_centerlines = filter_candidate_centerlines(xy, candidate_cl)
+            candidate_centerlines = filter_candidate_centerlines(xy_filtered, candidate_cl)
 
             # If no candidate found using above criteria, take the onces along with travel is the maximum
             if len(candidate_centerlines) < 1:
-                candidate_centerlines = get_centerlines_most_aligned_with_trajectory(xy, candidate_cl)
+                candidate_centerlines = get_centerlines_most_aligned_with_trajectory(xy_filtered, candidate_cl)
+
+            ## Additional ##
+
+            # Sort centerlines based on the distance to the naive reference point (after extension)
+
+            distances = []
+            for centerline in candidate_centerlines:
+                distances.append(min(np.linalg.norm((centerline - reference_point),axis=1)))
+            
+            unique_distances = list(set(distances))
+
+            final_indeces = [np.where(distances == unique_distance)[0][0] for unique_distance in unique_distances]
+
+            final_candidates = []
+            for index in final_indeces:
+                final_candidates.append(candidate_centerlines[index])
+
+            candidate_centerlines = final_candidates
 
         elif algorithm == "get_around":
         # Compute the lanes around a given position given a specific distance
 
-            vel, acc = self.get_agent_velocity_and_acceleration(xy[:obs_len,:],
-                                                                filter="least_squares")
-            dist_around = vel * (pred_len/freq) + 1/2 * acc * (pred_len/freq)**2
-
-            if dist_around < min_dist_around:
-                dist_around = min_dist_around
-
             dist_rasterized_map = [-dist_around,dist_around,-dist_around,dist_around]
 
-            xcenter, ycenter = xy[obs_len-1, 0], xy[obs_len-1, 1]
+            xcenter, ycenter = xy_filtered[obs_len-1, 0], xy_filtered[obs_len-1, 1]
             x_min = xcenter + dist_rasterized_map[0]
             x_max = xcenter + dist_rasterized_map[1]
             y_min = ycenter + dist_rasterized_map[2]
@@ -961,6 +1083,11 @@ class MapFeaturesUtils:
             lane_ids = []
             obs_pred_lanes: List[Sequence[int]] = []
 
+            yaw_aux = math.pi/2 - yaw # In order to align the data with the vertical axis
+            R = self.rotz2D(yaw_aux)
+
+            last_obs = xy_filtered[-1,:]
+
             for lane_id, lane_props in seq_lane_props.items():
                 lane_cl = lane_props.centerline
 
@@ -973,11 +1100,22 @@ class MapFeaturesUtils:
                     lane_ids.append(lane_id)
             candidate_centerlines = lane_centerlines
 
-        # Compute agent orientation
+            
+            agent_traj = np.dot(R,agent_traj.T).T
+            agent_traj -= last_obs
 
-        lane_dir_vector, yaw = self.get_yaw(xy, obs_len)
-        yaw_aux = math.pi/2 - yaw # In order to align the data with the vertical axis
-    
+            ### Filter centerline which start point is in front of the agent last observation
+
+            # yaw_aux = math.pi/2 - yaw # In order to align the data with the vertical axis
+            # R = map_features_utils_instance.rotz2D(yaw)
+            # start_oracle = oracle_centerline[0,:]
+
+            # oracle_centerline_aux = []
+            # oracle_centerline_aux.append(np.dot(R,oracle_centerline.T).T)
+            # agent_xy_aux = np.dot(R,agent_xy.T).T
+
+            # map_features_utils_instance.debug_centerline_and_agent(oracle_centerline_aux, agent_xy_aux, obs_len, obs_len+pred_len, split_name, file_id)
+
         if viz:
             fig, ax = plt.subplots(figsize=(6,6), facecolor="black")
 
@@ -986,38 +1124,45 @@ class MapFeaturesUtils:
 
             # Paint centerlines
 
-            for centerline_coords in candidate_centerlines:
-                visualize_centerline(centerline_coords) # Uncomment this to check the start and end
+            if len(candidate_centerlines) > 0:
+                for centerline_index, centerline_coords in enumerate(candidate_centerlines):
+                    visualize_centerline(centerline_coords) # Uncomment this to check the start and end
 
-                if np.min(centerline_coords[:,0]) < xmin: xmin = np.min(centerline_coords[:,0])
-                if np.min(centerline_coords[:,1]) < ymin: ymin = np.min(centerline_coords[:,1])
-                if np.max(centerline_coords[:,0]) > xmax: xmax = np.max(centerline_coords[:,0])
-                if np.max(centerline_coords[:,1]) > ymax: ymax = np.max(centerline_coords[:,1])
+                    if np.min(centerline_coords[:,0]) < xmin: xmin = np.min(centerline_coords[:,0])
+                    if np.min(centerline_coords[:,1]) < ymin: ymin = np.min(centerline_coords[:,1])
+                    if np.max(centerline_coords[:,0]) > xmax: xmax = np.max(centerline_coords[:,0])
+                    if np.max(centerline_coords[:,1]) > ymax: ymax = np.max(centerline_coords[:,1])
 
-                lane_polygon = centerline_to_polygon(centerline_coords)
+                    lane_polygon = centerline_to_polygon(centerline_coords)
 
-                                                                          #"black"  
-                ax.fill(lane_polygon[:, 0], lane_polygon[:, 1], "white", edgecolor='white', fill=True)
-                ax.plot(centerline_coords[:, 0], centerline_coords[:, 1], "-", color="gray", linewidth=1.5, alpha=1.0, zorder=2)
+                                                                            #"black"  
+                    ax.fill(lane_polygon[:, 0], lane_polygon[:, 1], "white", edgecolor='white', fill=True)
+
+                    if centerline_index == 0:
+                        ax.plot(centerline_coords[:, 0], centerline_coords[:, 1], "-", color="red", linewidth=3, alpha=1.0, zorder=4)
+                    elif centerline_index < max_candidates:
+                        ax.plot(centerline_coords[:, 0], centerline_coords[:, 1], "-", color="green", linewidth=3, alpha=1.0, zorder=3)
+                    else:
+                        ax.plot(centerline_coords[:, 0], centerline_coords[:, 1], "-", color="gray", linewidth=1.5, alpha=1.0, zorder=2)
+
+                plt.xlim(xmin, xmax)
+                plt.ylim(ymin, ymax)
+                plt.axis("off")
 
             # Paint agent's orientation
 
-            dx = lane_dir_vector[0] * 10
-            dy = lane_dir_vector[1] * 10
+            # dx = lane_dir_vector[0] * 10
+            # dy = lane_dir_vector[1] * 10
 
-            plt.arrow(
-                xy[obs_len-1,0], # Arrow origin
-                xy[obs_len-1,1],
-                dx, # Length of the arrow
-                dy,
-                color="darkmagenta",
-                width=1.0,
-                zorder=16,
-            )
-
-            plt.xlim(xmin, xmax)
-            plt.ylim(ymin, ymax)
-            plt.axis("off")
+            # plt.arrow(
+            #     xy_filtered[obs_len-1,0], # Arrow origin
+            #     xy_filtered[obs_len-1,1],
+            #     dx, # Length of the arrow
+            #     dy,
+            #     color="darkmagenta",
+            #     width=1.0,
+            #     zorder=16,
+            # )
 
             if algorithm == "map_api":
                 filename = os.path.join(output_dir,f"{seq_id}_binary_plausible_area.png")
@@ -1036,7 +1181,7 @@ class MapFeaturesUtils:
                     zorder=15,
                 )
 
-                # Agent prediction
+                # Agent prediction (GT)
 
                 plt.plot(
                     agent_traj[obs_len:, 0],
@@ -1062,6 +1207,19 @@ class MapFeaturesUtils:
                     markersize=5,
                     zorder=15,
                 )
+
+                ## Extended Agent's trajectory filtered
+
+                if extended_xy_filtered.size > 0:
+                    plt.plot(
+                        extended_xy_filtered[:, 0],
+                        extended_xy_filtered[::, 1],
+                        "-",
+                        color="purple",
+                        alpha=1,
+                        linewidth=3,
+                        zorder=16,
+                    )
             else: # test
                 # Agent observation
                 
@@ -1089,6 +1247,19 @@ class MapFeaturesUtils:
                     markersize=5,
                     zorder=15,
                 )
+
+                ## Extended Agent's trajectory filtered
+
+                if extended_xy_filtered.size > 0:
+                    plt.plot(
+                        extended_xy_filtered[:, 0],
+                        extended_xy_filtered[::, 1],
+                        "-",
+                        color="purple",
+                        alpha=1,
+                        linewidth=3,
+                        zorder=16,
+                    )
 
             plt.xlabel("Map X")
             plt.ylabel("Map Y")
@@ -1187,7 +1358,8 @@ class MapFeaturesUtils:
                 max_search_radius=self._MAX_SEARCH_RADIUS_CENTERLINES,
                 seq_len=seq_len,
                 mode=mode,
-                split=split
+                split=split,
+                algorithm=algorithm
             )[0]
             candidate_centerlines = [np.full((seq_len, 2), None)]
             candidate_nt_distances = [np.full((seq_len, 2), None)]
@@ -1196,6 +1368,7 @@ class MapFeaturesUtils:
             oracle_nt_dist = get_nt_distance(agent_xy,
                                              oracle_centerline,
                                              viz=viz)
+        print("Candidates: ", len(candidate_centerlines))
 
         map_feature_helpers = {
             "ORACLE_CENTERLINE": oracle_centerline,
