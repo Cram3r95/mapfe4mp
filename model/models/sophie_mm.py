@@ -24,11 +24,12 @@ NUM_MODES = 6
 OBS_LEN = 20
 PRED_LEN = 30
 NUM_PLAUSIBLE_AREA_POINTS = 512
+CENTERLINE_LENGTH = 30 # Starting from the last observation
 
 MLP_DIM = 64
 H_DIM = 128
 EMBEDDING_DIM = 16
-CONV_FILTERS = 60 # 60
+CONV_FILTERS = 8 # 60
 
 APPLY_DROPOUT = True
 DROPOUT = 0.4
@@ -233,6 +234,9 @@ class Multimodal_DecoderLSTM(nn.Module):
                 pred.append(Linear(self.h_dim, self.data_dim*self.pred_len))
             self.hidden2pos = nn.ModuleList(pred) 
 
+        self.ln1 = nn.LayerNorm(self.data_dim*self.num_modes)
+        self.ln2 = nn.LayerNorm(self.h_dim)
+
         self.confidences = nn.Linear(self.h_dim, self.num_modes)
 
     def forward(self, last_obs, last_obs_rel, state_tuple):
@@ -249,7 +253,9 @@ class Multimodal_DecoderLSTM(nn.Module):
         last_obs_rel = last_obs_rel.view(1, batch_size, -1)
 
         pred_traj_fake_rel = []
-        decoder_input = F.leaky_relu(self.spatial_embedding(last_obs_rel.contiguous().view(batch_size, -1))) 
+        # decoder_input = F.leaky_relu(self.spatial_embedding(last_obs_rel.contiguous().view(batch_size, -1))) 
+        decoder_input = F.tanh(self.spatial_embedding(self.ln1(last_obs_rel.contiguous().view(batch_size, -1)))) 
+        self.ln1
         if APPLY_DROPOUT: decoder_input = F.dropout(decoder_input, p=DROPOUT, training=self.training)
         decoder_input = decoder_input.contiguous().view(1, batch_size, self.embedding_dim)
 
@@ -281,9 +287,11 @@ class Multimodal_DecoderLSTM(nn.Module):
 
                     rel_pos = torch.cat(rel_pos,dim=1)   
                 elif HEAD == "SingleLinear":
-                    rel_pos = self.hidden2pos(state_tuple_h_.contiguous().view(-1, self.h_dim))
+                    rel_pos = self.hidden2pos(self.ln2(state_tuple_h_.contiguous().view(-1, self.h_dim)))
 
-                decoder_input = F.leaky_relu(self.spatial_embedding(rel_pos.contiguous().view(batch_size, -1)))
+                # decoder_input = F.leaky_relu(self.spatial_embedding(rel_pos.contiguous().view(batch_size, -1)))
+                decoder_input = F.tanh(self.spatial_embedding(self.ln1(rel_pos.contiguous().view(batch_size, -1)))) 
+
                 if APPLY_DROPOUT: decoder_input = F.dropout(decoder_input, p=DROPOUT, training=self.training)
                 decoder_input = decoder_input.contiguous().view(1, batch_size, self.embedding_dim)           
                 pred_traj_fake_rel.append(rel_pos.contiguous().view(batch_size,-1))
@@ -418,7 +426,7 @@ class Centerline_Encoder(nn.Module):
         self.data_dim = DATA_DIM
         self.num_filters = CONV_FILTERS
         self.kernel_size = 3
-        self.lane_length = 40
+        self.lane_length = CENTERLINE_LENGTH
 
         self.pooling_size = 2
 
@@ -453,6 +461,7 @@ class Centerline_Encoder(nn.Module):
         self.linear = nn.Linear(self.num_filters*aux_length,self.h_dim)
         self.bn = nn.BatchNorm1d(self.h_dim)
         self.tanh = torch.nn.Tanh()
+        self.leaky_relu = nn.LeakyReLU(0.1)
 
     def forward(self, phy_info):
         """
@@ -460,18 +469,39 @@ class Centerline_Encoder(nn.Module):
 
         batch_size = phy_info.shape[0]
 
-        phy_info_ = self.conv1(phy_info.permute(0,2,1))
-        phy_info_ = self.maxpooling1(phy_info_)
-        phy_info_ = self.conv2(phy_info_)
-        phy_info_ = self.maxpooling2(phy_info_)
-        phy_info_ = self.conv3(phy_info_)
+        # phy_info_ = self.conv1(phy_info.permute(0,2,1))
+        # phy_info_ = self.maxpooling1(phy_info_)
+        # phy_info_ = self.conv2(phy_info_)
+        # phy_info_ = self.maxpooling2(phy_info_)
+        # phy_info_ = self.conv3(phy_info_)
 
-        phy_info_ = self.linear(phy_info_.view(batch_size,-1))
-        phy_info_ = self.bn(phy_info_)
-        phy_info_ = self.tanh(phy_info_)
-        phy_info_ = F.dropout(phy_info_, p=DROPOUT, training=self.training)
+        # phy_info_ = self.linear(phy_info_.view(batch_size,-1))
+        # phy_info_ = self.bn(phy_info_)
+        # phy_info_ = self.tanh(phy_info_)
+        # phy_info_ = F.dropout(phy_info_, p=DROPOUT, training=self.training)
 
-        return phy_info_
+        # if torch.any(phy_info_.isnan()):
+        #     pdb.set_trace()
+
+        # return phy_info_
+
+        phy_info_a = self.conv1(phy_info.permute(0,2,1))
+        phy_info_b = self.maxpooling1(phy_info_a)
+        phy_info_b = self.leaky_relu(phy_info_b)
+        phy_info_c = self.conv2(phy_info_b)
+        phy_info_d = self.maxpooling2(phy_info_c)
+        phy_info_d = self.leaky_relu(phy_info_d)
+        phy_info_e = self.conv3(phy_info_d)
+
+        phy_info_1 = self.linear(phy_info_e.view(batch_size,-1))
+        phy_info_2 = self.bn(phy_info_1)
+        phy_info_2 = self.leaky_relu(phy_info_2)
+        phy_info_3 = F.dropout(phy_info_2, p=DROPOUT, training=self.training)
+
+        if torch.any(phy_info_3.isnan()):
+            pdb.set_trace()
+
+        return phy_info_3
         
 class TrajectoryGenerator(nn.Module):
     def __init__(self, PHYSICAL_CONTEXT="dummy"):
@@ -540,6 +570,9 @@ class TrajectoryGenerator(nn.Module):
 
         encoded_social_info = torch.cat(out_self_attention,dim=0) # batch_size · num_agents x num_inputs_decoder · hidden_dim
 
+        if torch.any(encoded_social_info.isnan()):
+            pdb.set_trace()
+
         if np.any(agent_idx): # single agent
             encoded_social_info = encoded_social_info[agent_idx,:]
  
@@ -568,6 +601,7 @@ class TrajectoryGenerator(nn.Module):
         
         elif self.physical_context == "oracle":
             encoded_phy_info = self.centerline_encoder(phy_info)
+
             mlp_decoder_context_input = torch.cat([encoded_social_info.contiguous().view(-1,self.h_dim),
                                                    encoded_phy_info.contiguous().view(-1,self.h_dim)],
                                                    dim=1)

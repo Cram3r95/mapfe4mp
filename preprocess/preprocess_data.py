@@ -64,8 +64,8 @@ config.dataset.start_from_percentage = 0.0
 
 # Preprocess data
                          # Split, Process, Split percentage
-splits_to_process = dict({"train":[True,1.0], # 0.01 (1 %), 0.1 (10 %), 1.0 (100 %)
-                          "val":  [False,0.01],
+splits_to_process = dict({"train":[False,0.01], # 0.01 (1 %), 0.1 (10 %), 1.0 (100 %)
+                          "val":  [True,0.01],
                           "test": [False,1.0]})
 modes_centerlines = ["test"] # "train","test" 
 # if train -> compute the best candidate (oracle), only using the "competition" algorithm
@@ -79,12 +79,12 @@ pred_len = 30 # steps
 freq = 10 # Hz ("steps/s")
 obs_origin = 20 
 min_dist_around = 25
-max_points = 40
+max_points = pred_len # In order to match with the number of future steps in Argoverse
 min_points = 4 # to perform a cubic interpolation you need at least 3 points
+algorithm = "map_api"
 
 viz = False
 limit_qualitative_results = 150
-debug = False
 check_every = 0.1 # % of total files
 
 RAW_DATA_FORMAT = {
@@ -178,8 +178,7 @@ for split_name,features in splits_to_process.items():
             for i, file_id in enumerate(file_id_list):
                 # print(f"File {file_id} -> {i+1}/{len(file_id_list)}")
 
-                # if file_id != -1:
-                if file_id == 188893:
+                if file_id != -1:
 
                     if limit_qualitative_results != -1 and i+1 > limit_qualitative_results:
                         viz = False
@@ -201,9 +200,20 @@ for split_name,features in splits_to_process.items():
                     first_obs = agent_xy[0,:]
                     last_obs = agent_xy[obs_origin-1,:]
 
-                    # TODO: This is wrong -> Compute the orientation using the filtered observation, not 
-                    # the raw data
-                    lane_dir_vector, yaw = map_features_utils_instance.get_yaw(agent_xy, obs_len)
+                    # Filter agent's trajectory (smooth)
+
+                    vel, acc, xy_filtered, extended_xy_filtered = map_features_utils_instance.get_agent_velocity_and_acceleration(agent_xy[:obs_len,:],
+                                                                                                                                  filter="least_squares",
+                                                                                                                                  debug=False)
+                                                                                                        
+                    dist_around = vel * (pred_len/freq) + 1/2 * acc * (pred_len/freq)**2
+
+                    if dist_around < min_dist_around:
+                        dist_around = min_dist_around
+
+                    # Compute agent's orientation
+
+                    lane_dir_vector, yaw = map_features_utils_instance.get_yaw(xy_filtered, obs_len)
 
                     for mode in modes_centerlines:
                         # Map features extraction
@@ -218,7 +228,7 @@ for split_name,features in splits_to_process.items():
                                 mode,
                                 avm,
                                 viz,
-                                algorithm="map_api" # competition, map_api, get_around
+                                algorithm=algorithm # competition, map_api, get_around
                             )
 
                         if mode == "test": # preprocess N plausible centerlines
@@ -226,26 +236,19 @@ for split_name,features in splits_to_process.items():
                             start_ = time.time()
 
                             relevant_centerlines = map_feature_helpers["CANDIDATE_CENTERLINES"]  
-                            pdb.set_trace()
+
                             seq_map_info = dict()
                             relevant_centerlines_filtered = []                 
 
-                            for relevant_centerline in relevant_centerlines:
+                            for index_centerline, relevant_centerline in enumerate(relevant_centerlines):
                                 # Get index of the closest waypoint to the first observation
                                 
-                                closest_wp_first, _ = map_features_utils_instance.get_closest_wp(first_obs, relevant_centerline)
+                                closest_wp_first, _ = map_features_utils_instance.get_closest_wp(last_obs, relevant_centerline)
 
                                 # Get index of the closest waypoint to the last observation + dist_around
                             
                                 closest_wp_last, dist_array_last = map_features_utils_instance.get_closest_wp(last_obs, relevant_centerline)
                                 dist_array_last = dist_array_last[closest_wp_last:] # To determine dist around from this point
-
-                                # TODO: The acceleration is quite noisy. Improve this calculation
-                                vel, acc = map_features_utils_instance.get_agent_velocity_and_acceleration(agent_xy[:obs_len,:],
-                                                                                                        filter="least_squares")                         
-                                dist_around = vel * (pred_len/freq) + 1/2 * acc * (pred_len/freq)**2
-                                if dist_around < min_dist_around:
-                                    dist_around = min_dist_around
 
                                 idx, value = find_nearest(dist_array_last,dist_around)
                                 num_points = idx + (closest_wp_last - closest_wp_first)
@@ -337,6 +340,14 @@ for split_name,features in splits_to_process.items():
                                         assert interpolated_centerline.shape[0] == max_points
 
                                         relevant_centerlines_filtered.append(interpolated_centerline)
+
+                                        # Store oracle
+
+                                        if index_centerline == 0 and algorithm == "map_api": 
+                                            # The first centerline also corresponds to the oracle using map_api
+
+                                            oracle_centerlines_list.append(interpolated_centerline)
+
                                     except:
                                         # TODO: Take the closest max_points if the previous algorithm fails
                                         
@@ -347,6 +358,13 @@ for split_name,features in splits_to_process.items():
                                 else:
                                     # print("The algorithm has the exact number of points")
                                     relevant_centerlines_filtered.append(relevant_centerline_filtered)            
+
+                                    # Store oracle
+
+                                    if index_centerline == 0 and algorithm == "map_api": 
+                                        # The first centerline also corresponds to the oracle using map_api
+
+                                        oracle_centerlines_list.append(relevant_centerline_filtered)
 
                             seq_map_info["relevant_centerlines_filtered"] = relevant_centerlines_filtered
 
@@ -393,14 +411,14 @@ for split_name,features in splits_to_process.items():
                             plt.ylim(ymin, ymax)
                             plt.axis("off")
 
-                            filename = os.path.join(output_dir,f"{file_id}_binary_plausible_area_filtered.png")
+                            filename = os.path.join(output_dir,f"{file_id}_binary_plausible_area_filtered_gray.png")
                             # plt.savefig(filename, bbox_inches='tight', facecolor=fig.get_facecolor(), edgecolor='none', pad_inches=0)
                             fig.tight_layout(pad=0)
                             fig.canvas.draw()
                             img_gray = cv2.cvtColor(np.asarray(fig.canvas.buffer_rgba()), cv2.COLOR_RGBA2GRAY)
 
                             cv2.imwrite(filename, img_gray)
-                            plt.close('all')
+                            # plt.close('all')
 
                             plt.arrow(
                                 agent_xy[obs_len-1,0], # Arrow origin
@@ -479,8 +497,17 @@ for split_name,features in splits_to_process.items():
                                     zorder=15,
                                 )
 
+                            filename = os.path.join(output_dir,f"{file_id}_binary_plausible_area_filtered_color.png")
                             # plt.savefig(filename, bbox_inches='tight', facecolor=fig.get_facecolor(), edgecolor='none', pad_inches=0)
-                            # plt.close('all')
+
+                            lane_polygon = centerline_to_polygon(relevant_centerlines_filtered[0])
+                            ax.fill(lane_polygon[:, 0], lane_polygon[:, 1], "green", edgecolor='green', fill=True)
+                            fig.tight_layout(pad=0)
+                            fig.canvas.draw()
+                            img_bgr = cv2.cvtColor(np.asarray(fig.canvas.buffer_rgba()), cv2.COLOR_RGBA2BGR)
+
+                            cv2.imwrite(filename, img_bgr)
+                            plt.close('all')
 
                             # plt.xlabel("Map X")
                             # plt.ylabel("Map Y")
@@ -493,7 +520,7 @@ for split_name,features in splits_to_process.items():
                             # print("Time consumed: ", end_-start_)
 
                             map_info[str(file_id)] = seq_map_info 
-                        
+
                         elif mode == "train": # only best centerline ("oracle")
                             start_ = time.time()
 
@@ -507,13 +534,6 @@ for split_name,features in splits_to_process.items():
                             
                             closest_wp_last, dist_array_last = map_features_utils_instance.get_closest_wp(last_obs, oracle_centerline)
                             dist_array_last = dist_array_last[closest_wp_last:] # To determine dist around from this point
-
-                            # TODO: The acceleration is quite noisy. Improve this calculation
-                            vel, acc = map_features_utils_instance.get_agent_velocity_and_acceleration(agent_xy[:obs_len,:],
-                                                                                                    filter="least_squares")                         
-                            dist_around = vel * (pred_len/freq) + 1/2 * acc * (pred_len/freq)**2
-                            if dist_around < min_dist_around:
-                                dist_around = min_dist_around
 
                             idx, value = find_nearest(dist_array_last,dist_around)
                             num_points = idx + (closest_wp_last - closest_wp_first)
@@ -599,7 +619,7 @@ for split_name,features in splits_to_process.items():
                                                                                                                     viz=viz)
                                     # end = time.time()
                                     # print("Time consumed by interpolation: ", end-start)
-                                    pdb.set_trace()
+
                                     assert interpolated_centerline.shape[0] == max_points
 
                                     oracle_centerlines_list.append(interpolated_centerline)
@@ -627,14 +647,12 @@ for split_name,features in splits_to_process.items():
                                 Estimated time to finish ({files_remaining} files): {round(time_per_iteration*files_remaining/60)} min")
                         print("Wrong centerlines: ", wrong_centerlines) 
 
+            # TODO: At this moment, both train and test use the same algorithm
+
             # Save only the oracle (best possible centerline) as a np.array -> num_sequences x max_points x 2 
             if mode == "train":
-                if debug:
-                    filename = os.path.join(BASE_DIR,config.dataset.path,split_name,
-                                            f"data_processed_{str(int(features[1]*100))}_percent","debug_oracle_centerlines.npy")
-                else:
-                    filename = os.path.join(BASE_DIR,config.dataset.path,split_name,
-                                            f"data_processed_{str(int(features[1]*100))}_percent","oracle_centerlines.npy")
+                filename = os.path.join(BASE_DIR,config.dataset.path,split_name,
+                                        f"data_processed_{str(int(features[1]*100))}_percent","oracle_centerlines.npy")
                 with open(filename, 'wb') as my_file: np.save(my_file, oracle_centerlines_list)
 
             # Save N centerlines per sequence. Note that the number of variables per sequence may vary
@@ -642,5 +660,15 @@ for split_name,features in splits_to_process.items():
                 filename = os.path.join(BASE_DIR,config.dataset.path,split_name,
                                         f"data_processed_{str(int(features[1]*100))}_percent","relevant_centerlines.npz")
                 with open(filename, 'wb') as my_file: np.savez(my_file, map_info)
+
+                # If method is least_squares and map_api, we assume the first centerline returned by the 
+                # algorithm will be also the oracle (most plausible)
+
+                if algorithm == "map_api":
+                    filename = os.path.join(BASE_DIR,config.dataset.path,split_name,
+                                        f"data_processed_{str(int(features[1]*100))}_percent","oracle_centerlines.npy")
+                    oracle_centerlines_array = np.array(oracle_centerlines_list)
+                    with open(filename, 'wb') as my_file: np.save(my_file, oracle_centerlines_array)
+
             
             

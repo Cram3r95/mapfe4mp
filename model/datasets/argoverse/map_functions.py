@@ -271,26 +271,6 @@ class MapFeaturesUtils:
         ]
         return sorted_lane_seqs, sorted_scores
 
-    def sort_lanes_based_on_point_in_polygon_score_custom(self, centerlines,xy_seq,city_name,avm):
-        """
-        """
-
-        lane_seq_polygon = [Polygon(centerline) for centerline in centerlines]
-
-        polygons = list(lane_seq_polygon)
-
-        list_contains = []
-
-        for polygon in polygons:
-            point_in_polygon_score = 0
-            for xy in xy_seq:
-                if polygon.contains(Point(xy)):
-                    point_in_polygon_score += 1
-            list_contains.append(point_in_polygon_score)
-
-        print("list_contains: ", list_contains)
-        pdb.set_trace()
-
     def get_heuristic_centerlines_for_test_set(
             self,
             lane_seqs: List[List[int]],
@@ -366,14 +346,18 @@ class MapFeaturesUtils:
         # https://en.wikipedia.org/wiki/Speed_limits_in_the_United_States_by_jurisdiction
         # 1 miles per hour (mph) ~= 1.609 kilometers per hour (kph)
         # Common speed limits in the USA (in highways): 70 - 80 mph -> (112 kph - 129 kph) -> (31.29 m/s - 35.76 m/s)
-        # The average is around 120 kph -> 33.33 m/s, so if the vehicle is accelerating strongly (in the observation has reached the 
-        # maximum velocity), we assume the GT will be without acceleration (e.g. Seq 188893 in train). The maximum prediction horizon
-        # should be around 100 m.
+        # The average is around 120 kph -> 33.33 m/s, so if the vehicle has accelerated strongly (in the last observation has reached the 
+        # maximum velocity), we assume the GT will be without acceleration, that is, braking or stop accelerating positively 
+        # (e.g. Seq 188893 in train). 
+        # The maximum prediction horizon should be around 100 m.
 
         #                            | (Limit of observation)
         #                            v
-        # ... . . .  .  .  .    .    .    .     .     .      .      .      .      .      .      .      .  
-        # [     Observation data     ][                       Groundtruth data                         ]
+        # ... . . .  .  .  .    .    .    .    .    .     .     .     .     .     .     .     .     . (Good interpretation)
+
+        # [     Observation data     ][                       Groundtruth data                      ]  
+
+        # ... . . .  .  .  .    .    .    .     .     .      .       .       .       .       .        .        .          . (Wrong interpretation) 
 
         x = agent_seq[:,0]
         y = agent_seq[:,1]
@@ -855,7 +839,7 @@ class MapFeaturesUtils:
             viz: bool = False,
             max_search_radius: float = 50.0,
             seq_len: int = 50,
-            max_candidates: int = 10,
+            max_candidates: int = 6,
             mode: str = "test",
             split: str = "train",
             algorithm: str = "competition", # competition, map_api, get_around
@@ -901,10 +885,10 @@ class MapFeaturesUtils:
 
         vel, acc, xy_filtered, extended_xy_filtered = self.get_agent_velocity_and_acceleration(xy,
                                                                                                filter="least_squares",
-                                                                                               debug=True)
+                                                                                               debug=False)
                                                                                                
         dist_around = vel * (pred_len/freq) + 1/2 * acc * (pred_len/freq)**2
-        # print("dist around: ", dist_around)
+
         if dist_around < min_dist_around:
             dist_around = min_dist_around
 
@@ -1053,7 +1037,10 @@ class MapFeaturesUtils:
                 distances.append(min(np.linalg.norm((centerline - reference_point),axis=1)))
             
             unique_distances = list(set(distances))
+            unique_distances.sort()
+            unique_distances = unique_distances[:max_candidates]
 
+            # print("unique distances: ", unique_distances)
             final_indeces = [np.where(distances == unique_distance)[0][0] for unique_distance in unique_distances]
 
             final_candidates = []
@@ -1100,10 +1087,6 @@ class MapFeaturesUtils:
                     lane_ids.append(lane_id)
             candidate_centerlines = lane_centerlines
 
-            
-            agent_traj = np.dot(R,agent_traj.T).T
-            agent_traj -= last_obs
-
             ### Filter centerline which start point is in front of the agent last observation
 
             # yaw_aux = math.pi/2 - yaw # In order to align the data with the vertical axis
@@ -1149,7 +1132,7 @@ class MapFeaturesUtils:
                 plt.ylim(ymin, ymax)
                 plt.axis("off")
 
-            # Paint agent's orientation
+            ## Paint agent's orientation
 
             # dx = lane_dir_vector[0] * 10
             # dy = lane_dir_vector[1] * 10
@@ -1164,9 +1147,9 @@ class MapFeaturesUtils:
             #     zorder=16,
             # )
 
-            if algorithm == "map_api":
-                filename = os.path.join(output_dir,f"{seq_id}_binary_plausible_area.png")
-                plt.savefig(filename, bbox_inches='tight', facecolor=fig.get_facecolor(), edgecolor='none', pad_inches=0)
+            # if algorithm == "map_api":
+            #     filename = os.path.join(output_dir,f"{seq_id}_binary_plausible_area.png")
+            #     plt.savefig(filename, bbox_inches='tight', facecolor=fig.get_facecolor(), edgecolor='none', pad_inches=0)
 
             if agent_traj.shape[0] == seq_len: # train and val
                 # Agent observation
@@ -1272,7 +1255,7 @@ class MapFeaturesUtils:
                 filename = os.path.join(output_dir,f"{seq_id}_relevant_centerlines.png")
             else:
                 filename = os.path.join(output_dir,f"{seq_id}_oracle.png")
-
+            print("filename: ", filename)
             plt.savefig(filename, bbox_inches='tight', facecolor="white", edgecolor='none', pad_inches=0)
 
             plt.show()
@@ -1368,7 +1351,6 @@ class MapFeaturesUtils:
             oracle_nt_dist = get_nt_distance(agent_xy,
                                              oracle_centerline,
                                              viz=viz)
-        print("Candidates: ", len(candidate_centerlines))
 
         map_feature_helpers = {
             "ORACLE_CENTERLINE": oracle_centerline,
