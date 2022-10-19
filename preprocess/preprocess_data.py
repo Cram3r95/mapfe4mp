@@ -64,7 +64,7 @@ config.dataset.start_from_percentage = 0.0
 
 # Preprocess data
                          # Split, Process, Split percentage
-splits_to_process = dict({"train":[False,0.01], # 0.01 (1 %), 0.1 (10 %), 1.0 (100 %)
+splits_to_process = dict({"train":[True,0.01], # 0.01 (1 %), 0.1 (10 %), 1.0 (100 %)
                           "val":  [True,0.01],
                           "test": [False,1.0]})
 modes_centerlines = ["test"] # "train","test" 
@@ -79,7 +79,8 @@ pred_len = 30 # steps
 freq = 10 # Hz ("steps/s")
 obs_origin = 20 
 min_dist_around = 25
-max_points = pred_len # In order to match with the number of future steps in Argoverse
+first_centerline_waypoint = "first_obs"
+max_points = 40 # pred_len # In order to match with the number of future steps in Argoverse
 min_points = 4 # to perform a cubic interpolation you need at least 3 points
 algorithm = "map_api"
 
@@ -243,7 +244,10 @@ for split_name,features in splits_to_process.items():
                             for index_centerline, relevant_centerline in enumerate(relevant_centerlines):
                                 # Get index of the closest waypoint to the first observation
                                 
-                                closest_wp_first, _ = map_features_utils_instance.get_closest_wp(last_obs, relevant_centerline)
+                                if first_centerline_waypoint == "last_obs":
+                                    closest_wp_first, _ = map_features_utils_instance.get_closest_wp(last_obs, relevant_centerline)
+                                elif first_centerline_waypoint == "first_obs":
+                                    closest_wp_first, _ = map_features_utils_instance.get_closest_wp(first_obs, relevant_centerline)
 
                                 # Get index of the closest waypoint to the last observation + dist_around
                             
@@ -528,8 +532,11 @@ for split_name,features in splits_to_process.items():
 
                             # Get index of the closest waypoint to the first observation
                             
-                            closest_wp_first, _ = map_features_utils_instance.get_closest_wp(first_obs, oracle_centerline)
-
+                            if first_centerline_waypoint == "last_obs":
+                                closest_wp_first, _ = map_features_utils_instance.get_closest_wp(last_obs, relevant_centerline)
+                            elif first_centerline_waypoint == "first_obs":
+                                closest_wp_first, _ = map_features_utils_instance.get_closest_wp(first_obs, relevant_centerline)
+                            
                             # Get index of the closest waypoint to the last observation + dist_around
                             
                             closest_wp_last, dist_array_last = map_features_utils_instance.get_closest_wp(last_obs, oracle_centerline)
@@ -658,7 +665,8 @@ for split_name,features in splits_to_process.items():
             # Save N centerlines per sequence. Note that the number of variables per sequence may vary
             elif mode == "test":
                 filename = os.path.join(BASE_DIR,config.dataset.path,split_name,
-                                        f"data_processed_{str(int(features[1]*100))}_percent","relevant_centerlines.npz")
+                                        f"data_processed_{str(int(features[1]*100))}_percent",
+                                        f"relevant_centerlines_{first_centerline_waypoint}_{str(max_points)}_points.npz")
                 with open(filename, 'wb') as my_file: np.savez(my_file, map_info)
 
                 # If method is least_squares and map_api, we assume the first centerline returned by the 
@@ -666,7 +674,8 @@ for split_name,features in splits_to_process.items():
 
                 if algorithm == "map_api":
                     filename = os.path.join(BASE_DIR,config.dataset.path,split_name,
-                                        f"data_processed_{str(int(features[1]*100))}_percent","oracle_centerlines.npy")
+                                        f"data_processed_{str(int(features[1]*100))}_percent",
+                                        f"oracle_centerlines_{first_centerline_waypoint}_{str(max_points)}_points.npy")
                     oracle_centerlines_array = np.array(oracle_centerlines_list)
                     with open(filename, 'wb') as my_file: np.save(my_file, oracle_centerlines_array)
 

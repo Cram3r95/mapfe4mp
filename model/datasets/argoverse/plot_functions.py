@@ -214,6 +214,7 @@ def viz_predictions_all(
         
         # TODO: Prepare this code to deal with batch size != 1
         if len(relevant_centerlines_abs) > 0:
+
             for j in range(len(relevant_centerlines_abs[:,0,:,:])):
                 centerline = relevant_centerlines_abs[j,0,:,:]
                 plt.plot(

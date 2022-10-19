@@ -6,22 +6,16 @@
 
 """
 Created on Fri Feb 25 12:19:38 2022
-@author: Carlos Gómez-Huélamo, Miguel Eduardo Ortiz Huamaní and Marcos V. Conde
+@author: Carlos Gómez-Huélamo
 """
 
 # General purpose imports
 
 import argparse
-import os
-import sys
-import yaml
 import pdb
-import time
-import glob
-import csv
-
-from pathlib import Path
-from prodict import Prodict
+import git
+import sys
+import os
 
 # DL & Math imports
 
@@ -32,36 +26,64 @@ import numpy as np
 
 import matplotlib.pyplot as plt
 
+# Custom imports
+
+repo = git.Repo('.', search_parent_directories=True)
+BASE_DIR = repo.working_tree_dir
+sys.path.append(BASE_DIR)
+
 #######################################
 
-filepath = "results/social_lstm_mhsa/100.0_percent/exp1/val/metrics.csv"
+def plot_metrics_distribution(file_csv):
+    """
+    """
 
-df = pd.read_csv(filepath,sep=" ")
-ade_column = df["ADE"][:-2]
-fde_column = df["FDE"][:-2]
+    root_dir = os.path.join(*file_csv.split('/')[:-1])
 
-fig, ax = plt.subplots(figsize=(6,6), facecolor="white")
+    df = pd.read_csv(file_csv,sep=" ")
+    
+    ade_column = df["ADE"][:-2].astype(float)
+    fde_column = df["FDE"][:-2].astype(float)
 
-plt.xlabel("[m]")
-plt.ylabel("Num sequences")
-plt.xticks(np.arange(0, ade_column.max(), 2))
-plt.title("ADE (Average Displacement Error, [m]) distribution")
-plt.hist(ade_column,bins=100)
-plt.savefig("results/social_lstm_mhsa/100.0_percent/exp1/val/ade.png", 
-             bbox_inches='tight', 
-             facecolor=fig.get_facecolor(), 
-             edgecolor='none', 
-             pad_inches=0)
+    fig, ax = plt.subplots(figsize=(6,6), facecolor="white")
 
-plt.close("all")
+    # Plot ADE (Average Displacement Error) distribution
 
-plt.xlabel("[m]")
-plt.ylabel("Num sequences")
-plt.xticks(np.arange(0, fde_column.max(), 2))
-plt.title("FDE (Final Displacement Error, [m]) distribution")
-plt.hist(fde_column,bins=100)
-plt.savefig("results/social_lstm_mhsa/100.0_percent/exp1/val/fde.png", 
-             bbox_inches='tight', 
-             facecolor=fig.get_facecolor(), 
-             edgecolor='none', 
-             pad_inches=0)
+    plt.xlabel("[m]")
+    plt.ylabel("Num sequences")
+
+    plt.xticks(np.arange(0, ade_column.max(), 2))
+    plt.title("ADE (Average Displacement Error, [m]) distribution")
+    plt.hist(ade_column,bins=100)
+
+    plt.savefig(os.path.join(root_dir,"ade_distribution.png"), 
+                bbox_inches='tight', 
+                facecolor=fig.get_facecolor(), 
+                edgecolor='none', 
+                pad_inches=0)
+
+    plt.close("all")
+
+    # Plot FDE (Final Displacement Error) distribution
+
+    plt.xlabel("[m]")
+    plt.ylabel("Num sequences")
+    plt.xticks(np.arange(0, fde_column.max(), 2))
+    plt.title("FDE (Final Displacement Error, [m]) distribution")
+    plt.hist(fde_column,bins=100)
+    plt.savefig(os.path.join(root_dir,"fde_distribution.png"), 
+                bbox_inches='tight', 
+                facecolor=fig.get_facecolor(), 
+                edgecolor='none', 
+                pad_inches=0)
+
+if __name__ == "__main__":
+    """
+    """
+
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--file_csv", required=True, type=str)
+    args = parser.parse_args()
+    print("args: ", args)
+
+    plot_metrics_distribution(args.file_csv)

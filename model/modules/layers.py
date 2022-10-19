@@ -44,17 +44,17 @@ class Linear(nn.Module):
         self.fa = nn.GELU()
         self.act = act
 
-    #     self.apply(self._init_weights)
+        self.apply(self._init_weights)
 
-    # def _init_weights(self, module):
-    #     """
-    #     """
-    #     classname = module.__class__.__name__
-    #     if classname.find('Linear') != -1:
-    #         try:
-    #             nn.init.kaiming_normal_(module.weight)
-    #         except:
-    #             pdb.set_trace()
+    def _init_weights(self, module):
+        """
+        """
+        classname = module.__class__.__name__
+        if classname.find('Linear') != -1:
+            try:
+                nn.init.kaiming_normal_(module.weight)
+            except:
+                pdb.set_trace()
 
     def forward(self, x):
         out = self.linear(x)

@@ -18,7 +18,7 @@ dataset:
                           # -1.0 if not used
     shuffle: True 
     data_augmentation: True # Rotation, Swapping, Dropout, Gaussian noise
-    class_balance: -1.0 # % of straight trajectories (considering the AGENT). Remaining % are curved trajectories
+    class_balance: 0.6 # % of straight trajectories (considering the AGENT). Remaining % are curved trajectories
                         # (again, considering the AGENT). -1.0 if no class balance is used (get_item takes the corresponding
                         # sequence regardless if it is straight or curved)
     preprocess_data: False
@@ -36,8 +36,8 @@ hyperparameters:
                                      # to encode/decode. 
                                      # Otherwise, use absolute coordinates
 
-    physical_context: "dummy"
-    # physical_context: "oracle"
+    # physical_context: "dummy"
+    physical_context: "oracle"
     # physical_context: "plausible_centerlines+area" # dummy (no physical context, only social), visual, goals, oracle, plausible_centerlines+area
 
     num_modes: 6 # Multimodality
@@ -58,7 +58,7 @@ hyperparameters:
                                     # checkpoint_val_percentage * total_num_iterations
     checkpoint_train_percentage: 0.1 # 0.2 # (0 - 1)
 
-    loss_type_g: "mse_w+nll" # (mse|mse_w), nll, (mse|mse_w)+nll, (mse|mse_w)+fa 
+    loss_type_g: "mse+nll" # (mse|mse_w), nll, (mse|mse_w)+nll, (mse|mse_w)+fa 
     loss_ade_weight: 1.1
     loss_ade_centerlines_weight: 1 
     loss_fde_weight: 1.4
@@ -66,16 +66,16 @@ hyperparameters:
     loss_fa_weight: 1
 
     lr_scheduler: True
-    lr_decay_factor: 0.5
+    lr_decay_factor: 0.5 # 0.5 
     lr_min: 5.0e-5
-    lr_epoch_percentage_patience: 0.15 # (0-N) E.g. If 0.05 -> the patience will be the 5 % of the total epochs
+    lr_epoch_percentage_patience: 0.25 # 0.15 # (0-N) E.g. If 0.05 -> the patience will be the 5 % of the total epochs
     
     g_steps: 1
     clipping_threshold_g: 1.1
     
     save_root_dir: "save/argoverse"
     # exp_name: "test_with_centerlines_and_pa_nll_centerlines" # If no specific exp_name is used, fill with current day and hour
-    exp_name: "test_only_social_2"
+    exp_name: "test_new_oracle_7_with_class_balance_and_linear"
     output_dir: # To be filled in the code (save_root_dir/model_name/split_percentage/exp)
     checkpoint_start_from:
     exp_description:

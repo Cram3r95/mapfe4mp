@@ -39,3 +39,4 @@ evaluate/**/*.h5
 # Qualitative resuts for each model
 
 results/**/*.png
+results/**/*.csv

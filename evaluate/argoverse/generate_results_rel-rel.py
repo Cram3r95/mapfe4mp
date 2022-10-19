@@ -61,7 +61,7 @@ parser.add_argument("--split", required=True, default="val", type=str)
 
 avm = ArgoverseMap()
 
-LIMIT_FILES = 150 # From 1 to num_files.
+LIMIT_FILES = -1 # From 1 to num_files.
                  # -1 by default to analyze all files of the specified split percentage
 
 OBS_ORIGIN = 20
@@ -76,7 +76,7 @@ PLOT_WORST_SCENES = False
 LIMIT_QUALITATIVE_RESULTS = 150
 
 COMPUTE_METRICS = True
-SAVE_METRICS = False
+SAVE_METRICS = True
 
 def generate_csv(results_path,ade_list,fde_list,num_seq_list,traj_kind_list,sort=False):
     """
@@ -352,8 +352,15 @@ def evaluate(loader, generator, config, split, current_cuda, pred_len, results_p
 
                 # Argoverse standard plot
 
-                relevant_centerlines_abs = relevant_centerlines.cpu().numpy() + map_origin.cpu().numpy()
-                pdb.set_trace()
+                if config.hyperparameters.physical_context == "plausible_centerlines+area":
+                    # K centerlines x batch_size x centerline length x 2
+                    relevant_centerlines_abs = relevant_centerlines.cpu().numpy() + map_origin.cpu().numpy()
+                elif config.hyperparameters.physical_context == "oracle":
+                    # 1 centerlines x batch_size x centerline length x 2
+                    relevant_centerlines_abs = phy_info.unsqueeze(0).cpu().numpy() + map_origin.cpu().numpy()
+                else:
+                    relevant_centerlines_abs = []
+                
                 plot_functions.viz_predictions_all(seq_id,
                                                    results_path,
                                                    obs_traj.permute(1,0,2).cpu().numpy(), # All obstacles
@@ -515,6 +522,12 @@ if __name__ == '__main__':
 """
 python evaluate/argoverse/generate_results_rel-rel.py \
 --model_path "save/argoverse/sophie_mm/100.0_percent/test_oracle_check_rel2absmm/argoverse_motion_forecasting_dataset_0_with_model.pt" \
+--device_gpu 0 --split "val"
+"""
+
+"""
+python evaluate/argoverse/generate_results_rel-rel.py \
+--model_path "save/argoverse/sophie_mm/1.0_percent/test_new_oracle_4/argoverse_motion_forecasting_dataset_0_with_model.pt" \
 --device_gpu 0 --split "val"
 """
 
