@@ -396,78 +396,78 @@ def get_driveable_area_and_centerlines(filename, agent_xy_abs, relevant_centerli
 
     start_total = time.time()
 
-    if DEBUG_TIME: print("-------------")
+    # if DEBUG_TIME: print("-------------")
 
-    # 0. Load variables for this sequence and get scales
-
-    start = time.time()
-    relevant_centerlines_filtered = relevant_centerlines["relevant_centerlines_filtered"]
-    center_plausible_area_filtered = relevant_centerlines["center_plausible_area_filtered"]
-    real_world_width = relevant_centerlines["real_world_width"]
-    real_world_height = relevant_centerlines["real_world_height"]
-
-    # rows = height (y in rw) and cols = width (x in rw) of an image
-
-    rows = IMG_ROWS # Default number of rows
-
-    ## Rescale the columns in order to have roughly the same scale in both axis
-
-    cols = math.ceil(rows*(real_world_width/real_world_height)) 
-    scale_x = float(cols/real_world_width) # px/m
-    scale_y = float(rows/real_world_height) # px/m
-    center_px = (int(rows/2),int(cols/2))
-
-    end = time.time()
-    if DEBUG_TIME: print("Time consumed by loading seq info: ", end-start)
-
-    # 1. Load image with plausible binary area filtered
-
-    start = time.time()
-    img_gray = cv2.imread(filename, cv2.IMREAD_GRAYSCALE)
-    end = time.time()
-    time_cv2 = end-start
+    # # 0. Load variables for this sequence and get scales
 
     # start = time.time()
-    # # img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)  
-    # # img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    relevant_centerlines_filtered = relevant_centerlines["relevant_centerlines_filtered"]
+    # center_plausible_area_filtered = relevant_centerlines["center_plausible_area_filtered"]
+    # real_world_width = relevant_centerlines["real_world_width"]
+    # real_world_height = relevant_centerlines["real_world_height"]
+
+    # # rows = height (y in rw) and cols = width (x in rw) of an image
+
+    # rows = IMG_ROWS # Default number of rows
+
+    # ## Rescale the columns in order to have roughly the same scale in both axis
+
+    # cols = math.ceil(rows*(real_world_width/real_world_height)) 
+    # scale_x = float(cols/real_world_width) # px/m
+    # scale_y = float(rows/real_world_height) # px/m
+    # center_px = (int(rows/2),int(cols/2))
+
     # end = time.time()
-    # time_cvtcolor = end-start
+    # if DEBUG_TIME: print("Time consumed by loading seq info: ", end-start)
 
-    start = time.time()
-    img_gray = cv2.resize(img_gray, dsize=(cols,rows))
-    end = time.time()
-    time_resize = end-start
-    # if DEBUG_TIME: print("Time consumed by cv2: ", time_cv2, time_cvtcolor, time_resize)
-    if DEBUG_TIME: print("Time consumed by cv2: ", time_cv2, time_resize)
+    # # 1. Load image with plausible binary area filtered
+
+    # start = time.time()
+    # img_gray = cv2.imread(filename, cv2.IMREAD_GRAYSCALE)
+    # end = time.time()
+    # time_cv2 = end-start
+
+    # # start = time.time()
+    # # # img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)  
+    # # # img_gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    # # end = time.time()
+    # # time_cvtcolor = end-start
+
+    # start = time.time()
+    # img_gray = cv2.resize(img_gray, dsize=(cols,rows))
+    # end = time.time()
+    # time_resize = end-start
+    # # if DEBUG_TIME: print("Time consumed by cv2: ", time_cv2, time_cvtcolor, time_resize)
+    # if DEBUG_TIME: print("Time consumed by cv2: ", time_cv2, time_resize)
     
-    # 2. Get random points from the feasible area points (N samples)
+    # # 2. Get random points from the feasible area points (N samples)
 
-    start = time.time()
-    rad = 1000 # meters. Cause we want to observe all points around the AGENT
-    rad_px = rad * scale_x # m * (px/m) = px (pixels) # TODO: Only valid if the image is squared
+    # start = time.time()
+    # rad = 1000 # meters. Cause we want to observe all points around the AGENT
+    # rad_px = rad * scale_x # m * (px/m) = px (pixels) # TODO: Only valid if the image is squared
     
-    fe_y, fe_x = get_points(img_gray, center_px, scale_x, radius=rad_px, color=255, N=NUM_POINTS_PLAUSIBLE_AREA, 
-                            around_center=False, DEBUG_TIME=DEBUG_TIME) # return pixels as y/x (rows/columns)
-    end = time.time()
-    if DEBUG_TIME: print("Time consumed by getting points: ", end-start)
+    # fe_y, fe_x = get_points(img_gray, center_px, scale_x, radius=rad_px, color=255, N=NUM_POINTS_PLAUSIBLE_AREA, 
+    #                         around_center=False, DEBUG_TIME=DEBUG_TIME) # return pixels as y/x (rows/columns)
+    # end = time.time()
+    # if DEBUG_TIME: print("Time consumed by getting points: ", end-start)
 
-    # 3. Transform the selected pixels to real-world points (global coordinates)
+    # # 3. Transform the selected pixels to real-world points (global coordinates)
 
-    start = time.time()
-    final_samples_px = np.hstack((fe_y.reshape(-1,1), fe_x.reshape(-1,1))) # rows (y), columns (x)
-    rw_points = transform_px2real_world(final_samples_px, 
-                                        center_plausible_area_filtered, 
-                                        (real_world_width,real_world_height), 
-                                        (rows,cols))
-    end = time.time()
-    if DEBUG_TIME: print("Time consumed by transform px 2 realworld: ", end-start)
+    # start = time.time()
+    # final_samples_px = np.hstack((fe_y.reshape(-1,1), fe_x.reshape(-1,1))) # rows (y), columns (x)
+    # rw_points = transform_px2real_world(final_samples_px, 
+    #                                     center_plausible_area_filtered, 
+    #                                     (real_world_width,real_world_height), 
+    #                                     (rows,cols))
+    # end = time.time()
+    # if DEBUG_TIME: print("Time consumed by transform px 2 realworld: ", end-start)
 
-    # 3.1. Then, transform to absolute coordinates around the last observation (0,0) of the target agent,
-    #      which represents the origin in this case
+    # # 3.1. Then, transform to absolute coordinates around the last observation (0,0) of the target agent,
+    # #      which represents the origin in this case
 
-    start = time.time()
+    # start = time.time()
     origin = origin_pos.cpu().data.numpy()
-    plausible_area_abs = rw_points - origin
+    # plausible_area_abs = rw_points - origin
 
     # 4. Transform relevant centerlines from global coordinates to absolute coordinates
 
@@ -477,10 +477,10 @@ def get_driveable_area_and_centerlines(filename, agent_xy_abs, relevant_centerli
         relevant_centerlines_abs.append(centerline)
 
     phy_info = dict()
-    phy_info["plausible_area_abs"] = plausible_area_abs
+    phy_info["plausible_area_abs"] = []
     phy_info["relevant_centerlines_abs"] = relevant_centerlines_abs
     end = time.time()
-    if DEBUG_TIME: print("Time consumed by storing map information: ", end-start)
+    # if DEBUG_TIME: print("Time consumed by storing map information: ", end-start)
     
     end_total = time.time()
     if DEBUG_TIME: print("Total seq time: ", end_total-start_total)

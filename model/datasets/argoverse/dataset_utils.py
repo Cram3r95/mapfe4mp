@@ -223,31 +223,45 @@ def save_processed_data_as_npy(data_processed_folder,
     with open(filename, 'wb') as my_file:
         my_file.write(string)
 
-def load_processed_files_from_npy(folder):
+def load_processed_files_from_npy(folder, required_variables_name_list):
     """
     """
-
-    preprocessed_data_dict = dict()
 
     preprocessed_files, num_files = load_list_from_folder(folder)
 
+    keys = []
     for preprocessed_file in preprocessed_files:
         key = preprocessed_file.split('/')[-1].split('.')[0]
 
-        with open(preprocessed_file, 'rb') as my_file:
+        if key in required_variables_name_list:
+            keys.append(key)
 
-            # Only load npy and npz files
+    try:
+        assert len(keys) == len(required_variables_name_list), \
+            "The number of loaded files from the folder does not match the number of variables you want"
+    except:
+        pdb.set_trace()
 
-            if (preprocessed_file.find('npy') != -1):
-                value = np.load(my_file)
-                preprocessed_data_dict[key] = value
-            elif (preprocessed_file.find('npz') != -1):
-                value = np.load(my_file, allow_pickle=True)
-                value = value['arr_0'].item() # We need to extract the information at this point
-                                              # Otherwise, if we store the NPz file in a dict and
-                                              # we try to extract the information later, we get this 
-                                              # error: "ValueError": seek of closed file
-                preprocessed_data_dict[key] = value
+    preprocessed_data_dict = dict()
+    for preprocessed_file in preprocessed_files:
+
+        key = preprocessed_file.split('/')[-1].split('.')[0]
+        
+        if key in keys:
+            with open(preprocessed_file, 'rb') as my_file:
+
+                # Only load npy and npz files
+
+                if (preprocessed_file.find('npy') != -1):
+                    value = np.load(my_file)
+                    preprocessed_data_dict[key] = value
+                elif (preprocessed_file.find('npz') != -1):
+                    value = np.load(my_file, allow_pickle=True)
+                    value = value['arr_0'].item() # We need to extract the information at this point
+                                                # Otherwise, if we store the NPz file in a dict and
+                                                # we try to extract the information later, we get this 
+                                                # error: "ValueError": seek of closed file
+                    preprocessed_data_dict[key] = value
         
     return preprocessed_data_dict
 

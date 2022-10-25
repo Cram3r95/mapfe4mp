@@ -527,13 +527,6 @@ python evaluate/argoverse/generate_results_rel-rel.py \
 
 """
 python evaluate/argoverse/generate_results_rel-rel.py \
---model_path "save/argoverse/sophie_mm/1.0_percent/test_new_oracle_4/argoverse_motion_forecasting_dataset_0_with_model.pt" \
---device_gpu 0 --split "val"
-"""
-
-# Bad at this moment (check the input centerlines)
-"""
-python evaluate/argoverse/generate_results_rel-rel.py \
---model_path "save/argoverse/sophie_mm/100.0_percent/test_with_centerlines_and_pa/argoverse_motion_forecasting_dataset_0_with_model.pt" \
---device_gpu 2 --split "test"
+--model_path "save/argoverse/sophie_mm/100.0_percent/test_with_pv_lstm_with_data_aug_with_goal_8/argoverse_motion_forecasting_dataset_0_with_model.pt" \
+--device_gpu 0 --split "test"
 """

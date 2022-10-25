@@ -99,8 +99,10 @@ def get_generator(model_path,config):
                                         current_cuda=current_cuda,
                                         adversarial_training=adversarial_training)
     except Exception as e:
-        print("Exception: ", e)
-        generator = TrajectoryGenerator(PHYSICAL_CONTEXT=config.hyperparameters.physical_context)
+        try:
+            generator = TrajectoryGenerator(PHYSICAL_CONTEXT=config.hyperparameters.physical_context)
+        except Exception as e:
+            generator = TrajectoryGenerator()
 
     checkpoint = torch.load(model_path, map_location=current_cuda)
     generator.load_state_dict(checkpoint.config_cp['g_best_state'], strict=False)

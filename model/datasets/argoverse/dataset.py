@@ -52,14 +52,13 @@ RAW_DATA_FORMAT = {
 APPLY_DATA_AUGMENTATION = False
 DEBUG_DATA_AUGMENTATION = False
 
-
 decision = [0,1] # Not apply/apply
 dropout_prob = [0.3,0.7] # Not applied/applied probability
-gaussian_noise_prob = [0.4,0.6]
+gaussian_noise_prob = [0.2,0.8]
 rotation_prob = [0.3,0.7]
 
 points_dropout_percentage = 0.3
-mu_noise,std_noise = 0,0.2
+mu_noise,std_noise = 0,0.1
 rotation_angles = [90,180,270]
 rotation_angles_prob = [0.33,0.33,0.34]
 
@@ -578,20 +577,15 @@ class ArgoverseMotionForecastingDataset(Dataset):
         else:
             print("Loading .npy files as np data structures ...")
 
-            preprocess_data_dict = dataset_utils.load_processed_files_from_npy(self.data_processed_folder)
+            required_variables_name_list = social_variables_names + physical_variables_names
 
-            variable_name_list = social_variables_names + physical_variables_names
-            try:
-                assert len(variable_name_list) == len(preprocess_data_dict.keys()), \
-                    "The number of loaded files from the folder does not match the number of variables you want"
-            except:
-                pdb.set_trace()
+            preprocess_data_dict = dataset_utils.load_processed_files_from_npy(self.data_processed_folder, required_variables_name_list)
 
             seq_list, seq_list_rel, loss_mask_list, non_linear_obj, num_objs_in_seq, \
             seq_id_list, object_class_id_list, object_id_list, ego_vehicle_origin, num_seq_list, \
             straight_trajectories_list, curved_trajectories_list, city_ids, norm, oracle_centerlines, \
             relevant_centerlines  = \
-                operator.itemgetter(*variable_name_list)(preprocess_data_dict)
+                operator.itemgetter(*required_variables_name_list)(preprocess_data_dict)
 
             # TODO: Refactorize this
             if self.extra_data_train != -1:
@@ -600,7 +594,7 @@ class ArgoverseMotionForecastingDataset(Dataset):
                 ex_seq_list, ex_seq_list_rel, ex_loss_mask_list, ex_non_linear_obj, ex_num_objs_in_seq, \
                 ex_seq_id_list, ex_object_class_id_list, ex_object_id_list, ex_ego_vehicle_origin, ex_num_seq_list, \
                 ex_straight_trajectories_list, ex_curved_trajectories_list, ex_city_ids, ex_norm  = \
-                    operator.itemgetter(*variable_name_list)(extra_preprocess_data_dict)
+                    operator.itemgetter(*required_variables_name_list)(extra_preprocess_data_dict)
 
                 num_val_files = len(ex_num_seq_list)
                 ex_cum_start_idx = [0] + np.cumsum(ex_num_objs_in_seq).tolist()

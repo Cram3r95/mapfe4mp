@@ -46,15 +46,15 @@ class Linear(nn.Module):
 
         self.apply(self._init_weights)
 
-    def _init_weights(self, module):
-        """
-        """
-        classname = module.__class__.__name__
-        if classname.find('Linear') != -1:
-            try:
-                nn.init.kaiming_normal_(module.weight)
-            except:
-                pdb.set_trace()
+    # def _init_weights(self, module):
+    #     """
+    #     """
+    #     classname = module.__class__.__name__
+    #     if classname.find('Linear') != -1:
+    #         try:
+    #             nn.init.kaiming_normal_(module.weight)
+    #         except:
+    #             pdb.set_trace()
 
     def forward(self, x):
         out = self.linear(x)
@@ -64,7 +64,7 @@ class Linear(nn.Module):
         return out
 
 class LinearRes(nn.Module):
-    def __init__(self, n_in, n_out, norm='GN', ng=32):
+    def __init__(self, n_in, n_out, norm='BN', ng=32):
         super(LinearRes, self).__init__()
         assert(norm in ['GN', 'BN', 'SyncBN'])
 

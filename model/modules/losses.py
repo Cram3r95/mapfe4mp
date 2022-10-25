@@ -147,16 +147,21 @@ def pytorch_neg_multi_log_likelihood_batch(
         future_len,
     ), f"expected 1D (Time) array for gt, got {avails.shape}"
     # assert all data are valid
-    assert torch.isfinite(pred).all(), "invalid value found in pred"
-    assert torch.isfinite(gt).all(), "invalid value found in gt"
-    assert torch.isfinite(confidences).all(), "invalid value found in confidences"
-    assert torch.isfinite(avails).all(), "invalid value found in avails"
+    try:
+        assert torch.isfinite(pred).all(), "invalid value found in pred"
+        assert torch.isfinite(gt).all(), "invalid value found in gt"
+        assert torch.isfinite(confidences).all(), "invalid value found in confidences"
+        assert torch.isfinite(avails).all(), "invalid value found in avails"
+    except:
+        pdb.set_trace()
     # pdb.set_trace()
     # convert to (batch_size, num_modes, future_len, num_coords)
     gt = torch.unsqueeze(gt, 1)  # add modes
     avails = avails[:, None, :, None]  # add modes and cords
 
     # error (batch_size, num_modes, future_len)
+
+    
     error = torch.sum(
         ((gt - pred) * avails) ** 2, dim=-1
     )  # reduce coords and use availability
@@ -203,7 +208,6 @@ def pytorch_neg_multi_log_likelihood_single(
     return pytorch_neg_multi_log_likelihood_batch(
         gt, pred.unsqueeze(1), confidences, avails
     )
-
 
 def _average_displacement_error(
         ground_truth: np.ndarray, pred: np.ndarray, confidences: np.ndarray, avails: np.ndarray, mode: str

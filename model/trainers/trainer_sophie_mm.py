@@ -35,6 +35,7 @@ from model.models.sophie_mm import TrajectoryGenerator
 from model.modules.losses import l2_loss_multimodal, mse, pytorch_neg_multi_log_likelihood_batch, evaluate_feasible_area_prediction
 from model.modules.evaluation_metrics import displacement_error, final_displacement_error
 from model.datasets.argoverse.dataset_utils import relative_to_abs_multimodal
+from model.datasets.argoverse.map_functions import MapFeaturesUtils
 from model.utils.checkpoint_data import Checkpoint, get_total_norm
 from model.utils.utils import create_weights
 
@@ -42,12 +43,14 @@ from model.utils.utils import create_weights
 
 # Global variables
 
+map_features_utils_instance = MapFeaturesUtils()
+
 torch.backends.cudnn.benchmark = True
 scaler = GradScaler()
 current_cuda = None
 absolute_root_folder = None
 
-USE_SCALER = False
+USE_SCALER = True
 CHECK_ACCURACY_TRAIN = False
 CHECK_ACCURACY_VAL = True
 MAX_TIME_TO_CHECK_TRAIN = 120 # minutes
@@ -58,6 +61,15 @@ min_ade_ = 50000
 g_lr = 0.001
 
 # Aux functions
+
+def get_best_predictions(pred, best_pred_indeces):
+    """
+    pred: batch_size x num_modes x pred_len x data_dim
+    best_pred_indeces: batch_size x 1
+
+    Take the best prediction (best mode) according to the best confidence for each sequence
+    """
+    return pred[torch.arange(pred.shape[0]), best_pred_indeces, :, :].squeeze()
 
 def get_lr(optimizer):
     """
@@ -91,40 +103,106 @@ def get_dtypes(use_gpu):
 
 # Aux functions losses
 
-def calculate_mse_gt_loss(gt, pred, loss_f, w_loss=None):
+def calculate_mse_gt_loss_multimodal(gt, pred, loss_f, compute_ade=True, compute_fde=True, w_loss=None):
     """
     gt: (pred_len, batch_size, data_dim)
     pred: (batch_size, num_modes, pred_len, data_dim)
     """
     
     batch_size, num_modes, pred_len, data_dim = pred.shape
-    pred = pred.permute(1,2,0,3)
+
+    pred = pred.permute(1,2,0,3) # num_modes, pred_len, batch_size, data_dim
+
     loss_ade = torch.zeros(1).to(pred)
     loss_fde = torch.zeros(1).to(pred)
 
     for i in range(num_modes):
-        loss_ade += loss_f(pred[i,:,:,:], gt, w_loss)
-        loss_fde += loss_f(pred[i][-1].unsqueeze(0), gt[-1].unsqueeze(0), w_loss)
+        if compute_ade: loss_ade += loss_f(pred[i,:,:,:], gt, w_loss)
+        if compute_fde: loss_fde += loss_f(pred[i][-1].unsqueeze(0), gt[-1].unsqueeze(0), w_loss)
 
     return loss_ade/num_modes, loss_fde/num_modes
 
-def calculate_mse_centerlines_loss(relevant_centerlines, pred, loss_f, w_loss=None):
+def calculate_mse_gt_loss_unimodal(gt, pred, loss_f, w_loss=None):
     """
-    relevant_centerlines: (num_modes, batch_size, pred_len, data_dim)
+    gt: (pred_len, batch_size, data_dim)
+    pred: (batch_size, pred_len, data_dim) (only the predictions with the best confidence for each sequence)
+    """
+
+    pred = pred.permute(1,0,2) # pred_len, batch_size, data_dim
+
+    loss_ade = loss_f(pred, gt, w_loss).to(pred)
+    loss_fde = loss_f(pred[-1].unsqueeze(0), gt[-1].unsqueeze(0), w_loss).to(pred)
+
+    return loss_ade, loss_fde
+
+def calculate_mse_centerlines_loss(centerlines, pred, loss_f, w_loss=None):
+    """
+    centerlines: (num_modes, batch_size, centerline_length, data_dim)
     pred: (batch_size, num_modes, pred_len, data_dim)
+
+    N.B. The centerline length and pred_len must match. Otherwise, use the function
+    calculate_mse_centerlines_loss_interpolating to get first the closest centerline
+    waypoint to the first prediction and then interpolate pred_len points to the goal
     """
-    pdb.set_trace()
+
     batch_size, num_modes, pred_len, data_dim = pred.shape
 
-
-
     pred = pred.permute(1,2,0,3)
+    centerlines = centerlines.permute(0,2,1,3)
+
     loss_ade = torch.zeros(1).to(pred)
     loss_fde = torch.zeros(1).to(pred)
 
     for i in range(num_modes):
-        loss_ade += loss_f(pred[i,:,:,:], gt, w_loss)
-        loss_fde += loss_f(pred[i][-1].unsqueeze(0), gt[-1].unsqueeze(0), w_loss)
+        loss_ade += loss_f(pred[i,:,:,:], centerlines[i,:,:,:], w_loss)
+        loss_fde += loss_f(pred[i][-1].unsqueeze(0), centerlines[i][-1].unsqueeze(0), w_loss)
+
+    return loss_ade/num_modes, loss_fde/num_modes
+
+def calculate_mse_centerlines_loss_interpolating(relevant_centerlines, pred, loss_f, w_loss=None):
+    """
+    relevant_centerlines: (num_modes, batch_size, centerline_length, data_dim)
+    pred: (batch_size, num_modes, pred_len, data_dim)
+    """
+    
+    batch_size, num_modes, pred_len, data_dim = pred.shape
+
+    relevant_centerlines_ = relevant_centerlines.clone()
+    centerline_length = relevant_centerlines_.shape[2]
+    
+    pred = pred.permute(1,2,0,3)
+    loss_ade = torch.zeros(1).to(pred)
+    loss_fde = torch.zeros(1).to(pred)
+
+    for mode in range(num_modes):
+        mode_centerlines = relevant_centerlines_[mode,:,:,:] # batch_size x centerline_length x 2
+        mode_l2 = torch.norm(mode_centerlines,dim=2) # get distances to origin (abs coordinates)
+        index_min = torch.argmin(mode_l2,dim=1)
+
+        c1 = torch.where(index_min <= (centerline_length-pred_len))[0] # Take pred_len points ahead from these centerlines
+        c2 = torch.where(index_min > (centerline_length-pred_len))[0] # From this point, interpolate pred_len points to the end of the centerline 
+        
+        filtered_relevant_centerlines = []
+        for i in range(batch_size):
+            assert (i in c1) or (i in c2)
+            if i in c1:
+                centerline = mode_centerlines[i,index_min[i]:index_min[i]+pred_len,:]
+                filtered_relevant_centerlines.append(centerline)
+            elif i in c2: # interpolate
+                centerline = mode_centerlines[i,index_min[i]:,:] # Take to the end
+                interpolated_centerline = map_features_utils_instance.interpolate_centerline(centerline,max_points=pred_len)
+                try:
+                    assert interpolated_centerline.shape[0] == pred_len 
+                except:
+                    pdb.set_trace()
+                filtered_relevant_centerlines.append(interpolated_centerline)
+
+        pdb.set_trace()
+        # Check if from those indeces to the end of the centerline there are at least pred_len points
+
+
+        # loss_ade += loss_f(pred[mode,:,:,:], gt, w_loss)
+        # loss_fde += loss_f(pred[mode][-1].unsqueeze(0), gt[-1].unsqueeze(0), w_loss)
 
     return loss_ade/num_modes, loss_fde/num_modes
 
@@ -264,7 +342,11 @@ def model_trainer(config, logger):
 
     # Initialize motion prediction generator and optimizer
 
-    generator = TrajectoryGenerator(PHYSICAL_CONTEXT=hyperparameters.physical_context)
+    try:
+        generator = TrajectoryGenerator(PHYSICAL_CONTEXT=hyperparameters.physical_context)
+    except:
+        generator = TrajectoryGenerator()
+        
     generator.to(device)
     generator.apply(init_weights)
     generator.type(float_dtype).train() # train mode (if you compute metrics -> .eval() mode)
@@ -334,6 +416,11 @@ def model_trainer(config, logger):
             "fa": evaluate_feasible_area_prediction
         }
     elif hyperparameters.loss_type_g == "mse+nll" or hyperparameters.loss_type_g == "mse_w+nll":
+        loss_f = {
+            "mse": mse,
+            "nll": pytorch_neg_multi_log_likelihood_batch
+        }
+    elif hyperparameters.loss_type_g == "centerlines+gt":
         loss_f = {
             "mse": mse,
             "nll": pytorch_neg_multi_log_likelihood_batch
@@ -741,7 +828,7 @@ def generator_step(hyperparameters, batch, generator, optimizer_g,
 
             pred_traj_fake_rel, conf = generator(obs_traj, obs_traj_rel, seq_start_end, agent_idx, phy_info=plausible_area, relevant_centerlines=relevant_centerlines)
         else:
-            pred_traj_fake_rel, conf = generator(obs_traj, obs_traj_rel, seq_start_end, agent_idx, phy_info=phy_info, relevant_centerlines=None)
+            pred_traj_fake_rel, conf = generator(obs_traj, obs_traj_rel, seq_start_end, agent_idx, phy_info=phy_info, relevant_centerlines=relevant_centerlines)
 
         if hyperparameters.output_single_agent:
             pred_traj_fake = relative_to_abs_multimodal(pred_traj_fake_rel, obs_traj[-1,agent_idx,:])
@@ -765,9 +852,9 @@ def generator_step(hyperparameters, batch, generator, optimizer_g,
 
             if "mse_w" in hyperparameters.loss_type_g:
                 w_loss = w_loss[:b, :]
-                loss_ade, loss_fde = calculate_mse_gt_loss(pred_traj_gt, pred_traj_fake, loss_f, w_loss)
+                loss_ade, loss_fde = calculate_mse_gt_loss_multimodal(pred_traj_gt, pred_traj_fake, loss_f, w_loss)
             else:
-                loss_ade, loss_fde = calculate_mse_gt_loss(pred_traj_gt, pred_traj_fake, loss_f)
+                loss_ade, loss_fde = calculate_mse_gt_loss_multimodal(pred_traj_gt, pred_traj_fake, loss_f)
 
             loss = hyperparameters.loss_ade_weight*loss_ade + \
                    hyperparameters.loss_fde_weight*loss_fde
@@ -780,7 +867,7 @@ def generator_step(hyperparameters, batch, generator, optimizer_g,
             losses["G_nll_loss"] = loss.item()
 
         elif hyperparameters.loss_type_g == "mse+fa" or hyperparameters.loss_type_g == "mse_w+fa":
-            loss_ade, loss_fde = calculate_mse_gt_loss(pred_traj_gt, pred_traj_fake, loss_f["mse"])
+            loss_ade, loss_fde = calculate_mse_gt_loss_multimodal(pred_traj_gt, pred_traj_fake, loss_f["mse"])
             loss_fa = evaluate_feasible_area_prediction(pred_traj_fake, pred_traj_gt, map_origin, num_seq, 
                                                         absolute_root_folder, split)
 
@@ -794,31 +881,52 @@ def generator_step(hyperparameters, batch, generator, optimizer_g,
 
         elif hyperparameters.loss_type_g == "mse+nll" or hyperparameters.loss_type_g == "mse_w+nll":
             _,b,_ = pred_traj_gt_rel.shape
-
+            # pdb.set_trace()
             if "mse_w" in hyperparameters.loss_type_g:
                 w_loss = w_loss[:b, :]
-                pdb.set_trace()
-                loss_ade, loss_fde = calculate_mse_gt_loss(pred_traj_gt, pred_traj_fake, loss_f["mse"], w_loss)
-                if relevant_centerlines:
-                    loss_ade_centerlines = calculate_mse_centerlines_loss(relevant_centerlines, pred_traj_fake, loss_f["mse"], w_loss)
+
+                loss_ade, loss_fde = calculate_mse_gt_loss_multimodal(pred_traj_gt, pred_traj_fake, loss_f["mse"], w_loss)
+                # if torch.is_tensor(relevant_centerlines):
+                #     loss_ade_centerlines = calculate_mse_centerlines_loss(relevant_centerlines, pred_traj_fake, loss_f["mse"], w_loss)
             else:
-                loss_ade, loss_fde = calculate_mse_gt_loss(pred_traj_gt, pred_traj_fake, loss_f["mse"])
-                if relevant_centerlines:
-                    loss_ade_centerlines = calculate_mse_centerlines_loss(relevant_centerlines, pred_traj_fake, loss_f["mse"])
+                loss_ade, loss_fde = calculate_mse_gt_loss_multimodal(pred_traj_gt, pred_traj_fake, loss_f["mse"])
+                # if torch.is_tensor(relevant_centerlines):
+                #     loss_ade_centerlines = calculate_mse_centerlines_loss(relevant_centerlines, pred_traj_fake, loss_f["mse"])
+
+            _, loss_fde_goal = calculate_mse_gt_loss_multimodal(phy_info.permute(1,0,2), pred_traj_fake, loss_f["mse"], compute_ade=False)
 
             loss_nll = calculate_nll_loss(pred_traj_gt, pred_traj_fake, loss_f["nll"], conf)
             
-
             loss = hyperparameters.loss_ade_weight*loss_ade + \
                    hyperparameters.loss_fde_weight*loss_fde + \
-                   hyperparameters.loss_nll_weight*loss_nll #+ \
+                   hyperparameters.loss_nll_weight*loss_nll + \
+                   0.5*loss_fde_goal
                 #    hyperparameters.loss_ade_centerlines_weight*loss_ade_centerlines 
 
             losses["G_mse_ade_loss"] = loss_ade.item()
             losses["G_mse_fde_loss"] = loss_fde.item()
             losses["G_nll_loss"] = loss_nll.item()
+            losses["G_mse_fde_goal_loss"] = loss_fde_goal.item()
             # losses["G_mse_ade_centerlines_loss"] = loss_nll.item()
-        
+        elif hyperparameters.loss_type_g == "centerlines+gt":
+
+            loss_ade_centerlines, loss_fde_centerlines = calculate_mse_centerlines_loss(relevant_centerlines, pred_traj_fake, loss_f["mse"])
+            
+            best_pred_traj_fake_indeces = conf.argmax(1)
+            best_pred_traj_fake = get_best_predictions(pred_traj_fake,best_pred_traj_fake_indeces)
+
+            loss_ade_gt, loss_fde_gt = calculate_mse_gt_loss_unimodal(pred_traj_gt, best_pred_traj_fake, loss_f["mse"])
+            
+            loss = loss_ade_centerlines + \
+                   loss_fde_centerlines + \
+                   2*loss_ade_gt + \
+                   2*loss_fde_gt
+
+            losses["G_mse_ade_centerlines_loss"] = loss_ade_centerlines.item()
+            losses["G_mse_fde_centerlines_loss"] = loss_fde_centerlines.item()
+            losses["G_mse_ade_gt_loss"] = loss_ade_gt.item()
+            losses["G_mse_fde_gt_loss"] = loss_fde_gt.item()
+
         losses[f"G_total_loss"] = loss.item()
 
     if hyperparameters.clipping_threshold_g > 0:

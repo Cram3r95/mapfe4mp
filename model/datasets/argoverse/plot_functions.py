@@ -126,6 +126,7 @@ def viz_predictions_all(
     query_search_range_manhattan_ = 2.5
 
     num_agents = input_abs.shape[0]
+    num_modes = output_abs.shape[0]
     obs_len = input_abs.shape[1]
     pred_len = target_abs.shape[1]
 
@@ -212,11 +213,29 @@ def viz_predictions_all(
 
         # Centerlines (Optional)
         
+        num_centerlines = relevant_centerlines_abs.shape[0]
+
+        count_rep_centerlines = np.zeros((num_centerlines))
+        rep_centerlines = []
+
         # TODO: Prepare this code to deal with batch size != 1
         if len(relevant_centerlines_abs) > 0:
+            for num_mode in range(num_centerlines):
+                centerline = relevant_centerlines_abs[num_mode,0,:,:]
 
-            for j in range(len(relevant_centerlines_abs[:,0,:,:])):
-                centerline = relevant_centerlines_abs[j,0,:,:]
+                # Check repeated centerlines
+
+                flag_repeated = False
+                for index_centerline, aux_centerline in enumerate(rep_centerlines):
+                    if np.allclose(centerline,aux_centerline):
+                        flag_repeated = True
+                        count_rep_centerlines[index_centerline] += 1
+                if not flag_repeated:
+                    count_rep_centerlines[num_mode] += 1
+                    rep_centerlines.append(centerline)
+
+                # Centerline
+
                 plt.plot(
                     centerline[:, 0],
                     centerline[:, 1],
@@ -239,9 +258,22 @@ def viz_predictions_all(
                     zorder=16,
                 )
 
+            # Plot the number of repetitions for each centerline
+
+            for index_repeated in range(len(count_rep_centerlines)):
+                if count_rep_centerlines[index_repeated] > 0:
+                    centerline = relevant_centerlines_abs[index_repeated,0,:,:]
+
+                    plt.text(
+                            centerline[-1, 0]+1,
+                            centerline[-1, 1]+1,
+                            str(int(count_rep_centerlines[index_repeated])),
+                            fontsize=12
+                            )
+
         if object_type == "AGENT":
             # Multimodal prediction (only AGENT of interest)
-            for num_mode in range(output.shape[0]):
+            for num_mode in range(num_modes):
                 # Prediction
                 plt.plot(
                     output[num_mode, :, 0],
@@ -264,6 +296,8 @@ def viz_predictions_all(
                     zorder=15,
                     markersize=9,
                 )
+
+
 
     seq_lane_props = avm.city_lane_centerlines_dict[city_name]
 

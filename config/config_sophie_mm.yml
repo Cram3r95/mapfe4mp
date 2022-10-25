@@ -17,8 +17,8 @@ dataset:
     extra_data_train: -1.0 # % (0-1) of the val split is used for training too. Remaining files are used for validation
                           # -1.0 if not used
     shuffle: True 
-    data_augmentation: True # Rotation, Swapping, Dropout, Gaussian noise
-    class_balance: 0.6 # % of straight trajectories (considering the AGENT). Remaining % are curved trajectories
+    data_augmentation: True # True # Rotation, Swapping, Dropout, Gaussian noise
+    class_balance: 0.7 # % of straight trajectories (considering the AGENT). Remaining % are curved trajectories
                         # (again, considering the AGENT). -1.0 if no class balance is used (get_item takes the corresponding
                         # sequence regardless if it is straight or curved)
     preprocess_data: False
@@ -51,7 +51,7 @@ hyperparameters:
                            # where we determine which is the optimal distance for which most agents
                            # are observed for our AGENT
     
-    num_epochs: 400
+    num_epochs: 400 # 400
     print_every: 50
     checkpoint_name: "0"                      
     checkpoint_val_percentage: 0.02 # 0.1 # (0 - 1) Check accuracy in validation split every
@@ -59,6 +59,7 @@ hyperparameters:
     checkpoint_train_percentage: 0.1 # 0.2 # (0 - 1)
 
     loss_type_g: "mse+nll" # (mse|mse_w), nll, (mse|mse_w)+nll, (mse|mse_w)+fa 
+    # loss_type_g: "centerlines+gt"
     loss_ade_weight: 1.1
     loss_ade_centerlines_weight: 1 
     loss_fde_weight: 1.4
@@ -68,14 +69,16 @@ hyperparameters:
     lr_scheduler: True
     lr_decay_factor: 0.5 # 0.5 
     lr_min: 5.0e-5
-    lr_epoch_percentage_patience: 0.25 # 0.15 # (0-N) E.g. If 0.05 -> the patience will be the 5 % of the total epochs
+    lr_epoch_percentage_patience: 0.2 # 0.15 # (0-N) E.g. If 0.05 -> the patience will be the 5 % of the total epochs
     
     g_steps: 1
     clipping_threshold_g: 1.1
     
     save_root_dir: "save/argoverse"
-    # exp_name: "test_with_centerlines_and_pa_nll_centerlines" # If no specific exp_name is used, fill with current day and hour
-    exp_name: "test_new_oracle_7_with_class_balance_and_linear"
+    exp_name: "test_with_pv_lstm_with_data_aug_with_goal_with_noise_centerline" #"test_new_oracle_40_points_first_obs_singlelinear_only_map_unimodal_decoder"
+    # exp_name: "test_plausible_centerlines_40_points_last_obs_multilinear" # If no specific exp_name is used, fill with current day and hour
+    # cp oracle_centerlines_last_obs_30_points.npy oracle_centerlines.npy && cp relevant_centerlines_last_obs_30_points.npz relevant_centerlines.npz
+    # cp oracle_centerlines_first_obs_40_points.npy oracle_centerlines.npy && cp relevant_centerlines_first_obs_40_points.npz relevant_centerlines.npz
     output_dir: # To be filled in the code (save_root_dir/model_name/split_percentage/exp)
     checkpoint_start_from:
     exp_description:

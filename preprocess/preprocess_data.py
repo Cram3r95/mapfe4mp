@@ -64,8 +64,8 @@ config.dataset.start_from_percentage = 0.0
 
 # Preprocess data
                          # Split, Process, Split percentage
-splits_to_process = dict({"train":[True,0.01], # 0.01 (1 %), 0.1 (10 %), 1.0 (100 %)
-                          "val":  [True,0.01],
+splits_to_process = dict({"train":[False,1.0], # 0.01 (1 %), 0.1 (10 %), 1.0 (100 %)
+                          "val":  [True,1.0],
                           "test": [False,1.0]})
 modes_centerlines = ["test"] # "train","test" 
 # if train -> compute the best candidate (oracle), only using the "competition" algorithm
@@ -73,14 +73,15 @@ modes_centerlines = ["test"] # "train","test"
 
 PREPROCESS_SOCIAL_DATA = False
 PREPROCESS_RELEVANT_CENTERLINES = True
+SAVE_BEV_PLAUSIBLE_AREA = False
 
 obs_len = 20 # steps
 pred_len = 30 # steps
 freq = 10 # Hz ("steps/s")
 obs_origin = 20 
 min_dist_around = 25
-first_centerline_waypoint = "first_obs"
-max_points = 40 # pred_len # In order to match with the number of future steps in Argoverse
+first_centerline_waypoint = "last_obs" # first_obs, last_obs
+max_points = 30 # 30 if start from last_obs, 40 if start from first obs
 min_points = 4 # to perform a cubic interpolation you need at least 3 points
 algorithm = "map_api"
 
@@ -417,11 +418,12 @@ for split_name,features in splits_to_process.items():
 
                             filename = os.path.join(output_dir,f"{file_id}_binary_plausible_area_filtered_gray.png")
                             # plt.savefig(filename, bbox_inches='tight', facecolor=fig.get_facecolor(), edgecolor='none', pad_inches=0)
-                            fig.tight_layout(pad=0)
-                            fig.canvas.draw()
-                            img_gray = cv2.cvtColor(np.asarray(fig.canvas.buffer_rgba()), cv2.COLOR_RGBA2GRAY)
-
-                            cv2.imwrite(filename, img_gray)
+                            
+                            if SAVE_BEV_PLAUSIBLE_AREA: 
+                                fig.tight_layout(pad=0)
+                                fig.canvas.draw()
+                                img_gray = cv2.cvtColor(np.asarray(fig.canvas.buffer_rgba()), cv2.COLOR_RGBA2GRAY)
+                                cv2.imwrite(filename, img_gray)
                             # plt.close('all')
 
                             plt.arrow(
@@ -506,11 +508,12 @@ for split_name,features in splits_to_process.items():
 
                             lane_polygon = centerline_to_polygon(relevant_centerlines_filtered[0])
                             ax.fill(lane_polygon[:, 0], lane_polygon[:, 1], "green", edgecolor='green', fill=True)
-                            fig.tight_layout(pad=0)
-                            fig.canvas.draw()
-                            img_bgr = cv2.cvtColor(np.asarray(fig.canvas.buffer_rgba()), cv2.COLOR_RGBA2BGR)
-
-                            cv2.imwrite(filename, img_bgr)
+                            
+                            if SAVE_BEV_PLAUSIBLE_AREA: 
+                                fig.tight_layout(pad=0)
+                                fig.canvas.draw()
+                                img_bgr = cv2.cvtColor(np.asarray(fig.canvas.buffer_rgba()), cv2.COLOR_RGBA2BGR)
+                                cv2.imwrite(filename, img_bgr)
                             plt.close('all')
 
                             # plt.xlabel("Map X")
