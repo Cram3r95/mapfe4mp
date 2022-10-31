@@ -456,9 +456,9 @@ class MapFeaturesUtils:
             print("Filter: ", filter)
             # print("xy_f: ", xy_f)
             print("Min weight, max weight: ", min_weight, max_weight)
-            print("Vel: ", vel_f)
+            # print("Vel: ", vel_f)
             print("vel averaged: ", vel_f_averaged)
-            print("Acc: ", acc_f)
+            # print("Acc: ", acc_f)
             print("acc averaged: ", acc_f_averaged)
 
             obs_len = 20
@@ -537,6 +537,9 @@ class MapFeaturesUtils:
 
                 plt.xlim(x_min, x_max)
                 plt.ylim(y_min, y_max)
+
+            plt.show()
+            plt.close('all')
 
         xy_f = xy_f.T # TODO: Check the above xy_f and transform from 2 x 20 to 20 x 2 (easy to read)
         extended_xy_f = extended_xy_f.T
@@ -642,6 +645,7 @@ class MapFeaturesUtils:
 
             plt.savefig(filename, bbox_inches='tight', facecolor=fig.get_facecolor(), edgecolor='none', pad_inches=0)
 
+            plt.show()
             plt.close('all')
 
         return interp_centerline

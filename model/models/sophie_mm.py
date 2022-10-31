@@ -1038,8 +1038,6 @@ class TrajectoryGenerator(nn.Module):
 
                 output,(hds, cds) = self.speed_decoder(decoder_input, (hds, cds))
                 speed_output = self.fc_speed(hds)
-                # speed_output = self.hardtanh(out)
-                # speed_output = self.final_output(hds.squeeze(0)).unsqueeze(0)
                                                 
                 speed_outputs.append(speed_output.squeeze(0))
 
@@ -1058,15 +1056,5 @@ class TrajectoryGenerator(nn.Module):
         conf = torch.softmax(conf.view(batch_size,-1), dim=1) # batch_size, num_modes
         if not torch.allclose(torch.sum(conf, dim=1), conf.new_ones((batch_size,))):
             pdb.set_trace()
-
-        # # TODO: THIS IS WRONG -> REPEAT PREDICTIONS AND CONFIDENCES
-
-        # pred_traj_fake_rel__ = torch.stack(speed_outputs,dim=0).unsqueeze(0)
-        # pred_traj_fake_rel = torch.repeat_interleave(pred_traj_fake_rel__,ARGOVERSE_NUM_MODES,dim=0)
-        
-        # pred_traj_fake_rel = pred_traj_fake_rel.permute(2,0,1,3) # batch_size, num_modes, pred_len, data_dim
-
-        # conf = torch.ones(batch_size,ARGOVERSE_NUM_MODES)/ARGOVERSE_NUM_MODES
-        # conf = conf.to(obs_traj.device)
         
         return pred_traj_fake_rel, conf
