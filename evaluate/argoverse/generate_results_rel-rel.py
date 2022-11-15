@@ -72,7 +72,7 @@ dist_around = 40
 dist_rasterized_map = [-dist_around, dist_around, -dist_around, dist_around]
 
 GENERATE_QUALITATIVE_RESULTS = True
-PLOT_WORST_SCENES = False
+PLOT_WORST_SCENES = True
 LIMIT_QUALITATIVE_RESULTS = 150
 
 COMPUTE_METRICS = True
@@ -241,7 +241,7 @@ def evaluate(loader, generator, config, split, current_cuda, pred_len, results_p
 
                 if config.hyperparameters.physical_context == "plausible_centerlines+area":
                     # TODO: Encapsulate this as a function
-
+       
                     # Plausible area (discretized)
 
                     plausible_area_array = np.array([curr_phy_info["plausible_area_abs"] for curr_phy_info in phy_info]).astype(np.float32)
@@ -360,7 +360,7 @@ def evaluate(loader, generator, config, split, current_cuda, pred_len, results_p
                     relevant_centerlines_abs = phy_info.unsqueeze(0).cpu().numpy() + map_origin.cpu().numpy()
                 else:
                     relevant_centerlines_abs = []
-                
+
                 plot_functions.viz_predictions_all(seq_id,
                                                    results_path,
                                                    obs_traj.permute(1,0,2).cpu().numpy(), # All obstacles
@@ -518,15 +518,28 @@ if __name__ == '__main__':
     args = parser.parse_args()
     main(args)
 
-# Best model at this moment
+# Best model at this moment (in terms of validation)
 """
 python evaluate/argoverse/generate_results_rel-rel.py \
 --model_path "save/argoverse/sophie_mm/100.0_percent/test_oracle_check_rel2absmm/argoverse_motion_forecasting_dataset_0_with_model.pt" \
 --device_gpu 0 --split "val"
 """
 
+# Best model at this moment (in terms of test)
 """
 python evaluate/argoverse/generate_results_rel-rel.py \
 --model_path "save/argoverse/sophie_mm/100.0_percent/test_with_pv_lstm_with_data_aug_with_goal_8/argoverse_motion_forecasting_dataset_0_with_model.pt" \
+--device_gpu 0 --split "test"
+"""
+
+"""
+python evaluate/argoverse/generate_results_rel-rel.py \
+--model_path "save/argoverse/sophie_mm/100.0_percent/pv_lstm_1/argoverse_motion_forecasting_dataset_0_with_model.pt" \
+--device_gpu 0 --split "test"
+"""
+
+"""
+python evaluate/argoverse/generate_results_rel-rel.py \
+--model_path "save/argoverse/sophie_mm/100.0_percent/pv_lstm_whole_pipeline_centerline_mlp/argoverse_motion_forecasting_dataset_0_with_model.pt" \
 --device_gpu 0 --split "test"
 """

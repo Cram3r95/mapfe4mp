@@ -1199,8 +1199,11 @@ class MapFeaturesUtils:
 
                 if extended_xy_filtered.size > 0:
                     plt.plot(
-                        extended_xy_filtered[:, 0],
-                        extended_xy_filtered[::, 1],
+                        # Since extended_xy_filtered has the input observation and then the extension
+                        # assuming a polynomial function of order = 2. Here we only want to plot the 
+                        # extension to roughly know where the agent would finish
+                        extended_xy_filtered[obs_len:, 0],
+                        extended_xy_filtered[obs_len:, 1],
                         "-",
                         color="purple",
                         alpha=1,
@@ -1239,8 +1242,11 @@ class MapFeaturesUtils:
 
                 if extended_xy_filtered.size > 0:
                     plt.plot(
-                        extended_xy_filtered[:, 0],
-                        extended_xy_filtered[::, 1],
+                        # Since extended_xy_filtered has the input observation and then the extension
+                        # assuming a polynomial function of order = 2. Here we only want to plot the 
+                        # extension to roughly know where the agent would finish
+                        extended_xy_filtered[obs_len:, 0],
+                        extended_xy_filtered[obs_len:, 1],
                         "-",
                         color="purple",
                         alpha=1,

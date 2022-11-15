@@ -472,6 +472,7 @@ def get_driveable_area_and_centerlines(filename, agent_xy_abs, relevant_centerli
     # 4. Transform relevant centerlines from global coordinates to absolute coordinates
 
     relevant_centerlines_abs = []
+
     for centerline in relevant_centerlines_filtered:
         centerline = centerline - origin
         relevant_centerlines_abs.append(centerline)
@@ -483,7 +484,7 @@ def get_driveable_area_and_centerlines(filename, agent_xy_abs, relevant_centerli
     # if DEBUG_TIME: print("Time consumed by storing map information: ", end-start)
     
     end_total = time.time()
-    if DEBUG_TIME: print("Total seq time: ", end_total-start_total)
+    # if DEBUG_TIME: print("Total seq time: ", end_total-start_total)
 
     # 5. Debug (plot result)
 

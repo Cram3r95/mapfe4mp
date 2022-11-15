@@ -9,16 +9,18 @@ dataset:
     path: "data/datasets/argoverse/motion-forecasting/"
     imgs_folder: "map_features"
     split: "train"
-    batch_size: 64
+    batch_size: 2048
     num_workers: 0
     start_from_percentage: 0.0 # By default, 0. If you want to analize a particular bunch of files (e.g. from 25 % to 50 %)
                                # then write here 0.25 and in split_percentage 0.25
-    split_percentage: 0.01 # % of the dataset (0-1)
+    split_percentage: 1.0 # % of the dataset (0-1)
     extra_data_train: -1.0 # % (0-1) of the val split is used for training too. Remaining files are used for validation
                           # -1.0 if not used
     shuffle: True 
-    data_augmentation: True # True # Rotation, Swapping, Dropout, Gaussian noise
-    class_balance: 0.7 # % of straight trajectories (considering the AGENT). Remaining % are curved trajectories
+    data_augmentation: False # True # Rotation, Swapping, Dropout, Gaussian noise
+                             # TODO: Optimize the data augmentation functions. At this moment it takes
+                             # around 95 % time of the seq collate function
+    class_balance: 0.6 # % of straight trajectories (considering the AGENT). Remaining % are curved trajectories
                         # (again, considering the AGENT). -1.0 if no class balance is used (get_item takes the corresponding
                         # sequence regardless if it is straight or curved)
     preprocess_data: False
@@ -37,8 +39,8 @@ hyperparameters:
                                      # Otherwise, use absolute coordinates
 
     # physical_context: "dummy"
-    physical_context: "oracle"
-    # physical_context: "plausible_centerlines+area" # dummy (no physical context, only social), visual, goals, oracle, plausible_centerlines+area
+    # physical_context: "oracle"
+    physical_context: "plausible_centerlines+area" # dummy (no physical context, only social), visual, goals, oracle, plausible_centerlines+area
 
     num_modes: 6 # Multimodality
     obs_origin: 20 # This frame will be the origin, tipically the first observation (1) or last observation 
@@ -60,10 +62,10 @@ hyperparameters:
 
     loss_type_g: "mse+nll" # (mse|mse_w), nll, (mse|mse_w)+nll, (mse|mse_w)+fa 
     # loss_type_g: "centerlines+gt"
-    loss_ade_weight: 1.1
+    loss_ade_weight: 1.1 # 1.1
     loss_ade_centerlines_weight: 1 
-    loss_fde_weight: 1.4
-    loss_nll_weight: 2.2 
+    loss_fde_weight: 1.4 # 1.4
+    loss_nll_weight: 2.2 # 2.2 
     loss_fa_weight: 1
 
     lr_scheduler: True
@@ -75,7 +77,7 @@ hyperparameters:
     clipping_threshold_g: 1.1
     
     save_root_dir: "save/argoverse"
-    exp_name: "test_with_pv_lstm_with_data_aug_with_goal_with_noise_centerline" #"test_new_oracle_40_points_first_obs_singlelinear_only_map_unimodal_decoder"
+    exp_name: "pv_lstm_whole_pipeline_centerline_mlp_3" 
     # exp_name: "test_plausible_centerlines_40_points_last_obs_multilinear" # If no specific exp_name is used, fill with current day and hour
     # cp oracle_centerlines_last_obs_30_points.npy oracle_centerlines.npy && cp relevant_centerlines_last_obs_30_points.npz relevant_centerlines.npz
     # cp oracle_centerlines_first_obs_40_points.npy oracle_centerlines.npy && cp relevant_centerlines_first_obs_40_points.npz relevant_centerlines.npz

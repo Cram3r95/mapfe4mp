@@ -277,6 +277,8 @@ def load_physical_information(num_seq_list, obs_traj, obs_traj_rel, pred_traj_gt
     """
 
     root_folder = os.path.join(*data_imgs_folder.split('/')[:-1])
+    split_name = data_imgs_folder.split('/')[-2]
+
     obs_len = obs_traj_rel.shape[0]
 
     batch_size = len(object_class_id_list)
@@ -304,7 +306,11 @@ def load_physical_information(num_seq_list, obs_traj, obs_traj_rel, pred_traj_gt
         curr_first_obs = first_obs[t0_idx:t1_idx,:]
 
         obs_len = curr_obs_traj_rel.shape[0]
-        curr_map_origin = map_origin[i][0]#.reshape(1,-1)
+        
+        if split_name == "test":
+            curr_map_origin = map_origin[i]
+        else:
+            curr_map_origin = map_origin[i][0] # TODO: Check this in the next preprocessing
                                                      
         filename = os.path.join(data_imgs_folder,str(curr_num_seq) + ".png")
 
@@ -362,7 +368,7 @@ def load_physical_information(num_seq_list, obs_traj, obs_traj_rel, pred_traj_gt
                                                                                 DEBUG_TIME=DEBUG_TIME)
             physical_context_list.append(phy_info)
             end = time.time()
-            # print("Time consumed by goal function: ", end-start)
+            # if DEBUG_TIME: print("Time consumed by goal function: ", end-start)
 
         t0_idx = t1_idx
 

@@ -7,6 +7,8 @@ import torch.nn as nn
 # Model parameters functions
 
 def create_weights(batch, vmin, vmax, w_len=30, w_type="linear"):
+    """
+    """
     w = torch.ones(w_len)
     if w_type == "linear":
         w = torch.linspace(vmin, vmax, w_len)
@@ -17,6 +19,8 @@ def create_weights(batch, vmin, vmax, w_len=30, w_type="linear"):
     return w
 
 def freeze_model(model, no_freeze_list=[]):
+    """
+    """
     for name, child in model.named_children():
         if name not in no_freeze_list:
             for param in child.parameters():
@@ -25,6 +29,8 @@ def freeze_model(model, no_freeze_list=[]):
     return model
 
 def load_weights(model, checkpoint, layer_name="decoder."):
+    """
+    """
     own_state = model.state_dict()
     for name, param in checkpoint.items():
         print("name ", name)
@@ -39,4 +45,6 @@ def load_weights(model, checkpoint, layer_name="decoder."):
 # Parameter and FLOPs
 
 def count_parameters(model):
+    """
+    """
     return sum(p.numel() for p in model.parameters() if p.requires_grad)

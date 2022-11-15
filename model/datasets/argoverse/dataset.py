@@ -58,7 +58,7 @@ gaussian_noise_prob = [0.2,0.8]
 rotation_prob = [0.3,0.7]
 
 points_dropout_percentage = 0.3
-mu_noise,std_noise = 0,0.1
+mu_noise,std_noise = 0,0.2
 rotation_angles = [90,180,270]
 rotation_angles_prob = [0.33,0.33,0.34]
 
@@ -85,7 +85,9 @@ def seq_collate(data):
     data is computed.
     """
 
-    start_1 = time.time()
+    DEBUG_TIME = False
+
+    start_seq_collate = time.time()
 
     (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel,
      non_linear_obj, loss_mask, seq_id_list, object_class_id_list, 
@@ -117,6 +119,8 @@ def seq_collate(data):
     # Data augmentation
 
     if APPLY_DATA_AUGMENTATION and CURRENT_SPLIT == "train":
+        start_data_aug = time.time()
+
         aug_obs_traj = torch.zeros((obs_traj.shape))
         aug_obs_traj_rel = torch.zeros((obs_traj_rel.shape))
         aug_pred_traj_gt = torch.zeros((pred_traj_gt.shape))
@@ -214,20 +218,22 @@ def seq_collate(data):
                                                  smoothen=False, save=True, data_aug=True)
             i += 1
 
-            # Replace tensors
+        # Replace tensors
 
         obs_traj = aug_obs_traj
         obs_traj_rel = aug_obs_traj_rel
         pred_traj_gt = aug_pred_traj_gt
         pred_traj_gt_rel = aug_pred_traj_gt_rel
 
+        end_data_aug = time.time()
+
+        if DEBUG_TIME: print(f"Time consumed by data augmentation functions: {end_data_aug-start_data_aug}\n")
+
     # Get physical information (image or goal points. Otherwise, use dummies)
 
-    start_2 = time.time()
+    start_phy_info = time.time()
 
     first_obs = obs_traj[0,:,:] # 1 x agents · batch_size x 2
-
-    DEBUG_TIME = False
 
     if (PHYSICAL_CONTEXT == "visual"  # batch_size x channels x height x width 
      or PHYSICAL_CONTEXT == "goals" # batch_size x num_goal_points x 2 (x|y) (real-world coordinates (HDmap))
@@ -251,18 +257,18 @@ def seq_collate(data):
         phy_info = np.random.randn(1,1,1,1)
         phy_info = torch.from_numpy(phy_info).type(torch.float32)
 
-    end_2 = time.time()
+    end_phy_info = time.time()
 
-    if DEBUG_TIME: print(f">>>>>>>>>>>>>> Time consumed by load physical information function: {end_2-start_2}\n")
-    # pdb.set_trace()
+    if DEBUG_TIME: print(f"Time consumed by load physical information function: {end_phy_info-start_phy_info}\n")
+
     num_seq_list = torch.stack(num_seq_list)
     norm = torch.stack(norm)
 
     out = [obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel, non_linear_obj,
            loss_mask, seq_start_end, object_cls, obj_id, map_origin, num_seq_list, norm, phy_info]
 
-    end = time.time()
-    # print(f"Time consumed by seq_collate function: {end-start}\n")
+    end_seq_collate = time.time()
+    if DEBUG_TIME: print(f">>>>>>>>>>>>>> Time consumed by seq_collate function: {end_seq_collate-start_seq_collate}\n")
 
     return tuple(out)
 

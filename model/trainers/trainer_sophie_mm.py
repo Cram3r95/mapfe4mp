@@ -396,12 +396,19 @@ def model_trainer(config, logger):
     ## Compute num iterations to calculate accuracy (both train and val)
 
     hyperparameters.checkpoint_train_every = round(hyperparameters.checkpoint_train_percentage * hyperparameters.num_iterations)
+
     hyperparameters.checkpoint_val_every = round(hyperparameters.checkpoint_val_percentage * hyperparameters.num_iterations)
+    if hyperparameters.checkpoint_val_every < hyperparameters.print_every:
+        hyperparameters.checkpoint_val_every = hyperparameters.print_every
 
     # Scheduler and loss functions
     
     if hyperparameters.lr_scheduler: 
         lr_scheduler_patience = int(hyperparameters.lr_epoch_percentage_patience * hyperparameters.num_iterations) # Every N epochs
+        
+        if lr_scheduler_patience < hyperparameters.print_every:
+            lr_scheduler_patience = hyperparameters.print_every * 2.1
+        
         scheduler_g = lrs.ReduceLROnPlateau(optimizer_g, "min", min_lr=hyperparameters.lr_min, 
                                             verbose=True, factor=hyperparameters.lr_decay_factor, 
                                             patience=lr_scheduler_patience)
@@ -428,7 +435,11 @@ def model_trainer(config, logger):
     else:
         assert 1 == 0, "loss_type_g is not correct"
 
-    w_loss = create_weights(config.dataset.batch_size, 1, 8).cuda(current_cuda)
+    min_weight = 1
+    max_weight = 4
+    w_loss = create_weights(config.dataset.batch_size, 
+                            min_weight, 
+                            max_weight).cuda(current_cuda) # batch_size x pred_len, from min_weight to max_weight
 
     # Tensorboard
 
@@ -450,6 +461,8 @@ def model_trainer(config, logger):
     num_analyzed_seqs = 0
     time_iterations = float(0)
     time_per_iteration = float(0)
+    time_seq_collate = float(0)
+    time_per_seq_collate = float(0)
     current_iteration = 0 # Current iteration, regardless the model had previous training
     flag_check_every = False
 
@@ -460,55 +473,65 @@ def model_trainer(config, logger):
         epoch += 1
         logger.info('Starting epoch {}'.format(epoch))
 
+        start_seq_collate = time.time()
         for batch in train_loader:
+            end_seq_collate = time.time()
+
             start = time.time()
             losses_g = generator_step(hyperparameters, batch, generator, optimizer_g, loss_f, w_loss)
             end = time.time()
             checkpoint.config_cp["norm_g"].append(get_total_norm(generator.parameters()))
             
-            time_iterations += end-start
+            time_iterations += end - start
             time_per_iteration = time_iterations / (current_iteration+1)
+
+            time_seq_collate += end_seq_collate - start_seq_collate
+            time_per_iteration = time_seq_collate / (current_iteration+1)
 
             # Compute approximate time to compute train and val metrics
 
             if not flag_check_every:
-                seconds_to_check_train = time_per_iteration*hyperparameters.checkpoint_train_every
-                seconds_to_check_val = time_per_iteration*hyperparameters.checkpoint_val_every
-                seconds_lr_patience = time_per_iteration*lr_scheduler_patience
+                print("time per iteration: ", time_per_iteration)
+                print("time per seq collate: ", time_per_seq_collate)
+                total_time = time_per_seq_collate + time_per_iteration
+
+                seconds_to_check_train = total_time*hyperparameters.checkpoint_train_every
+                seconds_to_check_val = total_time*hyperparameters.checkpoint_val_every
+                seconds_lr_patience = total_time*lr_scheduler_patience
 
                 if seconds_to_check_train > MAX_TIME_TO_CHECK_TRAIN*60:
-                    hyperparameters.checkpoint_train_every = round((MAX_TIME_TO_CHECK_TRAIN*60) / time_per_iteration)
+                    hyperparameters.checkpoint_train_every = round((MAX_TIME_TO_CHECK_TRAIN*60) / total_time)
                 if seconds_to_check_val > MAX_TIME_TO_CHECK_VAL*60:
-                    hyperparameters.checkpoint_val_every = round((MAX_TIME_TO_CHECK_VAL*60) / time_per_iteration)
+                    hyperparameters.checkpoint_val_every = round((MAX_TIME_TO_CHECK_VAL*60) / total_time)
                 if seconds_lr_patience > MAX_TIME_PATIENCE_LR_SCHEDULER*60:
-                    lr_scheduler_patience = round((MAX_TIME_PATIENCE_LR_SCHEDULER*60) / time_per_iteration)
+                    lr_scheduler_patience = round((MAX_TIME_PATIENCE_LR_SCHEDULER*60) / total_time)
 
                     scheduler_g = lrs.ReduceLROnPlateau(optimizer_g, "min", min_lr=hyperparameters.lr_min, 
                                                         verbose=True, factor=hyperparameters.lr_decay_factor, 
                                                         patience=lr_scheduler_patience)
-                                                
-                mins_to_check_train = round((time_per_iteration*hyperparameters.checkpoint_train_every)/60)
-                mins_to_check_val = round((time_per_iteration*hyperparameters.checkpoint_val_every)/60)
-                mins_to_complete = round((time_per_iteration*hyperparameters.num_iterations)/60)
-                mins_to_decrease_lr = round((time_per_iteration*lr_scheduler_patience)/60)
+
+                mins_to_check_train = round((total_time*hyperparameters.checkpoint_train_every)/60)
+                mins_to_check_val = round((total_time*hyperparameters.checkpoint_val_every)/60)
+                mins_to_complete = round((total_time*hyperparameters.num_iterations)/60)
+                mins_to_decrease_lr = round((total_time*lr_scheduler_patience)/60)
 
                 logger.info(
                             '\n Iterations per epoch: {} \n \
-                             Total epochs: {} \n \
-                             Total iterations: {} (Aprox. {} min) \n \
-                             Checkpoint train every: {} iterations (Aprox. {} min) \n \
-                             Checkpoint val every: {} iterations (Aprox. {} min) \n \
-                             Decrease LR if condition not met every: {} (Aprox. {} min)'
-                             .format(iterations_per_epoch, 
-                                     hyperparameters.num_epochs,
-                                     hyperparameters.num_iterations,
-                                     mins_to_complete,
-                                     hyperparameters.checkpoint_train_every,
-                                     mins_to_check_train,
-                                     hyperparameters.checkpoint_val_every,
-                                     mins_to_check_val,
-                                     lr_scheduler_patience,
-                                     mins_to_decrease_lr))
+                                Total epochs: {} \n \
+                                Total iterations: {} (Aprox. {} min) \n \
+                                Checkpoint train every: {} iterations (Aprox. {} min) \n \
+                                Checkpoint val every: {} iterations (Aprox. {} min) \n \
+                                Decrease LR if condition not met every: {} (Aprox. {} min)'
+                                .format(iterations_per_epoch, 
+                                        hyperparameters.num_epochs,
+                                        hyperparameters.num_iterations,
+                                        mins_to_complete,
+                                        hyperparameters.checkpoint_train_every,
+                                        mins_to_check_train,
+                                        hyperparameters.checkpoint_val_every,
+                                        mins_to_check_val,
+                                        lr_scheduler_patience,
+                                        mins_to_decrease_lr))
 
                 flag_check_every = True
 
@@ -523,6 +546,7 @@ def model_trainer(config, logger):
             if current_iteration % hyperparameters.print_every == 0:
                 logger.info('Iteration = {} / {}'.format(t+1, hyperparameters.num_iterations + previous_t))
                 logger.info('Time per iteration: {}'.format(time_per_iteration))
+                logger.info('Time per seq collate: {}'.format(time_per_seq_collate))
                 logger.info('Num of analyzed sequences: {}'.format(num_analyzed_seqs))
 
                 for k, v in sorted(losses_g.items()):
@@ -641,6 +665,8 @@ def model_trainer(config, logger):
                 g_lr = get_lr(optimizer_g)
                 writer.add_scalar("G_lr", g_lr, num_analyzed_seqs)
 
+            start_seq_collate = time.time()
+
     logger.info("Training finished")
 
     # Check train and validation metrics once the training is finished
@@ -737,6 +763,7 @@ def generator_step(hyperparameters, batch, generator, optimizer_g,
                    loss_f, w_loss=None, split="train"):
     """
     """
+
     # Load data in device
 
     if hyperparameters.physical_context != "plausible_centerlines+area":
@@ -848,11 +875,11 @@ def generator_step(hyperparameters, batch, generator, optimizer_g,
         losses = {}
 
         if hyperparameters.loss_type_g == "mse" or hyperparameters.loss_type_g == "mse_w":
-            _,b,_ = pred_traj_gt_rel.shape
 
-            if "mse_w" in hyperparameters.loss_type_g:
-                w_loss = w_loss[:b, :]
-                loss_ade, loss_fde = calculate_mse_gt_loss_multimodal(pred_traj_gt, pred_traj_fake, loss_f, w_loss)
+            if "mse_w" in hyperparameters.loss_type_g:   
+                _, num_objs, _ = pred_traj_gt.shape
+                w_loss_ = w_loss[:num_objs,:]
+                loss_ade, loss_fde = calculate_mse_gt_loss_multimodal(pred_traj_gt, pred_traj_fake, loss_f, w_loss=w_loss_)
             else:
                 loss_ade, loss_fde = calculate_mse_gt_loss_multimodal(pred_traj_gt, pred_traj_fake, loss_f)
 
@@ -880,12 +907,11 @@ def generator_step(hyperparameters, batch, generator, optimizer_g,
             losses["G_fa_loss"] = loss_fa.item()
 
         elif hyperparameters.loss_type_g == "mse+nll" or hyperparameters.loss_type_g == "mse_w+nll":
-            _,b,_ = pred_traj_gt_rel.shape
-            # pdb.set_trace()
-            if "mse_w" in hyperparameters.loss_type_g:
-                w_loss = w_loss[:b, :]
 
-                loss_ade, loss_fde = calculate_mse_gt_loss_multimodal(pred_traj_gt, pred_traj_fake, loss_f["mse"], w_loss)
+            if "mse_w" in hyperparameters.loss_type_g:
+                _, num_objs, _ = pred_traj_gt.shape
+                w_loss_ = w_loss[:num_objs,:]
+                loss_ade, loss_fde = calculate_mse_gt_loss_multimodal(pred_traj_gt, pred_traj_fake, loss_f["mse"], w_loss=w_loss_)
                 # if torch.is_tensor(relevant_centerlines):
                 #     loss_ade_centerlines = calculate_mse_centerlines_loss(relevant_centerlines, pred_traj_fake, loss_f["mse"], w_loss)
             else:
@@ -893,20 +919,20 @@ def generator_step(hyperparameters, batch, generator, optimizer_g,
                 # if torch.is_tensor(relevant_centerlines):
                 #     loss_ade_centerlines = calculate_mse_centerlines_loss(relevant_centerlines, pred_traj_fake, loss_f["mse"])
 
-            _, loss_fde_goal = calculate_mse_gt_loss_multimodal(phy_info.permute(1,0,2), pred_traj_fake, loss_f["mse"], compute_ade=False)
+            # _, loss_fde_goal = calculate_mse_gt_loss_multimodal(phy_info.permute(1,0,2), pred_traj_fake, loss_f["mse"], compute_ade=False)
 
             loss_nll = calculate_nll_loss(pred_traj_gt, pred_traj_fake, loss_f["nll"], conf)
             
             loss = hyperparameters.loss_ade_weight*loss_ade + \
                    hyperparameters.loss_fde_weight*loss_fde + \
-                   hyperparameters.loss_nll_weight*loss_nll + \
-                   0.5*loss_fde_goal
+                   hyperparameters.loss_nll_weight*loss_nll #+ \
+                #    0.5*loss_fde_goal
                 #    hyperparameters.loss_ade_centerlines_weight*loss_ade_centerlines 
 
             losses["G_mse_ade_loss"] = loss_ade.item()
             losses["G_mse_fde_loss"] = loss_fde.item()
             losses["G_nll_loss"] = loss_nll.item()
-            losses["G_mse_fde_goal_loss"] = loss_fde_goal.item()
+            # losses["G_mse_fde_goal_loss"] = loss_fde_goal.item()
             # losses["G_mse_ade_centerlines_loss"] = loss_nll.item()
         elif hyperparameters.loss_type_g == "centerlines+gt":
 
@@ -1005,7 +1031,7 @@ def check_accuracy(hyperparameters, loader, generator,
                 aux_indeces_list = []
                 for num_ in num_relevant_centerlines:
                     if num_ >= hyperparameters.num_modes: # Limit to the first hyperparameters.num_modes centerlines. We assume
-                                                        # the oracle is here. TODO: Force this from the preprocessing 
+                                                          # the oracle is here. TODO: Force this from the preprocessing 
                         aux_indeces = np.arange(hyperparameters.num_modes)
                         aux_indeces_list.append(aux_indeces)
                     else: # We have less centerlines than hyperparameters.num_modes
@@ -1021,7 +1047,7 @@ def check_accuracy(hyperparameters, loader, generator,
                         
                         assert len(aux_indeces) == hyperparameters.num_modes, "Number of centerlines does not match the number of required modes"
                         aux_indeces_list.append(aux_indeces)
-
+                
                 centerlines_indeces = np.array(aux_indeces_list)
 
                 relevant_centerlines = []

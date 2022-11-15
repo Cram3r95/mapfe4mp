@@ -96,6 +96,7 @@ def mse(gt, pred, w_loss=None):
 
         l2 = torch.mean(l2, axis=1) # b
         l2 = torch.mean(l2) # single value
+
     except Exception as e:
         print(e)
         pdb.set_trace()
