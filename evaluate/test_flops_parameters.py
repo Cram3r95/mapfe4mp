@@ -5,7 +5,7 @@
 
 """
 Created on Wed May 18 17:59:06 2022
-@author: Carlos Gómez-Huélamo and Miguel Eduardo Ortiz Huamaní
+@author: Carlos Gómez-Huélamo
 """
 
 # General purpose imports
@@ -33,12 +33,13 @@ sys.path.append(BASE_DIR)
 
 import model.utils.utils as utils
 
-from model.models.social_lstm_mhsa import TrajectoryGenerator as TG_So_LSTM_MHSA
+from model.models.sophie_mm import TrajectoryGenerator as TG_Sophie_MM
+from model.models.sophie_mm import TrajectoryGenerator as TG_So_LSTM_MHSA
 from model.models.social_set_transformer_mm import TrajectoryGenerator as TG_So_SET_Trans_MM
 
 #######################################
 
-current_cuda = torch.device(f"cuda:1")
+current_cuda = torch.device(f"cuda:0")
 device = torch.device(current_cuda if torch.cuda.is_available() else "cpu")
 
 # Get model parameters and FLOPs (Floating Point Operation per second)
@@ -46,62 +47,71 @@ device = torch.device(current_cuda if torch.cuda.is_available() else "cpu")
 print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
 agents = 20
 
-## Social LSTM MHSA
+# SoPhie MM
 
-aux_path = "save/argoverse/social_lstm_mhsa/best_unimodal_100_percent/config_file.yml"
-config_path = os.path.join(BASE_DIR,aux_path)
-with open(config_path) as config_file:
-    config_file = yaml.safe_load(config_file)
-    config_file = Prodict.from_dict(config_file)
+m_train = TG_Sophie_MM(PHYSICAL_CONTEXT="plausible_centerlines+area").train()
 
-h_dim = 32 # LSTM hidden state
-print("Social LSTM MHSA: ")
-
-print("Num agents: ", agents)
-
-m_train = TG_So_LSTM_MHSA(config_encoder_lstm=config_file.model.generator.encoder_lstm,
-                          config_decoder_lstm=config_file.model.generator.decoder_lstm,
-                          config_mhsa=config_file.model.generator.mhsa,
-                          current_cuda=current_cuda).train()
-
-m_non_train = TG_So_LSTM_MHSA(config_encoder_lstm=config_file.model.generator.encoder_lstm,
-                          config_decoder_lstm=config_file.model.generator.decoder_lstm,
-                          config_mhsa=config_file.model.generator.mhsa,
-                          current_cuda=current_cuda)
+m_non_train = TG_Sophie_MM(PHYSICAL_CONTEXT="plausible_centerlines+area")
 
 print("Only trainable parameters: ", utils.count_parameters(m_train))
 print("All parameters: ", utils.count_parameters(m_non_train))
 
-obs = torch.randn(20,agents,2).to(device)
-rel = torch.randn(20,agents,2).to(device)
-se = torch.tensor([[0,agents]]).to(device)
-idx = torch.tensor([1]).to(device)
+# ## Social LSTM MHSA
 
-model = m_non_train.to(device)
+# aux_path = "save/argoverse/social_lstm_mhsa/best_unimodal_100_percent/config_file.yml"
+# config_path = os.path.join(BASE_DIR,aux_path)
+# with open(config_path) as config_file:
+#     config_file = yaml.safe_load(config_file)
+#     config_file = Prodict.from_dict(config_file)
 
-t0 = time.time()
+# h_dim = 32 # LSTM hidden state
+# print("Social LSTM MHSA: ")
 
-preds = model(obs,rel,se,idx) # forward
-print("time ", time.time() - t0)
+# print("Num agents: ", agents)
 
-print("FLOPs count using thop library: ")
+# m_train = TG_So_LSTM_MHSA(config_encoder_lstm=config_file.model.generator.encoder_lstm,
+#                           config_decoder_lstm=config_file.model.generator.decoder_lstm,
+#                           config_mhsa=config_file.model.generator.mhsa,
+#                           current_cuda=current_cuda).train()
 
-macs, params = profile(model, inputs=(obs,rel,se,idx, ), custom_ops={})
-macs, params = clever_format([macs, params], "%.3f")
+# m_non_train = TG_So_LSTM_MHSA(config_encoder_lstm=config_file.model.generator.encoder_lstm,
+#                           config_decoder_lstm=config_file.model.generator.decoder_lstm,
+#                           config_mhsa=config_file.model.generator.mhsa,
+#                           current_cuda=current_cuda)
 
-print('{:<30}  {:<8}'.format('Computational complexity (MACs): ', macs))
-print('{:<30}  {:<8}'.format('Number of parameters: ', params))
+# print("Only trainable parameters: ", utils.count_parameters(m_train))
+# print("All parameters: ", utils.count_parameters(m_non_train))
 
-print("MACs count using fvcore library: ")
+# obs = torch.randn(20,agents,2).to(device)
+# rel = torch.randn(20,agents,2).to(device)
+# se = torch.tensor([[0,agents]]).to(device)
+# idx = torch.tensor([1]).to(device)
 
-macs = FlopCountAnalysis(model,(obs,rel,se,idx)) # This function actually 
-# returns the MACs. https://github.com/facebookresearch/fvcore/issues/69
+# model = m_non_train.to(device)
 
-print("MACs total: ", macs.total())
-print("MACs my module: ", macs.by_module())
-print("MACs by module and operator: ", macs.by_module_and_operator())
+# t0 = time.time()
 
-print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
+# preds = model(obs,rel,se,idx) # forward
+# print("time ", time.time() - t0)
+
+# print("FLOPs count using thop library: ")
+
+# macs, params = profile(model, inputs=(obs,rel,se,idx, ), custom_ops={})
+# macs, params = clever_format([macs, params], "%.3f")
+
+# print('{:<30}  {:<8}'.format('Computational complexity (MACs): ', macs))
+# print('{:<30}  {:<8}'.format('Number of parameters: ', params))
+
+# print("MACs count using fvcore library: ")
+
+# macs = FlopCountAnalysis(model,(obs,rel,se,idx)) # This function actually 
+# # returns the MACs. https://github.com/facebookresearch/fvcore/issues/69
+
+# print("MACs total: ", macs.total())
+# print("MACs my module: ", macs.by_module())
+# print("MACs by module and operator: ", macs.by_module_and_operator())
+
+# print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
 
 ## Social SET Transformer Multimodal
 
