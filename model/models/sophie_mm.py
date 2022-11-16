@@ -246,8 +246,8 @@ class Multimodal_DecoderLSTM(nn.Module):
         if HEAD == "MultiLinear":
             pred = []
             for _ in range(self.num_modes):
-                pred.append(nn.Linear(self.h_dim, self.data_dim))
-                # pred.append(LinearRes(self.h_dim, self.data_dim))
+                # pred.append(nn.Linear(self.h_dim, self.data_dim))
+                pred.append(LinearRes(self.h_dim, self.data_dim))
             self.hidden2pos = nn.ModuleList(pred) 
         elif HEAD == "SingleLinear":
             self.hidden2pos = nn.Linear(self.h_dim, self.traj_points)

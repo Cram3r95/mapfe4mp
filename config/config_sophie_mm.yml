@@ -77,7 +77,7 @@ hyperparameters:
     clipping_threshold_g: 1.1
     
     save_root_dir: "save/argoverse"
-    exp_name: "pv_lstm_whole_pipeline_centerline_mlp_3" 
+    exp_name: "pv_lstm_whole_pipeline_centerline_mlp_linear_res" 
     # exp_name: "test_plausible_centerlines_40_points_last_obs_multilinear" # If no specific exp_name is used, fill with current day and hour
     # cp oracle_centerlines_last_obs_30_points.npy oracle_centerlines.npy && cp relevant_centerlines_last_obs_30_points.npz relevant_centerlines.npz
     # cp oracle_centerlines_first_obs_40_points.npy oracle_centerlines.npy && cp relevant_centerlines_first_obs_40_points.npz relevant_centerlines.npz
