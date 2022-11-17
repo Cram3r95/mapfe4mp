@@ -1,6 +1,11 @@
+import sys
 import torch
 from torch import nn
-from fractions import gcd
+if str(sys.version_info[0])+"."+str(sys.version_info[1]) >= "3.9": # Python >= 3.9
+    from math import gcd
+else:
+    from fractions import gcd
+    
 import pdb
 
 class MLP(nn.Module):

@@ -43,7 +43,15 @@ Our papers:
 
 ## Get Started and Usage
 
-Tested in Ubuntu 16.04.
+### Installation via Docker
+
+Coming soon ...
+
+### Installation via Conda
+
+Tested in Ubuntu 16.04, Ubuntu 18.04.
+
+CUDA version >= 11.2
 
 If available, check `requirements.txt`
 
@@ -67,14 +75,39 @@ pip install \
     sklearn \
     gitpython \
     torchstat \
-    torch_sparse \
-    torch_geometric
 ```
-Download argoverse-api (1.0) in another folder (out of this directory). \
-Go to the argoverse-api folder: 
+In order to install torch-geometric and associated modules for the GNN computation, please check the following documentation:
+
+https://pytorch-geometric.readthedocs.io/en/latest/notes/installation.html
+
+E.g.
+
 ```
-pip install -e . (N.B. You must have the conda environment activated in order to have argoverse as a Python package of your environment)
+pip install torch-scatter torch-sparse torch-cluster torch-spline-conv torch-geometric -f https://data.pyg.org/whl/torch-1.13.0+cu116.html
 ```
+
+N.B.  If you find any error with the packages, try to install again the specific package separately.
+
+Download argoverse-api (1.0) in another folder (out of this directory):
+
+```
+git clone https://github.com/argoai/argoverse-api.git
+```
+
+Go to the argoverse-api folder and install the requirements of setup.py.
+
+N.B. Comment those packages that have specific versions, and just write the name of the package in order to have the latest version. E.g. numpy==1.19.9 -> numpy.
+N.B. You must have the conda environment activated in order to have argoverse as a Python package of your environment
+
+```
+pip install -e .
+```
+
+Don't worry if there are some errors (such as "ERROR: Could not build wheels for opencv-python which use PEP 517 and cannot be installed directly"), just run ```pip install -e .``` again.
+
+### Argoverse Motion-Forecasting dataset v1.1
+
+Check ```data/README.md```.
 
 ## Quantitative results
 
@@ -121,5 +154,5 @@ Work done with Miguel Ortiz, Santiago Montiel,
 
 Please add in the email subject "mapfe4mp" or "exploring map features paper"
 
-Carlos Gómez-Huélamo. [carlos.gomezh@uah.es](mailto:carlos.gomezh@uah.es) \
-Marcos Conde [marcos.conde-osorio@uni-wuerzburg.de](mailto:marcos.conde-osorio@uni-wuerzburg.de)
+Carlos Gómez-Huélamo: [carlos.gomezh@uah.es](mailto:carlos.gomezh@uah.es) \
+Marcos Conde: [marcos.conde-osorio@uni-wuerzburg.de](mailto:marcos.conde-osorio@uni-wuerzburg.de)

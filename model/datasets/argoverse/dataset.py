@@ -416,7 +416,7 @@ class ArgoverseMotionForecastingDataset(Dataset):
         self.data_processed_folder = os.path.join(root_folder,
                                                   self.split,
                                                   f"data_processed_{str(int(split_percentage*100))}_percent")
-                                                       
+                                             
         if self.extra_data_train != -1.0:
             self.extra_data_processed_folder = os.path.join(root_folder,
                                                             "val",
