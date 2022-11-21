@@ -77,6 +77,7 @@ pip install \
     thop \
     fvcore \
     torchstat \
+    ipykernel
 ```
 In order to install torch-geometric and associated modules for the GNN computations, please check the following documentation:
 
@@ -107,17 +108,29 @@ pip install -e .
 
 Don't worry if there are some errors (such as "ERROR: Could not build wheels for opencv-python which use PEP 517 and cannot be installed directly"), just run ```pip install -e .``` again.
 
-Finally, 
-
-copy the map information of the Argoverse Motion-Forecasting 
+Finally, copy the map information of the Argoverse Motion-Forecasting 
 
 ### Argoverse Motion-Forecasting dataset v1.1
 
 Check ```data/README.md```.
 
+### How to train
+
+Assuming your model is in model/models/```your_model.py/```, you must have the name of this script in the train.py script. Additionally, it is advisable to have a config file and trainer per model, since they must be quite different. For example:
+
+```
+python train.py --trainer mapfe4mp --device_gpu 3
+```
+
 ## Quantitative results
 
 Please check [our papers](https://arxiv.org/abs/2205.13071) for further details.
+
+To check your quantitative results using the Tensorboard tool, execute (assuming you have cloned this repo in your $HOME folder):
+
+cd ~/mapfe4mp/save/argoverse/```your_model```/```your_split_percent``` && tensorboard --logdir . --port=```your_port```
+
+E.g. cd ~/mapfe4mp/save/argoverse/mapfe4mp/100.0_percent && tensorboard --logdir . --port=6100
 
 ## Qualitative results
 

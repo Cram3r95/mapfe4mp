@@ -7,7 +7,7 @@ dataset:
     path: "data/datasets/argoverse/motion-forecasting/"
     imgs_folder: "map_features"
     split: "train"
-    batch_size: 512
+    batch_size: 1024
     num_workers: 0
     start_from_percentage: 0.0 # By default, 0. If you want to analize a particular bunch of files (e.g. from 25 % to 50 %)
                                # then write here 0.25 and in split_percentage 0.25
@@ -18,7 +18,7 @@ dataset:
     data_augmentation: False # True # Rotation, Swapping, Dropout, Gaussian noise
                              # TODO: Optimize the data augmentation functions. At this moment it takes
                              # around 95 % time of the seq collate function
-    class_balance: -1.0 # % of straight trajectories (considering the AGENT). Remaining % are curved trajectories
+    class_balance: 0.7 # % of straight trajectories (considering the AGENT). Remaining % are curved trajectories
                         # (again, considering the AGENT). -1.0 if no class balance is used (get_item takes the corresponding
                         # sequence regardless if it is straight or curved)
     preprocess_data: False
@@ -37,8 +37,8 @@ hyperparameters:
                                      # Otherwise, use absolute coordinates
 
     # physical_context: "social"
-    # physical_context: "oracle"
-    physical_context: "plausible_centerlines+area" # dummy (no physical context, only social), visual, goals, oracle, plausible_centerlines+area
+    physical_context: "oracle"
+    # physical_context: "plausible_centerlines+area" # dummy (no physical context, only social), visual, goals, oracle, plausible_centerlines+area
 
     num_modes: 6 # Multimodality
     obs_origin: 20 # This frame will be the origin, tipically the first observation (1) or last observation 
@@ -74,13 +74,13 @@ hyperparameters:
     clipping_threshold_g: 1.1
     
     save_root_dir: "save/argoverse"
-    exp_name: "mapfe4mp_1" 
+    exp_name: "mapfe4mp_2" 
     # exp_name: "test_plausible_centerlines_40_points_last_obs_multilinear" # If no specific exp_name is used, fill with current day and hour
     # cp oracle_centerlines_last_obs_30_points.npy oracle_centerlines.npy && cp relevant_centerlines_last_obs_30_points.npz relevant_centerlines.npz
     # cp oracle_centerlines_first_obs_40_points.npy oracle_centerlines.npy && cp relevant_centerlines_first_obs_40_points.npz relevant_centerlines.npz
     output_dir: # To be filled in the code (save_root_dir/model_name/split_percentage/exp)
     checkpoint_start_from:
-    exp_description: "Refactorized code. Test with 6 centerline per sequence"
+    exp_description: "Test with only oracle and social interactions, 60 conv filters and class balance 0.7"
     tensorboard_active: True
 
 # Model

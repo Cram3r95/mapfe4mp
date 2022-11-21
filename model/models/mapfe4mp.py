@@ -40,13 +40,11 @@ PRED_LEN = 30
 NUM_PLAUSIBLE_AREA_POINTS = 512
 CENTERLINE_LENGTH = 40
 
-MLP_DIM = 64
 NUM_ATTENTION_HEADS = 4
 H_DIM_PHYSICAL = 128
 H_DIM_SOCIAL = 128
-DECODER_H_DIM = H_DIM_SOCIAL*3 + H_DIM_PHYSICAL*6
 EMBEDDING_DIM = 16
-CONV_FILTERS = 16 # 60
+CONV_FILTERS = 60 # 60
 
 APPLY_DROPOUT = True
 DROPOUT = 0.4
@@ -345,7 +343,6 @@ class Multimodal_Decoder(nn.Module):
         self.pred_len = PRED_LEN
 
         self.decoder_h_dim = decoder_h_dim
-        self.mlp_dim = MLP_DIM
         self.embedding_dim = EMBEDDING_DIM
         self.num_modes = NUM_MODES
 
@@ -451,7 +448,6 @@ class TrajectoryGenerator(nn.Module):
 
         self.obs_len = OBS_LEN
         self.pred_len = PRED_LEN
-        self.mlp_dim = MLP_DIM
         self.h_dim_social = H_DIM_SOCIAL
         self.h_dim_physical = H_DIM_PHYSICAL
         self.num_attention_heads = NUM_ATTENTION_HEADS
@@ -495,7 +491,9 @@ class TrajectoryGenerator(nn.Module):
             self.concat_h_dim = 3 * self.h_dim_social 
         elif PHYSICAL_CONTEXT == "oracle":
             # encoded target pos and vel + social info + most plausible centerline encoded
-            self.concat_h_dim = 3 * self.h_dim_social + self.h_dim_physical
+            # self.concat_h_dim = 3 * self.h_dim_social + self.h_dim_physical
+            
+            self.concat_h_dim = self.h_dim_social + self.h_dim_physical
         elif PHYSICAL_CONTEXT == "plausible_centerlines+area":
             # encoded target pos and vel + social info + map information encoded
             self.concat_h_dim = 3 * self.h_dim_social + 6 * self.h_dim_physical
@@ -538,7 +536,11 @@ class TrajectoryGenerator(nn.Module):
         
         obs_traj = self.add_noise(obs_traj, factor=0.5)
         obs_traj_rel = self.add_noise(obs_traj_rel, factor=0.01)
-        relevant_centerlines = self.add_noise(relevant_centerlines)
+        if self.physical_context == "oracle":
+            phy_info = self.add_noise(phy_info)
+        elif self.physical_context == "plausible_centerlines+area":
+            # phy_info = self.add_noise(phy_info)
+            relevant_centerlines = self.add_noise(relevant_centerlines)
         
         # Encoder
 
@@ -577,12 +579,16 @@ class TrajectoryGenerator(nn.Module):
 
         elif self.physical_context == "oracle":
             encoded_phy_info = self.centerline_encoder(phy_info)
-            mlp_decoder_context_input = torch.cat([target_agent_encoded_obs_traj.contiguous().view(-1,self.h_dim_social), 
-                                                   target_agent_encoded_obs_traj_rel.contiguous().view(-1,self.h_dim_social), 
-                                                   encoded_social_info.contiguous().view(-1,self.h_dim_social), 
-                                                   encoded_phy_info.contiguous().view(-1,self.h_dim_physical)], 
-                                                   dim=1)
+            # mlp_decoder_context_input = torch.cat([target_agent_encoded_obs_traj.contiguous().view(-1,self.h_dim_social), 
+            #                                        target_agent_encoded_obs_traj_rel.contiguous().view(-1,self.h_dim_social), 
+            #                                        encoded_social_info.contiguous().view(-1,self.h_dim_social), 
+            #                                        encoded_phy_info.contiguous().view(-1,self.h_dim_physical)], 
+            #                                        dim=1)
 
+            mlp_decoder_context_input = torch.cat([encoded_social_info, 
+                                                   encoded_phy_info], 
+                                                   dim=1)
+            
             decoder_h = mlp_decoder_context_input.unsqueeze(0)
             decoder_c = torch.randn(tuple(decoder_h.shape)).cuda(obs_traj.device)
             state_tuple = (decoder_h, decoder_c)
