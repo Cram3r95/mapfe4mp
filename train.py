@@ -36,7 +36,8 @@ TRAINER_LIST = [
                 "pv_lstm",
                 "pv_lstm_mm",
                 "sophie",
-                "sophie_mm"
+                "sophie_mm",
+                "mapfe4mp"
                ]
 
 def create_logger(file_path):

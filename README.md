@@ -74,9 +74,11 @@ pip install \
     matplotlib \
     sklearn \
     gitpython \
+    thop \
+    fvcore \
     torchstat \
 ```
-In order to install torch-geometric and associated modules for the GNN computation, please check the following documentation:
+In order to install torch-geometric and associated modules for the GNN computations, please check the following documentation:
 
 https://pytorch-geometric.readthedocs.io/en/latest/notes/installation.html
 
@@ -104,6 +106,10 @@ pip install -e .
 ```
 
 Don't worry if there are some errors (such as "ERROR: Could not build wheels for opencv-python which use PEP 517 and cannot be installed directly"), just run ```pip install -e .``` again.
+
+Finally, 
+
+copy the map information of the Argoverse Motion-Forecasting 
 
 ### Argoverse Motion-Forecasting dataset v1.1
 

@@ -1,0 +1,91 @@
+# Dataset & HW
+
+use_gpu: 1
+device_gpu: 0 # Default CUDA device
+dataset_name: "argoverse_motion_forecasting_dataset"
+dataset:
+    path: "data/datasets/argoverse/motion-forecasting/"
+    imgs_folder: "map_features"
+    split: "train"
+    batch_size: 512
+    num_workers: 0
+    start_from_percentage: 0.0 # By default, 0. If you want to analize a particular bunch of files (e.g. from 25 % to 50 %)
+                               # then write here 0.25 and in split_percentage 0.25
+    split_percentage: 1.0 # % of the dataset (0-1)
+    extra_data_train: -1.0 # % (0-1) of the val split is used for training too. Remaining files are used for validation
+                          # -1.0 if not used
+    shuffle: True 
+    data_augmentation: False # True # Rotation, Swapping, Dropout, Gaussian noise
+                             # TODO: Optimize the data augmentation functions. At this moment it takes
+                             # around 95 % time of the seq collate function
+    class_balance: -1.0 # % of straight trajectories (considering the AGENT). Remaining % are curved trajectories
+                        # (again, considering the AGENT). -1.0 if no class balance is used (get_item takes the corresponding
+                        # sequence regardless if it is straight or curved)
+    preprocess_data: False
+    save_data: False
+
+# Model hyperparameters
+
+optim_parameters:
+    g_learning_rate: 1.0e-3 # 1.0e-3
+    g_weight_decay: 1.0e-3
+hyperparameters:
+    output_single_agent: True
+
+    use_rel_disp: &use_rel_disp True # If True, use dx/dy (equivalent to velocities) 
+                                     # to encode/decode. 
+                                     # Otherwise, use absolute coordinates
+
+    # physical_context: "social"
+    # physical_context: "oracle"
+    physical_context: "plausible_centerlines+area" # dummy (no physical context, only social), visual, goals, oracle, plausible_centerlines+area
+
+    num_modes: 6 # Multimodality
+    obs_origin: 20 # This frame will be the origin, tipically the first observation (1) or last observation 
+                   # (obs_len) of the AGENT (object to be predicted in Argoverse 1.0). Note that in the code
+                   # it will be 0 and 19 respectively
+    obs_len: &obs_len 20 
+    pred_len: &pred_len 30 # Must be 0 for the split test since we do not have the predictions of the agents
+                           # Only the observations (0 to obs_len-1 past observations)
+    distance_threshold: 40 # It depends on a statistical study (see get_sequences_as_array function), 
+                           # where we determine which is the optimal distance for which most agents
+                           # are observed for our AGENT
+    
+    num_epochs: 100 # 400
+    print_every: 50
+    checkpoint_name: "0"                      
+    checkpoint_val_percentage: 0.02 # 0.1 # (0 - 1) Check accuracy in validation split every
+                                    # checkpoint_val_percentage * total_num_iterations
+    checkpoint_train_percentage: 0.1 # 0.2 # (0 - 1)
+
+    loss_type_g: "mse+nll" # (mse|mse_w), nll, (mse|mse_w)+nll, (mse|mse_w)+fa, centerlines+gt
+    loss_ade_weight: 1.1 # 1.1
+    loss_ade_centerlines_weight: 1 
+    loss_fde_weight: 1.4 # 1.4
+    loss_nll_weight: 2.2 # 2.2 
+    loss_fa_weight: 1
+
+    lr_scheduler: True
+    lr_decay_factor: 0.1 # 0.5 
+    lr_min: 1.0e-6
+    lr_epoch_percentage_patience: 0.2 # 0.15 # (0-N) E.g. If 0.05 -> the patience will be the 5 % of the total epochs
+    
+    g_steps: 1
+    clipping_threshold_g: 1.1
+    
+    save_root_dir: "save/argoverse"
+    exp_name: "mapfe4mp_1" 
+    # exp_name: "test_plausible_centerlines_40_points_last_obs_multilinear" # If no specific exp_name is used, fill with current day and hour
+    # cp oracle_centerlines_last_obs_30_points.npy oracle_centerlines.npy && cp relevant_centerlines_last_obs_30_points.npz relevant_centerlines.npz
+    # cp oracle_centerlines_first_obs_40_points.npy oracle_centerlines.npy && cp relevant_centerlines_first_obs_40_points.npz relevant_centerlines.npz
+    output_dir: # To be filled in the code (save_root_dir/model_name/split_percentage/exp)
+    checkpoint_start_from:
+    exp_description: "Refactorized code. Test with 6 centerline per sequence"
+    tensorboard_active: True
+
+# Model
+
+model:
+    name: "mapfe4mp"
+
+

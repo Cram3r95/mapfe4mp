@@ -1,5 +1,6 @@
 import sys
 import torch
+import math
 from torch import nn
 if str(sys.version_info[0])+"."+str(sys.version_info[1]) >= "3.9": # Python >= 3.9
     from math import gcd
@@ -51,19 +52,19 @@ class Linear(nn.Module):
 
         self.apply(self._init_weights)
 
-    # def _init_weights(self, module):
-    #     """
-    #     """
-    #     classname = module.__class__.__name__
-    #     if classname.find('Linear') != -1:
-    #         try:
-    #             nn.init.kaiming_normal_(module.weight)
-    #         except:
-    #             pdb.set_trace()
+    def _init_weights(self, module):
+        """
+        """
+        classname = module.__class__.__name__
+        if classname.find('Linear') != -1:
+            try:
+                nn.init.kaiming_normal_(module.weight)
+            except:
+                pdb.set_trace()
 
     def forward(self, x):
         out = self.linear(x)
-        out = self.norm(out)
+        # out = self.norm(out)
         if self.act:
             out = self.fa(out)
         return out
@@ -73,15 +74,17 @@ class LinearRes(nn.Module):
         super(LinearRes, self).__init__()
         assert(norm in ['GN', 'BN', 'SyncBN'])
 
-        self.linear1 = nn.Linear(n_in, n_out, bias=False)
-        self.linear2 = nn.Linear(n_out, n_out, bias=False)
-        self.relu = nn.ReLU(inplace=True)
+        mid_dim = math.ceil((n_in + n_out)/2)
+        self.linear1 = nn.Linear(n_in, mid_dim, bias=False)
+        self.linear2 = nn.Linear(mid_dim, n_out, bias=False)
+        # self.relu = nn.ReLU(inplace=True)
+        self.tanh = nn.Tanh()
 
         if norm == 'GN':
-            self.norm1 = nn.GroupNorm(gcd(ng, n_out), n_out)
+            self.norm1 = nn.GroupNorm(gcd(ng, mid_dim), mid_dim)
             self.norm2 = nn.GroupNorm(gcd(ng, n_out), n_out)
         elif norm == 'BN':
-            self.norm1 = nn.BatchNorm1d(n_out)
+            self.norm1 = nn.BatchNorm1d(mid_dim)
             self.norm2 = nn.BatchNorm1d(n_out)
         else:   
             exit('SyncBN has not been added!')
@@ -103,7 +106,7 @@ class LinearRes(nn.Module):
     def forward(self, x):
         out = self.linear1(x)
         out = self.norm1(out)
-        out = self.relu(out)
+        out = self.tanh(out)
         out = self.linear2(out)
         out = self.norm2(out)
 
@@ -112,5 +115,5 @@ class LinearRes(nn.Module):
         else:
             out += x
 
-        out = self.relu(out)
+        out = self.tanh(out)
         return out

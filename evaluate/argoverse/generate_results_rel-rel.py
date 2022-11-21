@@ -525,21 +525,10 @@ python evaluate/argoverse/generate_results_rel-rel.py \
 --device_gpu 0 --split "val"
 """
 
-# Best model at this moment (in terms of test)
-"""
-python evaluate/argoverse/generate_results_rel-rel.py \
---model_path "save/argoverse/sophie_mm/100.0_percent/test_with_pv_lstm_with_data_aug_with_goal_8/argoverse_motion_forecasting_dataset_0_with_model.pt" \
---device_gpu 0 --split "test"
-"""
+####
 
 """
 python evaluate/argoverse/generate_results_rel-rel.py \
---model_path "save/argoverse/sophie_mm/100.0_percent/pv_lstm_1/argoverse_motion_forecasting_dataset_0_with_model.pt" \
---device_gpu 0 --split "test"
-"""
-
-"""
-python evaluate/argoverse/generate_results_rel-rel.py \
---model_path "save/argoverse/sophie_mm/100.0_percent/pv_lstm_whole_pipeline_centerline_mlp/argoverse_motion_forecasting_dataset_0_with_model.pt" \
---device_gpu 0 --split "test"
+--model_path "save/argoverse/sophie_mm/100.0_percent/stable_model_test_gnn_mhsa_centerlines_2/argoverse_motion_forecasting_dataset_0_with_model.pt" \
+--device_gpu 0 --split "val"
 """

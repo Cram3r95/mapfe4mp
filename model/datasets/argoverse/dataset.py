@@ -115,7 +115,7 @@ def seq_collate(data):
     map_origin = torch.stack(map_origin)
 
     obs_len = obs_traj.shape[0]
-
+    
     # Data augmentation
 
     if APPLY_DATA_AUGMENTATION and CURRENT_SPLIT == "train":

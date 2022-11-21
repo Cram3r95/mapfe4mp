@@ -92,14 +92,7 @@ def get_generator(model_path,config):
 
     # TODO: Pass as argument only "config"
 
-    try:
-        generator = TrajectoryGenerator(config_encoder_lstm=config.model.generator.encoder_lstm,
-                                        config_decoder_lstm=config.model.generator.decoder_lstm,
-                                        config_mhsa=config.model.generator.mhsa,
-                                        current_cuda=current_cuda,
-                                        adversarial_training=adversarial_training)
-    except Exception as e:
-        generator = TrajectoryGenerator(PHYSICAL_CONTEXT=config.hyperparameters.physical_context)
+    generator = TrajectoryGenerator(PHYSICAL_CONTEXT=config.hyperparameters.physical_context)
 
     checkpoint = torch.load(model_path, map_location=current_cuda)
     generator.load_state_dict(checkpoint.config_cp['g_best_state'], strict=False)

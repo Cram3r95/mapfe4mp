@@ -50,12 +50,12 @@ scaler = GradScaler()
 current_cuda = None
 absolute_root_folder = None
 
-USE_SCALER = True
+USE_SCALER = False # Do not use this scaler, first learn how to use it properly
 CHECK_ACCURACY_TRAIN = False
 CHECK_ACCURACY_VAL = True
-MAX_TIME_TO_CHECK_TRAIN = 120 # minutes
-MAX_TIME_TO_CHECK_VAL = 120 # minutes
-MAX_TIME_PATIENCE_LR_SCHEDULER = 120 # 60 # minutes
+MAX_TIME_TO_CHECK_TRAIN = 60 # minutes
+MAX_TIME_TO_CHECK_VAL = 60 # minutes
+MAX_TIME_PATIENCE_LR_SCHEDULER = 60 # 60 # minutes
 
 min_ade_ = 50000
 g_lr = 0.001

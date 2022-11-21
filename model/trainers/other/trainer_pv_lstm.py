@@ -30,7 +30,7 @@ from torch.utils.tensorboard import SummaryWriter
 # Custom imports
 
 from model.datasets.argoverse.dataset import ArgoverseMotionForecastingDataset, seq_collate
-from model.models.pv_lstm import TrajectoryGenerator
+from mapfe4mp.model.models.other.pv_lstm import TrajectoryGenerator
 from model.modules.losses import l2_loss, mse, pytorch_neg_multi_log_likelihood_batch, evaluate_feasible_area_prediction
 from model.modules.evaluation_metrics import displacement_error, final_displacement_error
 from model.datasets.argoverse.dataset_utils import relative_to_abs
