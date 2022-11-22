@@ -179,7 +179,7 @@ def map_generator(curr_num_seq,
                                                                           #"black"  
         ax.fill(lane_polygon[:, 0], lane_polygon[:, 1], "white", edgecolor='white', fill=True)
         ax.plot(lane_cl[:, 0], lane_cl[:, 1], "-", color=centerlines_colour, linewidth=1.5, alpha=1.0, zorder=2)
-        # N.B. zorder must be 2 (Line2D) in order to represent the whole line, with 1 (Path) there are some problems
+        # N.B. If you want to represent the centerline on top of the filled polygon, the zorder must be higher
 
     # print("Time consumed by plot drivable area and lane centerlines: ", time.time()-t0)
 
@@ -482,7 +482,7 @@ class MapFeaturesUtils:
                         color="b",
                         alpha=1,
                         linewidth=3,
-                        zorder=15,
+                        zorder=1,
                     )
 
                 for i in range(xy_f.shape[1]):
@@ -503,7 +503,7 @@ class MapFeaturesUtils:
                         color="r",
                         alpha=1,
                         linewidth=3,
-                        zorder=15,
+                        zorder=1,
                     )
 
                 for i in range(extended_xy_f.shape[1]):
@@ -524,7 +524,7 @@ class MapFeaturesUtils:
                         color="b",
                         alpha=1,
                         linewidth=3,
-                        zorder=15,
+                        zorder=1,
                     )
 
                 for i in range(xy_f.shape[1]):
@@ -578,7 +578,7 @@ class MapFeaturesUtils:
                     color="b",
                     alpha=1,
                     linewidth=3,
-                    zorder=15,
+                    zorder=1,
                 )
 
                 # Agent prediction
@@ -590,7 +590,7 @@ class MapFeaturesUtils:
                     color="r",
                     alpha=1,
                     linewidth=3,
-                    zorder=15,
+                    zorder=1,
                 )
 
                 final_x = agent_xy[-1, 0]
@@ -605,7 +605,7 @@ class MapFeaturesUtils:
                     color="r",
                     alpha=1,
                     markersize=5,
-                    zorder=15,
+                    zorder=2,
                 )
             else: # test
                 # Agent observation
@@ -617,7 +617,7 @@ class MapFeaturesUtils:
                     color="b",
                     alpha=1,
                     linewidth=3,
-                    zorder=15,
+                    zorder=1,
                 )
 
                 final_x = agent_xy[-1, 0]
@@ -632,7 +632,7 @@ class MapFeaturesUtils:
                     color="b",
                     alpha=1,
                     markersize=5,
-                    zorder=15,
+                    zorder=2,
                 )
 
             output_dir = os.path.join(BASE_DIR,f"data/datasets/argoverse/motion-forecasting/{split}/map_features")
@@ -704,7 +704,7 @@ class MapFeaturesUtils:
                 color="b",
                 alpha=1,
                 linewidth=3,
-                zorder=15,
+                zorder=1,
             )
 
             # Agent prediction
@@ -716,7 +716,7 @@ class MapFeaturesUtils:
                 color="r",
                 alpha=1,
                 linewidth=3,
-                zorder=15,
+                zorder=1,
             )
 
             # First observation
@@ -731,7 +731,7 @@ class MapFeaturesUtils:
                 color="b",
                 alpha=1,
                 markersize=5,
-                zorder=15,
+                zorder=2,
             )
 
             # Last observation
@@ -746,7 +746,7 @@ class MapFeaturesUtils:
                 color="b",
                 alpha=1,
                 markersize=5,
-                zorder=15,
+                zorder=2,
             )
 
             # Final GT
@@ -761,7 +761,7 @@ class MapFeaturesUtils:
                 color="r",
                 alpha=1,
                 markersize=5,
-                zorder=15,
+                zorder=2,
             )
         else: # test
             # Agent observation
@@ -773,7 +773,7 @@ class MapFeaturesUtils:
                 color="b",
                 alpha=1,
                 linewidth=3,
-                zorder=15,
+                zorder=1,
             )
 
             # First observation
@@ -788,7 +788,7 @@ class MapFeaturesUtils:
                 color="b",
                 alpha=1,
                 markersize=5,
-                zorder=15,
+                zorder=1,
             )
 
             # Last observation
@@ -803,7 +803,7 @@ class MapFeaturesUtils:
                 color="b",
                 alpha=1,
                 markersize=5,
-                zorder=15,
+                zorder=2,
             )
 
         plt.xlabel("Map X")
@@ -1126,9 +1126,9 @@ class MapFeaturesUtils:
                     ax.fill(lane_polygon[:, 0], lane_polygon[:, 1], "white", edgecolor='white', fill=True)
 
                     if centerline_index == 0:
-                        ax.plot(centerline_coords[:, 0], centerline_coords[:, 1], "-", color="red", linewidth=3, alpha=1.0, zorder=4)
+                        ax.plot(centerline_coords[:, 0], centerline_coords[:, 1], "-", color="cyan", linewidth=3, alpha=1.0, zorder=2)
                     elif centerline_index < max_candidates:
-                        ax.plot(centerline_coords[:, 0], centerline_coords[:, 1], "-", color="green", linewidth=3, alpha=1.0, zorder=3)
+                        ax.plot(centerline_coords[:, 0], centerline_coords[:, 1], "-", color="green", linewidth=3, alpha=1.0, zorder=2)
                     else:
                         ax.plot(centerline_coords[:, 0], centerline_coords[:, 1], "-", color="gray", linewidth=1.5, alpha=1.0, zorder=2)
 
@@ -1165,7 +1165,7 @@ class MapFeaturesUtils:
                     color="b",
                     alpha=1,
                     linewidth=3,
-                    zorder=15,
+                    zorder=2,
                 )
 
                 # Agent prediction (GT)
@@ -1177,7 +1177,7 @@ class MapFeaturesUtils:
                     color="r",
                     alpha=1,
                     linewidth=3,
-                    zorder=15,
+                    zorder=2,
                 )
 
                 final_x = agent_traj[-1, 0]
@@ -1192,7 +1192,7 @@ class MapFeaturesUtils:
                     color="r",
                     alpha=1,
                     markersize=5,
-                    zorder=15,
+                    zorder=3,
                 )
 
                 ## Extended Agent's trajectory filtered
@@ -1208,7 +1208,7 @@ class MapFeaturesUtils:
                         color="purple",
                         alpha=1,
                         linewidth=3,
-                        zorder=16,
+                        zorder=2,
                     )
             else: # test
                 # Agent observation
@@ -1220,7 +1220,7 @@ class MapFeaturesUtils:
                     color="b",
                     alpha=1,
                     linewidth=3,
-                    zorder=15,
+                    zorder=2,
                 )
 
                 final_x = agent_traj[-1, 0]
@@ -1235,7 +1235,7 @@ class MapFeaturesUtils:
                     color="b",
                     alpha=1,
                     markersize=5,
-                    zorder=15,
+                    zorder=3,
                 )
 
                 ## Extended Agent's trajectory filtered
@@ -1251,7 +1251,7 @@ class MapFeaturesUtils:
                         color="purple",
                         alpha=1,
                         linewidth=3,
-                        zorder=16,
+                        zorder=2,
                     )
 
             plt.xlabel("Map X")

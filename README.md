@@ -43,6 +43,8 @@ Our papers:
 
 ## Get Started and Usage
 
+First of all, we highly encourage the use of the VSCode editor, regarding the debugging capability and its quite interesting extensions.
+
 ### Installation via Docker
 
 Coming soon ...
@@ -121,6 +123,18 @@ Assuming your model is in model/models/```your_model.py/```, you must have the n
 ```
 python train.py --trainer mapfe4mp --device_gpu 3
 ```
+
+### Notes
+
+Recommended VSCode extensions:
+
+- Jupyter 
+- Python
+- Python for VSCode
+
+If you cannot open a Jupyter Notebook correctly, just reinstall the Jupyter extension in your VSCode editor.
+
+Please, be aware that after installing a new extension, you should reload your VSCode window.
 
 ## Quantitative results
 

@@ -13,6 +13,7 @@ Created on Fri Feb 25 12:19:38 2022
 import math
 import numpy as np
 import pdb
+import time
 
 # DL & Math imports
 
@@ -49,7 +50,7 @@ CONV_FILTERS = 32 # 60
 APPLY_DROPOUT = True
 DROPOUT = 0.4
 
-HEAD = "MultiLinear" # SingleLinear, MultiLinear, Non-Autoregressive
+HEAD = "SingleLinear" # SingleLinear, MultiLinear, Non-Autoregressive
 
 def make_mlp(dim_list, activation_function="ReLU", batch_norm=False, dropout=0.0):
     """
@@ -600,7 +601,7 @@ class TrajectoryGenerator(nn.Module):
         Returns:
             _type_: _description_
         """
-
+        start = time.time()
         batch_size = seq_start_end.shape[0]
         
         # Data aug (TODO: Do this in the seq_collate function)
@@ -696,5 +697,8 @@ class TrajectoryGenerator(nn.Module):
         
         if torch.any(pred_traj_fake_rel.isnan()) or torch.any(conf.isnan()):
             pdb.set_trace()
-
+            
+        end = time.time()
+        print("Time consumed by forward: ", end-start)
+        
         return pred_traj_fake_rel, conf

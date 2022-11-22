@@ -913,8 +913,11 @@ def generator_step(hyperparameters, batch, generator, optimizer_g,
                 # if torch.is_tensor(relevant_centerlines):
                 #     loss_ade_centerlines = calculate_mse_centerlines_loss(relevant_centerlines, pred_traj_fake, loss_f["mse"], w_loss)
             else:
-                loss_ade, loss_fde = calculate_mse_gt_loss_multimodal(pred_traj_gt, pred_traj_fake, loss_f["mse"])
+                # loss_ade, loss_fde = calculate_mse_gt_loss_multimodal(pred_traj_gt, pred_traj_fake, loss_f["mse"])
                 # loss_ade, loss_fde = calculate_mse_gt_loss_multimodal(pred_traj_gt_rel, pred_traj_fake_rel, loss_f["mse"])
+                
+                _, loss_fde = calculate_mse_gt_loss_multimodal(pred_traj_gt, pred_traj_fake, loss_f["mse"])
+                loss_ade, _ = calculate_mse_gt_loss_multimodal(pred_traj_gt_rel, pred_traj_fake_rel, loss_f["mse"])
                 # if torch.is_tensor(relevant_centerlines):
                 #     loss_ade_centerlines = calculate_mse_centerlines_loss(relevant_centerlines, pred_traj_fake, loss_f["mse"])
 
