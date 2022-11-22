@@ -343,11 +343,7 @@ def model_trainer(config, logger):
 
     # Initialize motion prediction generator and optimizer
 
-    try:
-        generator = TrajectoryGenerator(PHYSICAL_CONTEXT=hyperparameters.physical_context)
-    except Exception as e:
-        print("Exception: ", e)
-        generator = TrajectoryGenerator()
+    generator = TrajectoryGenerator(PHYSICAL_CONTEXT=hyperparameters.physical_context)
         
     generator.to(device)
     generator.apply(init_weights)
@@ -918,12 +914,14 @@ def generator_step(hyperparameters, batch, generator, optimizer_g,
                 #     loss_ade_centerlines = calculate_mse_centerlines_loss(relevant_centerlines, pred_traj_fake, loss_f["mse"], w_loss)
             else:
                 loss_ade, loss_fde = calculate_mse_gt_loss_multimodal(pred_traj_gt, pred_traj_fake, loss_f["mse"])
+                # loss_ade, loss_fde = calculate_mse_gt_loss_multimodal(pred_traj_gt_rel, pred_traj_fake_rel, loss_f["mse"])
                 # if torch.is_tensor(relevant_centerlines):
                 #     loss_ade_centerlines = calculate_mse_centerlines_loss(relevant_centerlines, pred_traj_fake, loss_f["mse"])
 
             # _, loss_fde_goal = calculate_mse_gt_loss_multimodal(phy_info.permute(1,0,2), pred_traj_fake, loss_f["mse"], compute_ade=False)
 
             loss_nll = calculate_nll_loss(pred_traj_gt, pred_traj_fake, loss_f["nll"], conf)
+            # loss_nll = calculate_nll_loss(pred_traj_gt_rel, pred_traj_fake_rel, loss_f["nll"], conf)
             
             loss = hyperparameters.loss_ade_weight*loss_ade + \
                    hyperparameters.loss_fde_weight*loss_fde + \
@@ -983,9 +981,7 @@ def check_accuracy(hyperparameters, loader, generator,
     total_traj, total_traj_l, total_traj_nl = 0, 0, 0
     loss_mask_sum = 0
 
-    # Set generator to eval mode (not training now)
-
-    generator.eval()
+    generator.eval() # Set generator to eval mode (in order to not modify the weights)
 
     with torch.no_grad(): # Do not compute the gradients (only when we want to check the accuracy)
         for batch in loader:

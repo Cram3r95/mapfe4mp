@@ -44,12 +44,12 @@ NUM_ATTENTION_HEADS = 4
 H_DIM_PHYSICAL = 128
 H_DIM_SOCIAL = 128
 EMBEDDING_DIM = 16
-CONV_FILTERS = 60 # 60
+CONV_FILTERS = 32 # 60
 
 APPLY_DROPOUT = True
 DROPOUT = 0.4
 
-HEAD = "SingleLinear" # SingleLinear, MultiLinear, Non-Autoregressive
+HEAD = "MultiLinear" # SingleLinear, MultiLinear, Non-Autoregressive
 
 def make_mlp(dim_list, activation_function="ReLU", batch_norm=False, dropout=0.0):
     """
@@ -354,8 +354,8 @@ class Multimodal_Decoder(nn.Module):
         if HEAD == "MultiLinear":
             pred = []
             for _ in range(self.num_modes):
-                # pred.append(nn.Linear(self.decoder_h_dim, self.data_dim))
-                pred.append(Linear(self.decoder_h_dim, self.data_dim))
+                pred.append(nn.Linear(self.decoder_h_dim, self.data_dim))
+                # pred.append(Linear(self.decoder_h_dim, self.data_dim))
             self.hidden2pos = nn.ModuleList(pred) 
         elif HEAD == "SingleLinear":
             self.hidden2pos = nn.Linear(self.decoder_h_dim, self.traj_points)
@@ -440,8 +440,78 @@ class Multimodal_Decoder(nn.Module):
 
         return pred_traj_fake_rel, conf
 
+## CRAT-PRED
+
+class DecoderResidual(nn.Module):
+    def __init__(self, h_dim):
+        super(DecoderResidual, self).__init__()
+
+        self.h_dim = h_dim
+        
+        output = []
+        for i in range(NUM_MODES):
+            output.append(PredictionNet(self.h_dim))
+
+        self.output = nn.ModuleList(output)
+        
+        self.confidences = nn.Sequential(nn.Linear(PRED_LEN*DATA_DIM,32),
+                                         nn.ReLU(),
+                                         nn.Linear(32,1))  
+
+    def forward(self, decoder_in):
+        batch_size = decoder_in.shape[0]
+        pred = []
+
+        for out_subnet in self.output:
+            pred.append(out_subnet(decoder_in))
+
+        decoder_out = torch.stack(pred)
+        decoder_out = torch.swapaxes(decoder_out, 0, 1)
+        
+        pred_traj_fake_rel = decoder_out.view(batch_size,NUM_MODES,PRED_LEN,DATA_DIM)
+
+        conf = self.confidences(pred_traj_fake_rel.contiguous().view(batch_size,NUM_MODES,-1))
+        conf = torch.softmax(conf.view(batch_size,-1), dim=1) # batch_size, num_modes
+        if not torch.allclose(torch.sum(conf, dim=1), conf.new_ones((batch_size,))):
+            pdb.set_trace()
+
+        return pred_traj_fake_rel, conf
+
+class PredictionNet(nn.Module):
+    def __init__(self, h_dim):
+        super(PredictionNet, self).__init__()
+
+        self.latent_size = h_dim
+
+        self.weight1 = nn.Linear(self.latent_size, self.latent_size)
+        self.norm1 = nn.GroupNorm(1, self.latent_size)
+
+        self.weight2 = nn.Linear(self.latent_size, self.latent_size)
+        self.norm2 = nn.GroupNorm(1, self.latent_size)
+
+        self.output_fc = nn.Linear(self.latent_size, PRED_LEN * 2)
+
+    def forward(self, prednet_in):
+        # Residual layer
+        x = self.weight1(prednet_in)
+        x = self.norm1(x)
+        x = F.relu(x)
+        x = self.weight2(x)
+        x = self.norm2(x)
+
+        x += prednet_in
+
+        x = F.relu(x)
+
+        # Last layer has no activation function
+        prednet_out = self.output_fc(x)
+
+        return prednet_out
+    
+## CRAT-PRED
+
 class TrajectoryGenerator(nn.Module):
-    def __init__(self, PHYSICAL_CONTEXT="dummy"):
+    def __init__(self, PHYSICAL_CONTEXT="social"):
         super(TrajectoryGenerator, self).__init__()
 
         self.physical_context = PHYSICAL_CONTEXT
@@ -497,8 +567,9 @@ class TrajectoryGenerator(nn.Module):
         elif PHYSICAL_CONTEXT == "plausible_centerlines+area":
             # encoded target pos and vel + social info + map information encoded
             self.concat_h_dim = 3 * self.h_dim_social + 6 * self.h_dim_physical
- 
+
         self.decoder = Multimodal_Decoder(decoder_h_dim=self.concat_h_dim)  
+        # self.decoder = DecoderResidual(h_dim=self.concat_h_dim)
 
     def add_noise(self, input, factor=1):
         """_summary_
@@ -533,14 +604,18 @@ class TrajectoryGenerator(nn.Module):
         batch_size = seq_start_end.shape[0]
         
         # Data aug (TODO: Do this in the seq_collate function)
+        # Only during training!!!
         
-        obs_traj = self.add_noise(obs_traj, factor=0.5)
-        obs_traj_rel = self.add_noise(obs_traj_rel, factor=0.01)
-        if self.physical_context == "oracle":
-            phy_info = self.add_noise(phy_info)
-        elif self.physical_context == "plausible_centerlines+area":
-            # phy_info = self.add_noise(phy_info)
-            relevant_centerlines = self.add_noise(relevant_centerlines)
+        # if self.training:
+        #     obs_traj = self.add_noise(obs_traj, factor=0.1)
+        #     obs_traj_rel = self.add_noise(obs_traj_rel, factor=0.01)
+            
+        #     # Dropout for the centerlines, not gaussian noise!
+        #     # if self.physical_context == "oracle":
+        #     #     phy_info = self.add_noise(phy_info)
+        #     # elif self.physical_context == "plausible_centerlines+area":
+        #     #     # phy_info = self.add_noise(phy_info)
+        #     #     relevant_centerlines = self.add_noise(relevant_centerlines)
         
         # Encoder
 
@@ -617,6 +692,7 @@ class TrajectoryGenerator(nn.Module):
             state_tuple = (decoder_h, decoder_c)
 
         pred_traj_fake_rel, conf = self.decoder(last_pos, last_pos_rel, state_tuple)
+        # pred_traj_fake_rel, conf = self.decoder(mlp_decoder_context_input)
         
         if torch.any(pred_traj_fake_rel.isnan()) or torch.any(conf.isnan()):
             pdb.set_trace()

@@ -1265,8 +1265,8 @@ class MapFeaturesUtils:
                 filename = os.path.join(output_dir,f"{seq_id}_relevant_centerlines.png")
             else:
                 filename = os.path.join(output_dir,f"{seq_id}_oracle.png")
-            print("filename: ", filename)
-            plt.savefig(filename, bbox_inches='tight', facecolor="white", edgecolor='none', pad_inches=0)
+            # print("filename: ", filename)
+            # plt.savefig(filename, bbox_inches='tight', facecolor="white", edgecolor='none', pad_inches=0)
 
             plt.show()
             plt.close('all')
