@@ -144,7 +144,7 @@ To check your quantitative results using the Tensorboard tool, execute (assuming
 
 cd ~/mapfe4mp/save/argoverse/```your_model```/```your_split_percent``` && tensorboard --logdir . --port=```your_port```
 
-E.g. cd ~/mapfe4mp/save/argoverse/mapfe4mp/100.0_percent && tensorboard --logdir . --port=6100
+E.g. cd ~/mapfe4mp/save/argoverse/mapfe4mp/100.0_percent && python -m tensorboard.main --logdir . --port=6100
 
 ## Qualitative results
 

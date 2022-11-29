@@ -87,19 +87,18 @@ def make_mlp(dim_list, activation_function="ReLU", batch_norm=False, dropout=0.0
     return nn.Sequential(*layers)
 
 class MotionEncoder(nn.Module):
-    def __init__(self, h_dim, current_device):
+    def __init__(self, h_dim):
         super(MotionEncoder, self).__init__()
 
         self.input_size = DATA_DIM
         self.hidden_size = h_dim
         self.num_layers = 1
-        self.current_device = current_device
 
         self.lstm = nn.LSTM(
             input_size=self.input_size,
             hidden_size=self.hidden_size,
             num_layers=self.num_layers
-        ).cuda(self.current_device)
+        )
 
     def forward(self, lstm_in):
         """_summary_
@@ -111,25 +110,20 @@ class MotionEncoder(nn.Module):
             _type_: _description_
         """
         
-        lstm_hidden_state = torch.randn(self.num_layers, 
-                                        lstm_in.shape[1], 
-                                        self.hidden_size, 
-                                        dtype=torch.float,
-                                        device=lstm_in.device)
-        lstm_cell_state = torch.randn(self.num_layers, 
-                                      lstm_in.shape[1], 
-                                      self.hidden_size,
-                                      dtype=torch.float, 
-                                      device=lstm_in.device)
+        lstm_hidden_state = torch.randn(
+            self.num_layers, lstm_in.shape[1], self.hidden_size, device=lstm_in.device)
+        lstm_cell_state = torch.randn(
+            self.num_layers, lstm_in.shape[1], self.hidden_size, device=lstm_in.device)
+        lstm_hidden = (lstm_hidden_state, lstm_cell_state)
 
-        lstm_out, (lstm_hidden_state_, lstm_cell_state_) = self.lstm(lstm_in, (lstm_hidden_state, lstm_cell_state))
-
+        lstm_out, (lstm_hidden, lstm_cell) = self.lstm(lstm_in, lstm_hidden)
+        
         # lstm_out is the hidden state over all time steps from the last LSTM layer
         # In this case, only the features of the last time step are used
 
-        if APPLY_DROPOUT: lstm_hidden_state_ = F.dropout(lstm_hidden_state_, p=DROPOUT, training=self.training)
-        lstm_hidden_state_ = lstm_hidden_state_.squeeze(dim=0)
-        return lstm_hidden_state_
+        if APPLY_DROPOUT: lstm_hidden = F.dropout(lstm_hidden, p=DROPOUT, training=self.training)
+        lstm_hidden_ = lstm_hidden.squeeze(dim=0)
+        return lstm_hidden_
 
 class GNN(nn.Module):
     def __init__(self, h_dim):
@@ -333,8 +327,7 @@ class Centerline_Encoder(nn.Module):
         phy_info_ = self.linear(self.flatten(phy_info_))
         phy_info_ = F.dropout(phy_info_, p=DROPOUT, training=self.training)
 
-        # num_centerlines = phy_info.shape[0]
-        # phy_info_ = phy_info.permute(0,2,1)
+        # phy_info_ = phy_info_.permute(0,2,1)
         # phy_info_ = phy_info_.contiguous().view(num_centerlines, -1)
         # phy_info_ = self.mlp_centerlines(phy_info_)
 
@@ -519,7 +512,7 @@ class PredictionNet(nn.Module):
 ## CRAT-PRED
 
 class TrajectoryGenerator(nn.Module):
-    def __init__(self, PHYSICAL_CONTEXT="social", CURRENT_DEVICE="cpu"):
+    def __init__(self, PHYSICAL_CONTEXT="social"):
         super(TrajectoryGenerator, self).__init__()
 
         self.physical_context = PHYSICAL_CONTEXT
@@ -537,7 +530,7 @@ class TrajectoryGenerator(nn.Module):
 
         ## Social 
 
-        self.motion_encoder = MotionEncoder(h_dim=self.h_dim_social,current_device=CURRENT_DEVICE)
+        self.social_encoder = MotionEncoder(h_dim=self.h_dim_social)
         self.agent_gnn = GNN(h_dim=self.h_dim_social)
         self.sattn = MultiheadSelfAttention(h_dim=self.h_dim_social,
                                             num_heads=self.num_attention_heads)
@@ -625,10 +618,10 @@ class TrajectoryGenerator(nn.Module):
         #     #     # phy_info = self.add_noise(phy_info)
         #     #     relevant_centerlines = self.add_noise(relevant_centerlines)
         
-        # Motion Encoder
-        
-        encoded_obs_traj = self.motion_encoder(obs_traj)
-        encoded_obs_traj_rel = self.motion_encoder(obs_traj_rel)
+        # Encoder
+
+        encoded_obs_traj = self.social_encoder(obs_traj)
+        encoded_obs_traj_rel = self.social_encoder(obs_traj_rel)
 
         target_agent_encoded_obs_traj = encoded_obs_traj[agent_idx,:]
         target_agent_encoded_obs_traj_rel = encoded_obs_traj_rel[agent_idx,:]
@@ -707,5 +700,5 @@ class TrajectoryGenerator(nn.Module):
             
         end = time.time()
         # print("Time consumed by forward: ", end-start)
-
+        
         return pred_traj_fake_rel, conf

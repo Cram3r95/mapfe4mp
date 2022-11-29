@@ -91,7 +91,7 @@ def seq_collate(data):
 
     (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel,
      non_linear_obj, loss_mask, seq_id_list, object_class_id_list, 
-     object_id_list, city_id, map_origin, num_seq_list, norm, 
+     object_id_list, city_id, map_origin, num_seq_list, norm, target_agent_orientation, 
      oracle_centerlines, relevant_centerlines) = zip(*data)
 
     _len = [len(seq) for seq in obs_traj]
@@ -113,8 +113,59 @@ def seq_collate(data):
     object_cls = torch.cat(object_class_id_list, dim=0)
     obj_id = torch.cat(object_id_list, dim=0)
     map_origin = torch.stack(map_origin)
+    target_agent_orientation = torch.stack(target_agent_orientation)
+    
+    # target_agent_orientation = 
+    
+    num_seq_list = torch.stack(num_seq_list)
+    norm = torch.stack(norm)
 
     obs_len = obs_traj.shape[0]
+    batch_size = map_origin.shape[0]
+    
+    # Get physical information (image or goal points. Otherwise, use dummies)
+
+    start_phy_info = time.time()
+
+    first_obs = obs_traj[0,:,:] # 1 x agents · batch_size x 2
+
+    # if (PHYSICAL_CONTEXT == "visual"  # batch_size x channels x height x width 
+    #  or PHYSICAL_CONTEXT == "goals" # batch_size x num_goal_points x 2 (x|y) (real-world coordinates (HDmap))
+    #  or PHYSICAL_CONTEXT == "plausible_centerlines+area"): #  
+    #     phy_info = dataset_utils.load_physical_information(num_seq_list, obs_traj, obs_traj_rel, pred_traj_gt, pred_traj_gt_rel, first_obs, map_origin,
+    #                                                        dist_rasterized_map, object_class_id_list, DATA_IMGS_FOLDER,
+    #                                                        physical_context=PHYSICAL_CONTEXT,relevant_centerlines=relevant_centerlines,
+    #                                                        DEBUG_IMAGES=False, DEBUG_TIME=DEBUG_TIME)
+    #     if PHYSICAL_CONTEXT != "plausible_centerlines+area":
+    #         # Here we have a np.array, only number
+    #         phy_info = torch.from_numpy(phy_info).type(torch.float)
+    #         if PHYSICAL_CONTEXT == "visual": phy_info = phy_info.permute(0, 3, 1, 2)
+    if PHYSICAL_CONTEXT == "plausible_centerlines":
+        # Relevant centerlines from global (map) coordinates to absolute (around origin) coordinates
+        
+        relevant_centerlines = torch.stack(relevant_centerlines, dim=0)
+        max_centerlines = relevant_centerlines.shape[1]
+        points_per_centerline = relevant_centerlines.shape[2]
+        data_dim = relevant_centerlines.shape[3]
+        aux_ = relevant_centerlines.view(batch_size,max_centerlines,-1).sum(dim = -1)
+        rows, cols = torch.where(aux_ == 0)
+        
+        phy_info = relevant_centerlines - map_origin.unsqueeze(1)
+        phy_info[rows,cols,:,:] = torch.zeros((points_per_centerline,data_dim))
+        
+    elif PHYSICAL_CONTEXT == "oracle":
+        # Oracle centerlines from global (map) coordinates to absolute (around origin) coordinates
+
+        oracle_centerlines = torch.stack(oracle_centerlines, dim=0)
+        phy_info = oracle_centerlines - map_origin
+
+    elif PHYSICAL_CONTEXT == "dummy": # dummy phy_info
+        phy_info = np.random.randn(1,1,1,1)
+        phy_info = torch.from_numpy(phy_info).type(torch.float)
+
+    end_phy_info = time.time()
+
+    if DEBUG_TIME: print(f"Time consumed by load physical information function: {end_phy_info-start_phy_info}\n")
     
     # Data augmentation
 
@@ -229,43 +280,9 @@ def seq_collate(data):
 
         if DEBUG_TIME: print(f"Time consumed by data augmentation functions: {end_data_aug-start_data_aug}\n")
 
-    # Get physical information (image or goal points. Otherwise, use dummies)
-
-    start_phy_info = time.time()
-
-    first_obs = obs_traj[0,:,:] # 1 x agents · batch_size x 2
-
-    if (PHYSICAL_CONTEXT == "visual"  # batch_size x channels x height x width 
-     or PHYSICAL_CONTEXT == "goals" # batch_size x num_goal_points x 2 (x|y) (real-world coordinates (HDmap))
-     or PHYSICAL_CONTEXT == "plausible_centerlines+area"): #  
-        phy_info = dataset_utils.load_physical_information(num_seq_list, obs_traj, obs_traj_rel, pred_traj_gt, pred_traj_gt_rel, first_obs, map_origin,
-                                                           dist_rasterized_map, object_class_id_list, DATA_IMGS_FOLDER,
-                                                           physical_context=PHYSICAL_CONTEXT,relevant_centerlines=relevant_centerlines,
-                                                           DEBUG_IMAGES=False, DEBUG_TIME=DEBUG_TIME)
-        if PHYSICAL_CONTEXT != "plausible_centerlines+area":
-            # Here we have a np.array, only number
-            phy_info = torch.from_numpy(phy_info).type(torch.float32)
-            if PHYSICAL_CONTEXT == "visual": phy_info = phy_info.permute(0, 3, 1, 2)
-
-    elif PHYSICAL_CONTEXT == "oracle":
-        # Oracle centerlines from global (map) coordinates to absolute (around origin) coordinates
-
-        oracle_centerlines = torch.stack(oracle_centerlines, dim=0)
-        phy_info = oracle_centerlines - map_origin
-
-    elif PHYSICAL_CONTEXT == "dummy": # dummy phy_info
-        phy_info = np.random.randn(1,1,1,1)
-        phy_info = torch.from_numpy(phy_info).type(torch.float32)
-
-    end_phy_info = time.time()
-
-    if DEBUG_TIME: print(f"Time consumed by load physical information function: {end_phy_info-start_phy_info}\n")
-
-    num_seq_list = torch.stack(num_seq_list)
-    norm = torch.stack(norm)
-
     out = [obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel, non_linear_obj,
-           loss_mask, seq_start_end, object_cls, obj_id, map_origin, num_seq_list, norm, phy_info]
+           loss_mask, seq_start_end, object_cls, obj_id, map_origin, num_seq_list, norm, target_agent_orientation,
+           phy_info]
 
     end_seq_collate = time.time()
     if DEBUG_TIME: print(f">>>>>>>>>>>>>> Time consumed by seq_collate function: {end_seq_collate-start_seq_collate}\n")
@@ -431,13 +448,15 @@ class ArgoverseMotionForecastingDataset(Dataset):
                                   'num_objs_in_seq','seq_id_list','object_class_id_list',
                                   'object_id_list','ego_vehicle_origin','num_seq_list',
                                   'straight_trajectories_list','curved_trajectories_list','city_id',
-                                  'norm'] 
-        physical_variables_names = ['oracle_centerlines','relevant_centerlines']
+                                  'norm','target_agent_orientation'] 
+        physical_variables_names = ['oracle_centerlines','relevant_centerlines'] # map_info
         
         # Load file_id_list and apply split percentage/start_from
 
         folder = os.path.join(root_folder,self.split,"data")
+        print("folder: ", folder)
         files, num_files = dataset_utils.load_list_from_folder(folder)
+        print("num files333: ", num_files)
 
         ## Sort list and analize a specific percentage/from a specific position
 
@@ -448,7 +467,8 @@ class ArgoverseMotionForecastingDataset(Dataset):
 
         # Preprocess data (from raw .csvs to torch Tensors, at least including the 
         # AGENT (most important vehicle) and AV
-
+        print("Print: ", os.path.join(root_folder,self.split))
+        pdb.set_trace()
         assert os.path.isdir(os.path.join(root_folder,self.split)), "\n\nHey, the folder you want to analyze does not exist!"
              
         if (preprocess_data and not os.path.isdir(self.data_processed_folder)): # This split percentage has not been processed yet
@@ -586,11 +606,11 @@ class ArgoverseMotionForecastingDataset(Dataset):
             required_variables_name_list = social_variables_names + physical_variables_names
 
             preprocess_data_dict = dataset_utils.load_processed_files_from_npy(self.data_processed_folder, required_variables_name_list)
-
+        
             seq_list, seq_list_rel, loss_mask_list, non_linear_obj, num_objs_in_seq, \
             seq_id_list, object_class_id_list, object_id_list, ego_vehicle_origin, num_seq_list, \
-            straight_trajectories_list, curved_trajectories_list, city_ids, norm, oracle_centerlines, \
-            relevant_centerlines  = \
+            straight_trajectories_list, curved_trajectories_list, city_ids, norm, target_agent_orientation, \
+            oracle_centerlines, relevant_centerlines  = \
                 operator.itemgetter(*required_variables_name_list)(preprocess_data_dict)
 
             # TODO: Refactorize this
@@ -703,8 +723,12 @@ class ArgoverseMotionForecastingDataset(Dataset):
         self.num_seq_list = torch.from_numpy(num_seq_list).type(torch.int)
         self.num_seq = len(num_seq_list)
 
+        self.target_agent_orientation = torch.from_numpy(target_agent_orientation).type(torch.float)
         self.oracle_centerlines = torch.from_numpy(oracle_centerlines).type(torch.float)
-        self.relevant_centerlines = relevant_centerlines
+        self.relevant_centerlines = torch.from_numpy(relevant_centerlines).type(torch.float)
+        
+        # self.map_info # dict with relevant centerlines, oracle centerline, width and height of plausible area, etc.
+        # not used at this moment
         
     def __len__(self):
         return self.num_seq
@@ -771,7 +795,7 @@ class ArgoverseMotionForecastingDataset(Dataset):
                 self.cont_curved_traj.append(index)
 
         start, end = self.seq_start_end[index]
-
+    
         try: # Bad done (for train and val) -> origin is N x 1 x 2
             out = [
                     self.obs_traj[start:end, :, :], self.pred_traj_gt[start:end, :, :],
@@ -779,8 +803,9 @@ class ArgoverseMotionForecastingDataset(Dataset):
                     self.non_linear_obj[start:end], self.loss_mask[start:end, :],
                     self.seq_id_list[start:end, :, :], self.object_class_id_list[start:end], 
                     self.object_id_list[start:end], self.city_ids[index], self.ego_vehicle_origin[index,:,:],
-                    self.num_seq_list[index], self.norm, self.oracle_centerlines[index,:,:], 
-                    self.relevant_centerlines[str(self.file_id_list[index])]
+                    self.num_seq_list[index], self.norm, self.target_agent_orientation[index],
+                    self.oracle_centerlines[index,:,:], self.relevant_centerlines[index,:,:,:]
+                    # self.relevant_centerlines[str(self.file_id_list[index])]
                   ] 
         except: # Well done (for test) -> origin is N x 2
             out = [
@@ -789,8 +814,9 @@ class ArgoverseMotionForecastingDataset(Dataset):
                     self.non_linear_obj[start:end], self.loss_mask[start:end, :],
                     self.seq_id_list[start:end, :, :], self.object_class_id_list[start:end], 
                     self.object_id_list[start:end], self.city_ids[index], self.ego_vehicle_origin[index,:], # HERE THE DIFFERENCE
-                    self.num_seq_list[index], self.norm, self.oracle_centerlines[index,:,:],
-                    self.relevant_centerlines[str(self.file_id_list[index])]
+                    self.num_seq_list[index], self.norm, self.target_agent_orientation[index],
+                    self.oracle_centerlines[index,:,:], self.relevant_centerlines[index,:,:,:]
+                    # self.relevant_centerlines[str(self.file_id_list[index])]
                 ]
 
         # Increase file count

@@ -85,13 +85,14 @@ def init_weights(module):
     try:
         if classname.find('Linear') != -1 and classname != "LinearRes":
             nn.init.kaiming_normal_(module.weight)
+            
     except: # Custom layers
         keys = module.__dict__['_modules'].keys()
 
         for key in keys:
             if key.capitalize().find('Linear') != -1:
                 nn.init.kaiming_normal_(module.__dict__['_modules'][key].weight)
-
+                               
 def get_dtypes(use_gpu):
     """
     """
@@ -198,7 +199,6 @@ def calculate_mse_centerlines_loss_interpolating(relevant_centerlines, pred, los
                     pdb.set_trace()
                 filtered_relevant_centerlines.append(interpolated_centerline)
 
-        pdb.set_trace()
         # Check if from those indeces to the end of the centerline there are at least pred_len points
 
 
@@ -343,8 +343,8 @@ def model_trainer(config, logger):
 
     # Initialize motion prediction generator and optimizer
 
-    generator = TrajectoryGenerator(PHYSICAL_CONTEXT=hyperparameters.physical_context)
-        
+    generator = TrajectoryGenerator(PHYSICAL_CONTEXT=hyperparameters.physical_context,
+                                    CURRENT_DEVICE=current_cuda)
     generator.to(device)
     generator.apply(init_weights)
     generator.type(float_dtype).train() # train mode (if you compute metrics -> .eval() mode)
@@ -770,7 +770,8 @@ def generator_step(hyperparameters, batch, generator, optimizer_g,
         batch = [tensor.cuda(current_cuda) for tensor in batch if torch.is_tensor(tensor)]
 
         (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel, non_linear_obj,
-        loss_mask, seq_start_end, object_cls, obj_id, map_origin, num_seq, norm, phy_info) = batch
+        loss_mask, seq_start_end, object_cls, obj_id, map_origin, num_seq, norm, 
+        target_agent_orientation, relevant_centerlines) = batch
     elif hyperparameters.physical_context == "plausible_centerlines+area":
 
         # TODO: In order to improve this, seq_collate should return a dictionary instead of a tuple
@@ -780,7 +781,7 @@ def generator_step(hyperparameters, batch, generator, optimizer_g,
         batch = [tensor.cuda(current_cuda) for tensor in batch if torch.is_tensor(tensor)]
 
         (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel, non_linear_obj,
-        loss_mask, seq_start_end, object_cls, obj_id, map_origin, num_seq, norm) = batch
+        loss_mask, seq_start_end, object_cls, obj_id, map_origin, num_seq, norm, target_agent_orientation) = batch
     
     batch_size = seq_start_end.shape[0]
 
@@ -798,165 +799,167 @@ def generator_step(hyperparameters, batch, generator, optimizer_g,
 
     optimizer_g.zero_grad()
 
-    with autocast():
-        # Forward (If agent_idx != None, model prediction refers only to target agent)
+    # with autocast():
+    # Forward (If agent_idx != None, model prediction refers only to target agent)
 
-        relevant_centerlines = []
-        if hyperparameters.physical_context == "plausible_centerlines+area":
-            # TODO: Encapsulate this as a function
+    # relevant_centerlines = []
+    # if hyperparameters.physical_context == "plausible_centerlines+area":
+    #     # TODO: Encapsulate this as a function
 
-            # Plausible area (discretized)
+    #     # Plausible area (discretized)
 
-            plausible_area_array = np.array([curr_phy_info["plausible_area_abs"] for curr_phy_info in phy_info]).astype(np.float32)
-            plausible_area = torch.from_numpy(plausible_area_array).type(torch.float).cuda(obs_traj.device)
+    #     plausible_area_array = np.array([curr_phy_info["plausible_area_abs"] for curr_phy_info in phy_info]).astype(np.float32)
+    #     plausible_area = torch.from_numpy(plausible_area_array).type(torch.float).cuda(obs_traj.device)
 
-            # Compute relevant centerlines
+    #     # Compute relevant centerlines
 
-            num_relevant_centerlines = [len(curr_phy_info["relevant_centerlines_abs"]) for curr_phy_info in phy_info]
-            aux_indeces_list = []
-            for num_ in num_relevant_centerlines:
-                if num_ >= hyperparameters.num_modes: # Limit to the first hyperparameters.num_modes centerlines. We assume
-                                                    # the oracle is here. TODO: Force this from the preprocessing 
-                    aux_indeces = np.arange(hyperparameters.num_modes)
-                    aux_indeces_list.append(aux_indeces)
-                else: # We have less centerlines than hyperparameters.num_modes
-                    quotient = int(hyperparameters.num_modes / num_)
-                    remainder = hyperparameters.num_modes % num_
+    #     num_relevant_centerlines = [len(curr_phy_info["relevant_centerlines_abs"]) for curr_phy_info in phy_info]
+    #     aux_indeces_list = []
+    #     for num_ in num_relevant_centerlines:
+    #         if num_ >= hyperparameters.num_modes: # Limit to the first hyperparameters.num_modes centerlines. We assume
+    #                                             # the oracle is here. TODO: Force this from the preprocessing 
+    #             aux_indeces = np.arange(hyperparameters.num_modes)
+    #             aux_indeces_list.append(aux_indeces)
+    #         else: # We have less centerlines than hyperparameters.num_modes
+    #             quotient = int(hyperparameters.num_modes / num_)
+    #             remainder = hyperparameters.num_modes % num_
 
-                    aux_indeces = np.arange(num_)
-                    aux_indeces = np.tile(aux_indeces,quotient)
+    #             aux_indeces = np.arange(num_)
+    #             aux_indeces = np.tile(aux_indeces,quotient)
 
-                    if remainder != 0:
-                        aux_indeces_ = np.arange(remainder)
-                        aux_indeces = np.hstack((aux_indeces,aux_indeces_))
-                    
-                    assert len(aux_indeces) == hyperparameters.num_modes, "Number of centerlines does not match the number of required modes"
-                    aux_indeces_list.append(aux_indeces)
-
-            centerlines_indeces = np.array(aux_indeces_list)
-
-            relevant_centerlines = []
-            for mode in range(hyperparameters.num_modes):
-
-                # Dynamic map info (one centerline per iteration -> Max Num_Modes iterations)
-
-                current_centerlines_indeces = centerlines_indeces[:,mode]
-                current_centerlines_list = []
-                for i in range(batch_size):
-                    current_centerline = phy_info[i]["relevant_centerlines_abs"][current_centerlines_indeces[i]]
-                    current_centerlines_list.append(current_centerline)
-
-                current_centerlines = torch.from_numpy(np.array(current_centerlines_list)).type(torch.float).cuda(obs_traj.device)
-                relevant_centerlines.append(current_centerlines.unsqueeze(0))
-
-            relevant_centerlines = torch.cat(relevant_centerlines,dim=0)
-
-            pred_traj_fake_rel, conf = generator(obs_traj, obs_traj_rel, seq_start_end, agent_idx, phy_info=plausible_area, relevant_centerlines=relevant_centerlines)
-        else:
-            pred_traj_fake_rel, conf = generator(obs_traj, obs_traj_rel, seq_start_end, agent_idx, phy_info=phy_info, relevant_centerlines=relevant_centerlines)
-
-        if hyperparameters.output_single_agent:
-            pred_traj_fake = relative_to_abs_multimodal(pred_traj_fake_rel, obs_traj[-1,agent_idx,:])
-        else:
-            pred_traj_fake = relative_to_abs_multimodal(pred_traj_fake_rel, obs_traj[-1])
-
-        # Take (if specified) data of only the AGENT of interest
-
-        if hyperparameters.output_single_agent:
-            obs_traj = obs_traj[:,agent_idx, :]
-            pred_traj_gt = pred_traj_gt[:, agent_idx, :]
-            obs_traj_rel = obs_traj_rel[:, agent_idx, :]
-
-        # TODO: Check if in other configurations the losses are computed using relative or absolute
-        # coordinates
-
-        losses = {}
-
-        if hyperparameters.loss_type_g == "mse" or hyperparameters.loss_type_g == "mse_w":
-
-            if "mse_w" in hyperparameters.loss_type_g:   
-                _, num_objs, _ = pred_traj_gt.shape
-                w_loss_ = w_loss[:num_objs,:]
-                loss_ade, loss_fde = calculate_mse_gt_loss_multimodal(pred_traj_gt, pred_traj_fake, loss_f, w_loss=w_loss_)
-            else:
-                loss_ade, loss_fde = calculate_mse_gt_loss_multimodal(pred_traj_gt, pred_traj_fake, loss_f)
-
-            loss = hyperparameters.loss_ade_weight*loss_ade + \
-                   hyperparameters.loss_fde_weight*loss_fde
-
-            losses["G_mse_ade_loss"] = loss_ade.item()
-            losses["G_mse_fde_loss"] = loss_fde.item()
-
-        elif hyperparameters.loss_type_g == "nll":
-            loss = calculate_nll_loss(pred_traj_gt, pred_traj_fake,loss_f)
-            losses["G_nll_loss"] = loss.item()
-
-        elif hyperparameters.loss_type_g == "mse+fa" or hyperparameters.loss_type_g == "mse_w+fa":
-            loss_ade, loss_fde = calculate_mse_gt_loss_multimodal(pred_traj_gt, pred_traj_fake, loss_f["mse"])
-            loss_fa = evaluate_feasible_area_prediction(pred_traj_fake, pred_traj_gt, map_origin, num_seq, 
-                                                        absolute_root_folder, split)
-
-            loss = hyperparameters.loss_ade_weight*loss_ade + \
-                   hyperparameters.loss_fde_weight*loss_fde + \
-                   hyperparameters.loss_fa_weight*loss_fa 
-
-            losses["G_mse_ade_loss"] = loss_ade.item()
-            losses["G_mse_fde_loss"] = loss_fde.item()
-            losses["G_fa_loss"] = loss_fa.item()
-
-        elif hyperparameters.loss_type_g == "mse+nll" or hyperparameters.loss_type_g == "mse_w+nll":
-
-            if "mse_w" in hyperparameters.loss_type_g:
-                _, num_objs, _ = pred_traj_gt.shape
-                w_loss_ = w_loss[:num_objs,:]
-                loss_ade, loss_fde = calculate_mse_gt_loss_multimodal(pred_traj_gt, pred_traj_fake, loss_f["mse"], w_loss=w_loss_)
-                # if torch.is_tensor(relevant_centerlines):
-                #     loss_ade_centerlines = calculate_mse_centerlines_loss(relevant_centerlines, pred_traj_fake, loss_f["mse"], w_loss)
-            else:
-                # loss_ade, loss_fde = calculate_mse_gt_loss_multimodal(pred_traj_gt, pred_traj_fake, loss_f["mse"])
-                # loss_ade, loss_fde = calculate_mse_gt_loss_multimodal(pred_traj_gt_rel, pred_traj_fake_rel, loss_f["mse"])
+    #             if remainder != 0:
+    #                 aux_indeces_ = np.arange(remainder)
+    #                 aux_indeces = np.hstack((aux_indeces,aux_indeces_))
                 
-                _, loss_fde = calculate_mse_gt_loss_multimodal(pred_traj_gt, pred_traj_fake, loss_f["mse"])
-                loss_ade, _ = calculate_mse_gt_loss_multimodal(pred_traj_gt_rel, pred_traj_fake_rel, loss_f["mse"])
-                # if torch.is_tensor(relevant_centerlines):
-                #     loss_ade_centerlines = calculate_mse_centerlines_loss(relevant_centerlines, pred_traj_fake, loss_f["mse"])
+    #             assert len(aux_indeces) == hyperparameters.num_modes, "Number of centerlines does not match the number of required modes"
+    #             aux_indeces_list.append(aux_indeces)
 
-            # _, loss_fde_goal = calculate_mse_gt_loss_multimodal(phy_info.permute(1,0,2), pred_traj_fake, loss_f["mse"], compute_ade=False)
+    #     centerlines_indeces = np.array(aux_indeces_list)
 
-            loss_nll = calculate_nll_loss(pred_traj_gt, pred_traj_fake, loss_f["nll"], conf)
-            # loss_nll = calculate_nll_loss(pred_traj_gt_rel, pred_traj_fake_rel, loss_f["nll"], conf)
+    #     relevant_centerlines = []
+    #     for mode in range(hyperparameters.num_modes):
+
+    #         # Dynamic map info (one centerline per iteration -> Max Num_Modes iterations)
+
+    #         current_centerlines_indeces = centerlines_indeces[:,mode]
+    #         current_centerlines_list = []
+    #         for i in range(batch_size):
+    #             current_centerline = phy_info[i]["relevant_centerlines_abs"][current_centerlines_indeces[i]]
+    #             current_centerlines_list.append(current_centerline)
+
+    #         current_centerlines = torch.from_numpy(np.array(current_centerlines_list)).type(torch.float).cuda(obs_traj.device)
+    #         relevant_centerlines.append(current_centerlines.unsqueeze(0))
+
+    #     relevant_centerlines = torch.cat(relevant_centerlines,dim=0)
+
+    #     pred_traj_fake_rel, conf = generator(obs_traj, obs_traj_rel, seq_start_end, agent_idx, phy_info=plausible_area, relevant_centerlines=relevant_centerlines)
+    # else:
+    #     pred_traj_fake_rel, conf = generator(obs_traj, obs_traj_rel, seq_start_end, agent_idx, phy_info=phy_info, relevant_centerlines=relevant_centerlines)
+
+    pred_traj_fake_rel, conf = generator(obs_traj, obs_traj_rel, seq_start_end, agent_idx, relevant_centerlines=relevant_centerlines)
+
+    if hyperparameters.output_single_agent:
+        pred_traj_fake = relative_to_abs_multimodal(pred_traj_fake_rel, obs_traj[-1,agent_idx,:])
+    else:
+        pred_traj_fake = relative_to_abs_multimodal(pred_traj_fake_rel, obs_traj[-1])
+
+    # Take (if specified) data of only the AGENT of interest
+
+    if hyperparameters.output_single_agent:
+        obs_traj = obs_traj[:,agent_idx, :]
+        pred_traj_gt = pred_traj_gt[:, agent_idx, :]
+        obs_traj_rel = obs_traj_rel[:, agent_idx, :]
+
+    # TODO: Check if in other configurations the losses are computed using relative or absolute
+    # coordinates
+
+    losses = {}
+
+    if hyperparameters.loss_type_g == "mse" or hyperparameters.loss_type_g == "mse_w":
+
+        if "mse_w" in hyperparameters.loss_type_g:   
+            _, num_objs, _ = pred_traj_gt.shape
+            w_loss_ = w_loss[:num_objs,:]
+            loss_ade, loss_fde = calculate_mse_gt_loss_multimodal(pred_traj_gt, pred_traj_fake, loss_f, w_loss=w_loss_)
+        else:
+            loss_ade, loss_fde = calculate_mse_gt_loss_multimodal(pred_traj_gt, pred_traj_fake, loss_f)
+
+        loss = hyperparameters.loss_ade_weight*loss_ade + \
+                hyperparameters.loss_fde_weight*loss_fde
+
+        losses["G_mse_ade_loss"] = loss_ade.item()
+        losses["G_mse_fde_loss"] = loss_fde.item()
+
+    elif hyperparameters.loss_type_g == "nll":
+        loss = calculate_nll_loss(pred_traj_gt, pred_traj_fake,loss_f)
+        losses["G_nll_loss"] = loss.item()
+
+    elif hyperparameters.loss_type_g == "mse+fa" or hyperparameters.loss_type_g == "mse_w+fa":
+        loss_ade, loss_fde = calculate_mse_gt_loss_multimodal(pred_traj_gt, pred_traj_fake, loss_f["mse"])
+        loss_fa = evaluate_feasible_area_prediction(pred_traj_fake, pred_traj_gt, map_origin, num_seq, 
+                                                    absolute_root_folder, split)
+
+        loss = hyperparameters.loss_ade_weight*loss_ade + \
+                hyperparameters.loss_fde_weight*loss_fde + \
+                hyperparameters.loss_fa_weight*loss_fa 
+
+        losses["G_mse_ade_loss"] = loss_ade.item()
+        losses["G_mse_fde_loss"] = loss_fde.item()
+        losses["G_fa_loss"] = loss_fa.item()
+
+    elif hyperparameters.loss_type_g == "mse+nll" or hyperparameters.loss_type_g == "mse_w+nll":
+
+        if "mse_w" in hyperparameters.loss_type_g:
+            _, num_objs, _ = pred_traj_gt.shape
+            w_loss_ = w_loss[:num_objs,:]
+            loss_ade, loss_fde = calculate_mse_gt_loss_multimodal(pred_traj_gt, pred_traj_fake, loss_f["mse"], w_loss=w_loss_)
+            # if torch.is_tensor(relevant_centerlines):
+            #     loss_ade_centerlines = calculate_mse_centerlines_loss(relevant_centerlines, pred_traj_fake, loss_f["mse"], w_loss)
+        else:
+            loss_ade, loss_fde = calculate_mse_gt_loss_multimodal(pred_traj_gt, pred_traj_fake, loss_f["mse"])
+            # loss_ade, loss_fde = calculate_mse_gt_loss_multimodal(pred_traj_gt_rel, pred_traj_fake_rel, loss_f["mse"])
             
-            loss = hyperparameters.loss_ade_weight*loss_ade + \
-                   hyperparameters.loss_fde_weight*loss_fde + \
-                   hyperparameters.loss_nll_weight*loss_nll #+ \
-                #    0.5*loss_fde_goal
-                #    hyperparameters.loss_ade_centerlines_weight*loss_ade_centerlines 
+            # _, loss_fde = calculate_mse_gt_loss_multimodal(pred_traj_gt, pred_traj_fake, loss_f["mse"])
+            # loss_ade, _ = calculate_mse_gt_loss_multimodal(pred_traj_gt_rel, pred_traj_fake_rel, loss_f["mse"])
+            # if torch.is_tensor(relevant_centerlines):
+            #     loss_ade_centerlines = calculate_mse_centerlines_loss(relevant_centerlines, pred_traj_fake, loss_f["mse"])
 
-            losses["G_mse_ade_loss"] = loss_ade.item()
-            losses["G_mse_fde_loss"] = loss_fde.item()
-            losses["G_nll_loss"] = loss_nll.item()
-            # losses["G_mse_fde_goal_loss"] = loss_fde_goal.item()
-            # losses["G_mse_ade_centerlines_loss"] = loss_nll.item()
-        elif hyperparameters.loss_type_g == "centerlines+gt":
+        # _, loss_fde_goal = calculate_mse_gt_loss_multimodal(phy_info.permute(1,0,2), pred_traj_fake, loss_f["mse"], compute_ade=False)
 
-            loss_ade_centerlines, loss_fde_centerlines = calculate_mse_centerlines_loss(relevant_centerlines, pred_traj_fake, loss_f["mse"])
-            
-            best_pred_traj_fake_indeces = conf.argmax(1)
-            best_pred_traj_fake = get_best_predictions(pred_traj_fake,best_pred_traj_fake_indeces)
+        loss_nll = calculate_nll_loss(pred_traj_gt, pred_traj_fake, loss_f["nll"], conf)
+        # loss_nll = calculate_nll_loss(pred_traj_gt_rel, pred_traj_fake_rel, loss_f["nll"], conf)
+        
+        loss = hyperparameters.loss_ade_weight*loss_ade + \
+                hyperparameters.loss_fde_weight*loss_fde + \
+                hyperparameters.loss_nll_weight*loss_nll #+ \
+            #    0.5*loss_fde_goal
+            #    hyperparameters.loss_ade_centerlines_weight*loss_ade_centerlines 
 
-            loss_ade_gt, loss_fde_gt = calculate_mse_gt_loss_unimodal(pred_traj_gt, best_pred_traj_fake, loss_f["mse"])
-            
-            loss = loss_ade_centerlines + \
-                   loss_fde_centerlines + \
-                   2*loss_ade_gt + \
-                   2*loss_fde_gt
+        losses["G_mse_ade_loss"] = loss_ade.item()
+        losses["G_mse_fde_loss"] = loss_fde.item()
+        losses["G_nll_loss"] = loss_nll.item()
+        # losses["G_mse_fde_goal_loss"] = loss_fde_goal.item()
+        # losses["G_mse_ade_centerlines_loss"] = loss_nll.item()
+    elif hyperparameters.loss_type_g == "centerlines+gt":
 
-            losses["G_mse_ade_centerlines_loss"] = loss_ade_centerlines.item()
-            losses["G_mse_fde_centerlines_loss"] = loss_fde_centerlines.item()
-            losses["G_mse_ade_gt_loss"] = loss_ade_gt.item()
-            losses["G_mse_fde_gt_loss"] = loss_fde_gt.item()
+        loss_ade_centerlines, loss_fde_centerlines = calculate_mse_centerlines_loss(relevant_centerlines, pred_traj_fake, loss_f["mse"])
+        
+        best_pred_traj_fake_indeces = conf.argmax(1)
+        best_pred_traj_fake = get_best_predictions(pred_traj_fake,best_pred_traj_fake_indeces)
 
-        losses[f"G_total_loss"] = loss.item()
+        loss_ade_gt, loss_fde_gt = calculate_mse_gt_loss_unimodal(pred_traj_gt, best_pred_traj_fake, loss_f["mse"])
+        
+        loss = loss_ade_centerlines + \
+                loss_fde_centerlines + \
+                2*loss_ade_gt + \
+                2*loss_fde_gt
+
+        losses["G_mse_ade_centerlines_loss"] = loss_ade_centerlines.item()
+        losses["G_mse_fde_centerlines_loss"] = loss_fde_centerlines.item()
+        losses["G_mse_ade_gt_loss"] = loss_ade_gt.item()
+        losses["G_mse_fde_gt_loss"] = loss_fde_gt.item()
+
+    losses[f"G_total_loss"] = loss.item()
 
     if hyperparameters.clipping_threshold_g > 0:
         nn.utils.clip_grad_norm_(
@@ -996,7 +999,8 @@ def check_accuracy(hyperparameters, loader, generator,
                 batch = [tensor.cuda(current_cuda) for tensor in batch if torch.is_tensor(tensor)]
 
                 (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel, non_linear_obj,
-                 loss_mask, seq_start_end, object_cls, obj_id, map_origin, num_seq, norm, phy_info) = batch
+                 loss_mask, seq_start_end, object_cls, obj_id, map_origin, num_seq, norm, 
+                 target_agent_orientation, relevant_centerlines) = batch
             elif hyperparameters.physical_context == "plausible_centerlines+area":
 
                 # TODO: In order to improve this, seq_collate should return a dictionary instead of a tuple
@@ -1006,7 +1010,7 @@ def check_accuracy(hyperparameters, loader, generator,
                 batch = [tensor.cuda(current_cuda) for tensor in batch if torch.is_tensor(tensor)]
 
                 (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel, non_linear_obj,
-                loss_mask, seq_start_end, object_cls, obj_id, map_origin, num_seq, norm) = batch
+                loss_mask, seq_start_end, object_cls, obj_id, map_origin, num_seq, norm, target_agent_orientation) = batch
 
             batch_size = seq_start_end.shape[0]
 
@@ -1018,58 +1022,60 @@ def check_accuracy(hyperparameters, loader, generator,
 
             # Forward (If agent_idx != None, model prediction refers only to target agent)
 
-            if hyperparameters.physical_context == "plausible_centerlines+area":
-                # TODO: Encapsulate this as a function
+            # relevant_centerlines = []
+            # if hyperparameters.physical_context == "plausible_centerlines+area":
+            #     # TODO: Encapsulate this as a function
 
-                # Plausible area (discretized)
+            #     # Plausible area (discretized)
 
-                plausible_area_array = np.array([curr_phy_info["plausible_area_abs"] for curr_phy_info in phy_info]).astype(np.float32)
-                plausible_area = torch.from_numpy(plausible_area_array).type(torch.float).cuda(obs_traj.device)
+            #     plausible_area_array = np.array([curr_phy_info["plausible_area_abs"] for curr_phy_info in phy_info]).astype(np.float32)
+            #     plausible_area = torch.from_numpy(plausible_area_array).type(torch.float).cuda(obs_traj.device)
 
-                # Compute relevant centerlines
+            #     # Compute relevant centerlines
 
-                num_relevant_centerlines = [len(curr_phy_info["relevant_centerlines_abs"]) for curr_phy_info in phy_info]
-                aux_indeces_list = []
-                for num_ in num_relevant_centerlines:
-                    if num_ >= hyperparameters.num_modes: # Limit to the first hyperparameters.num_modes centerlines. We assume
-                                                          # the oracle is here. TODO: Force this from the preprocessing 
-                        aux_indeces = np.arange(hyperparameters.num_modes)
-                        aux_indeces_list.append(aux_indeces)
-                    else: # We have less centerlines than hyperparameters.num_modes
-                        quotient = int(hyperparameters.num_modes / num_)
-                        remainder = hyperparameters.num_modes % num_
+            #     num_relevant_centerlines = [len(curr_phy_info["relevant_centerlines_abs"]) for curr_phy_info in phy_info]
+            #     aux_indeces_list = []
+            #     for num_ in num_relevant_centerlines:
+            #         if num_ >= hyperparameters.num_modes: # Limit to the first hyperparameters.num_modes centerlines. We assume
+            #                                             # the oracle is here. TODO: Force this from the preprocessing 
+            #             aux_indeces = np.arange(hyperparameters.num_modes)
+            #             aux_indeces_list.append(aux_indeces)
+            #         else: # We have less centerlines than hyperparameters.num_modes
+            #             quotient = int(hyperparameters.num_modes / num_)
+            #             remainder = hyperparameters.num_modes % num_
 
-                        aux_indeces = np.arange(num_)
-                        aux_indeces = np.tile(aux_indeces,quotient)
+            #             aux_indeces = np.arange(num_)
+            #             aux_indeces = np.tile(aux_indeces,quotient)
 
-                        if remainder != 0:
-                            aux_indeces_ = np.arange(remainder)
-                            aux_indeces = np.hstack((aux_indeces,aux_indeces_))
+            #             if remainder != 0:
+            #                 aux_indeces_ = np.arange(remainder)
+            #                 aux_indeces = np.hstack((aux_indeces,aux_indeces_))
                         
-                        assert len(aux_indeces) == hyperparameters.num_modes, "Number of centerlines does not match the number of required modes"
-                        aux_indeces_list.append(aux_indeces)
-                
-                centerlines_indeces = np.array(aux_indeces_list)
+            #             assert len(aux_indeces) == hyperparameters.num_modes, "Number of centerlines does not match the number of required modes"
+            #             aux_indeces_list.append(aux_indeces)
 
-                relevant_centerlines = []
-                for mode in range(hyperparameters.num_modes):
+            #     centerlines_indeces = np.array(aux_indeces_list)
 
-                    # Dynamic map info (one centerline per iteration -> Max Num_Modes iterations)
+            #     relevant_centerlines = []
+            #     for mode in range(hyperparameters.num_modes):
 
-                    current_centerlines_indeces = centerlines_indeces[:,mode]
-                    current_centerlines_list = []
-                    for i in range(batch_size):
-                        current_centerline = phy_info[i]["relevant_centerlines_abs"][current_centerlines_indeces[i]]
-                        current_centerlines_list.append(current_centerline)
+            #         # Dynamic map info (one centerline per iteration -> Max Num_Modes iterations)
 
-                    current_centerlines = torch.from_numpy(np.array(current_centerlines_list)).type(torch.float).cuda(obs_traj.device)
-                    relevant_centerlines.append(current_centerlines.unsqueeze(0))
+            #         current_centerlines_indeces = centerlines_indeces[:,mode]
+            #         current_centerlines_list = []
+            #         for i in range(batch_size):
+            #             current_centerline = phy_info[i]["relevant_centerlines_abs"][current_centerlines_indeces[i]]
+            #             current_centerlines_list.append(current_centerline)
 
-                relevant_centerlines = torch.cat(relevant_centerlines,dim=0)
+            #         current_centerlines = torch.from_numpy(np.array(current_centerlines_list)).type(torch.float).cuda(obs_traj.device)
+            #         relevant_centerlines.append(current_centerlines.unsqueeze(0))
 
-                pred_traj_fake_rel, conf = generator(obs_traj, obs_traj_rel, seq_start_end, agent_idx, phy_info=plausible_area, relevant_centerlines=relevant_centerlines)
-            else:
-                pred_traj_fake_rel, conf = generator(obs_traj, obs_traj_rel, seq_start_end, agent_idx, phy_info=phy_info, relevant_centerlines=None)
+            #     relevant_centerlines = torch.cat(relevant_centerlines,dim=0)
+
+            #     pred_traj_fake_rel, conf = generator(obs_traj, obs_traj_rel, seq_start_end, agent_idx, phy_info=plausible_area, relevant_centerlines=relevant_centerlines)
+            # else:
+            #     pred_traj_fake_rel, conf = generator(obs_traj, obs_traj_rel, seq_start_end, agent_idx, phy_info=phy_info, relevant_centerlines=relevant_centerlines)
+            pred_traj_fake_rel, conf = generator(obs_traj, obs_traj_rel, seq_start_end, agent_idx, relevant_centerlines=relevant_centerlines)
 
             if hyperparameters.output_single_agent:
                 pred_traj_fake = relative_to_abs_multimodal(pred_traj_fake_rel, obs_traj[-1,agent_idx,:])

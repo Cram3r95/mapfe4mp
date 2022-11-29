@@ -54,7 +54,7 @@ from model.datasets.argoverse.dataset_utils import load_list_from_folder, get_or
 
 #######################################
 
-config_path = os.path.join(BASE_DIR,"config/config_social_lstm_mhsa.yml")
+config_path = os.path.join(BASE_DIR,"config/config_mapfe4mp.yml")
 with open(config_path) as config:
     config = yaml.safe_load(config)
     config = Prodict.from_dict(config)
@@ -64,9 +64,9 @@ config.dataset.start_from_percentage = 0.0
 
 # Preprocess data
                          # Split, Process, Split percentage
-splits_to_process = dict({"train":[False,1.0], # 0.01 (1 %), 0.1 (10 %), 1.0 (100 %)
+splits_to_process = dict({"train":[True,1.0], # 0.01 (1 %), 0.1 (10 %), 1.0 (100 %)
                           "val":  [True,1.0],
-                          "test": [False,1.0]})
+                          "test": [True,1.0]})
 modes_centerlines = ["test"] # "train","test" 
 # if train -> compute the best candidate (oracle), only using the "competition" algorithm
 # if test, return N plausible candidates. Choose between "competition", "map_api" and "get_around" algorithms
@@ -79,11 +79,16 @@ obs_len = 20 # steps
 pred_len = 30 # steps
 freq = 10 # Hz ("steps/s")
 obs_origin = 20 
+max_centerlines = 3
 min_dist_around = 25
-first_centerline_waypoint = "last_obs" # first_obs, last_obs
-max_points = 30 # 30 if start from last_obs, 40 if start from first obs
+first_centerline_waypoint = "first_obs" # first_obs, last_obs
+data_dim = 2 # x,y
+max_points = 40 # 30 if start from last_obs, 40 if start from first obs
 min_points = 4 # to perform a cubic interpolation you need at least 3 points
-algorithm = "map_api"
+algorithm = "map_api" # competition, map_api, get_around
+                      # TODO: At this moment, only the "map_api" algorithm is prepared
+                      # to retrieve the centerlines (both relevant and oracle) correctly
+filter = "least_squares"
 
 viz = False
 limit_qualitative_results = 150
@@ -169,6 +174,8 @@ for split_name,features in splits_to_process.items():
             
             map_info = dict()
             oracle_centerlines_list = []
+            relevant_centerlines_list = []
+            target_agent_orientation_list = []
 
             output_dir = os.path.join(BASE_DIR,f"data/datasets/argoverse/motion-forecasting/{split_name}/map_features")
             # output_dir = os.path.join(BASE_DIR,f"data/datasets/argoverse/motion-forecasting/{split_name}/map_features_gray")
@@ -205,7 +212,7 @@ for split_name,features in splits_to_process.items():
                     # Filter agent's trajectory (smooth)
 
                     vel, acc, xy_filtered, extended_xy_filtered = map_features_utils_instance.get_agent_velocity_and_acceleration(agent_xy[:obs_len,:],
-                                                                                                                                  filter="least_squares",
+                                                                                                                                  filter=filter,
                                                                                                                                   debug=False)
                                                                                                         
                     dist_around = vel * (pred_len/freq) + 1/2 * acc * (pred_len/freq)**2
@@ -216,7 +223,8 @@ for split_name,features in splits_to_process.items():
                     # Compute agent's orientation
 
                     lane_dir_vector, yaw = map_features_utils_instance.get_yaw(xy_filtered, obs_len)
-
+                    target_agent_orientation_list.append(yaw)
+                    
                     for mode in modes_centerlines:
                         # Map features extraction
 
@@ -230,7 +238,8 @@ for split_name,features in splits_to_process.items():
                                 mode,
                                 avm,
                                 viz,
-                                algorithm=algorithm # competition, map_api, get_around
+                                max_candidates=max_centerlines,
+                                algorithm=algorithm
                             )
 
                         if mode == "test": # preprocess N plausible centerlines
@@ -370,7 +379,18 @@ for split_name,features in splits_to_process.items():
                                         # The first centerline also corresponds to the oracle using map_api
 
                                         oracle_centerlines_list.append(relevant_centerline_filtered)
+                            
+                            # Determine if there are some repeated centerlines after filtering. Take the unique
+                            # elements. If after this there are less than max_centerlines, pad with zeros
 
+                            aux_array = np.array(relevant_centerlines_filtered)
+                            vals, idx_start, count = np.unique(aux_array, axis=0, return_counts=True, return_index=True)
+                            relevant_centerlines_filtered_aux = aux_array[np.sort(idx_start),:,:]
+                            
+                            pad_zeros_centerlines = np.zeros((max_centerlines-relevant_centerlines_filtered_aux.shape[0],max_points,data_dim))
+                            relevant_centerlines_filtered = np.vstack((relevant_centerlines_filtered_aux,pad_zeros_centerlines))
+
+                            relevant_centerlines_list.append(relevant_centerlines_filtered)
                             seq_map_info["relevant_centerlines_filtered"] = relevant_centerlines_filtered
 
                             fig, ax = plt.subplots(figsize=(6,6), facecolor="black")
@@ -381,17 +401,18 @@ for split_name,features in splits_to_process.items():
                             # Paint centerlines
 
                             for centerline_coords in relevant_centerlines_filtered:
-                                # visualize_centerline(centerline_coords) # Uncomment this to check the start and end
+                                if np.any(centerline_coords): # avoid processing padded centerlines
+                                    visualize_centerline(centerline_coords) # Uncomment this to check the start and end
 
-                                lane_polygon = centerline_to_polygon(centerline_coords)
+                                    lane_polygon = centerline_to_polygon(centerline_coords)
 
-                                if np.min(lane_polygon[:,0]) < xmin: xmin = np.min(lane_polygon[:,0])
-                                if np.min(lane_polygon[:,1]) < ymin: ymin = np.min(lane_polygon[:,1])
-                                if np.max(lane_polygon[:,0]) > xmax: xmax = np.max(lane_polygon[:,0])
-                                if np.max(lane_polygon[:,1]) > ymax: ymax = np.max(lane_polygon[:,1])
-                                                                        #"black"  
-                                ax.fill(lane_polygon[:, 0], lane_polygon[:, 1], "white", edgecolor='white', fill=True)
-                                ax.plot(centerline_coords[:, 0], centerline_coords[:, 1], "-", color="gray", linewidth=1.5, alpha=1.0, zorder=2)
+                                    if np.min(lane_polygon[:,0]) < xmin: xmin = np.min(lane_polygon[:,0])
+                                    if np.min(lane_polygon[:,1]) < ymin: ymin = np.min(lane_polygon[:,1])
+                                    if np.max(lane_polygon[:,0]) > xmax: xmax = np.max(lane_polygon[:,0])
+                                    if np.max(lane_polygon[:,1]) > ymax: ymax = np.max(lane_polygon[:,1])
+                                                                            #"black"  
+                                    ax.fill(lane_polygon[:, 0], lane_polygon[:, 1], "white", edgecolor='white', fill=True)
+                                    ax.plot(centerline_coords[:, 0], centerline_coords[:, 1], "-", color="gray", linewidth=1.5, alpha=1.0, zorder=2)
 
                             center_plausible_area_filtered = np.zeros((2))
                             center_plausible_area_filtered[0] = (xmin+xmax)/2
@@ -662,25 +683,38 @@ for split_name,features in splits_to_process.items():
             # Save only the oracle (best possible centerline) as a np.array -> num_sequences x max_points x 2 
             if mode == "train":
                 filename = os.path.join(BASE_DIR,config.dataset.path,split_name,
-                                        f"data_processed_{str(int(features[1]*100))}_percent","oracle_centerlines.npy")
-                with open(filename, 'wb') as my_file: np.save(my_file, oracle_centerlines_list)
+                                        f"data_processed_{str(int(features[1]*100))}_percent",
+                                        "oracle_centerlines.npy")
+                oracle_centerlines_array = np.array(oracle_centerlines_list)
+                with open(filename, 'wb') as my_file: np.save(my_file, oracle_centerlines_array)
 
             # Save N centerlines per sequence. Note that the number of variables per sequence may vary
             elif mode == "test":
+                # filename = os.path.join(BASE_DIR,config.dataset.path,split_name,
+                #                         f"data_processed_{str(int(features[1]*100))}_percent",
+                #                         f"relevant_centerlines_{algorithm}_{first_centerline_waypoint}_{str(max_points)}_points.npz")
+                # with open(filename, 'wb') as my_file: np.savez(my_file, map_info)
                 filename = os.path.join(BASE_DIR,config.dataset.path,split_name,
                                         f"data_processed_{str(int(features[1]*100))}_percent",
-                                        f"relevant_centerlines_{first_centerline_waypoint}_{str(max_points)}_points.npz")
-                with open(filename, 'wb') as my_file: np.savez(my_file, map_info)
-
+                                        f"relevant_centerlines_{algorithm}_{first_centerline_waypoint}_{str(max_points)}_points.npy")
+                relevant_centerlines_array = np.array(relevant_centerlines_list)
+                with open(filename, 'wb') as my_file: np.save(my_file, relevant_centerlines_array)
+                
                 # If method is least_squares and map_api, we assume the first centerline returned by the 
                 # algorithm will be also the oracle (most plausible)
 
                 if algorithm == "map_api":
                     filename = os.path.join(BASE_DIR,config.dataset.path,split_name,
                                         f"data_processed_{str(int(features[1]*100))}_percent",
-                                        f"oracle_centerlines_{first_centerline_waypoint}_{str(max_points)}_points.npy")
+                                        f"oracle_centerlines_{algorithm}_{first_centerline_waypoint}_{str(max_points)}_points.npy")
                     oracle_centerlines_array = np.array(oracle_centerlines_list)
                     with open(filename, 'wb') as my_file: np.save(my_file, oracle_centerlines_array)
+
+            filename = os.path.join(BASE_DIR,config.dataset.path,split_name,
+                                f"data_processed_{str(int(features[1]*100))}_percent",
+                                f"target_agent_orientation.npy")
+            target_agent_orientation_array = np.array(target_agent_orientation_list)
+            with open(filename, 'wb') as my_file: np.save(my_file, target_agent_orientation_array)
 
             
             

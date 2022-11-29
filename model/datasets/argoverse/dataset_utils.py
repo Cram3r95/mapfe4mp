@@ -123,11 +123,11 @@ def apply_percentage_startfrom(file_id_list, num_files,
                                shuffle=False,split_percentage=0.25, start_from_percentage=0.0):
     """
     """
-
+    print("files: ", num_files)
     start_from = int(start_from_percentage*num_files)
     n_files = int(split_percentage*num_files)
     file_id_list = file_id_list[start_from:start_from+n_files]
-
+    
     if (start_from + n_files) > num_files:
         print(f"WARNING: Unable to analyze {n_files} from file {start_from} \
                 Analyzing remaining files to completion")
@@ -258,9 +258,9 @@ def load_processed_files_from_npy(folder, required_variables_name_list):
                 elif (preprocessed_file.find('npz') != -1):
                     value = np.load(my_file, allow_pickle=True)
                     value = value['arr_0'].item() # We need to extract the information at this point
-                                                # Otherwise, if we store the NPz file in a dict and
-                                                # we try to extract the information later, we get this 
-                                                # error: "ValueError": seek of closed file
+                                                  # Otherwise, if we store the NPz file in a dict and
+                                                  # we try to extract the information later, we get this 
+                                                  # error: "ValueError": seek of closed file
                     preprocessed_data_dict[key] = value
         
     return preprocessed_data_dict

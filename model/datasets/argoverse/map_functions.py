@@ -876,7 +876,7 @@ class MapFeaturesUtils:
         pred_len = 30
         freq = 10
 
-        min_dist_around = 25
+        min_dist_around = 15
 
         traj_len = xy.shape[0]
         agent_traj = copy.deepcopy(xy)
@@ -892,7 +892,7 @@ class MapFeaturesUtils:
                                                                                                debug=False)
                                                                                                
         dist_around = vel * (pred_len/freq) + 1/2 * acc * (pred_len/freq)**2
-
+        
         if dist_around < min_dist_around:
             dist_around = min_dist_around
 
@@ -912,6 +912,7 @@ class MapFeaturesUtils:
                     index_max_dist = i
 
         reference_point = extended_xy_filtered[index_max_dist,:]
+        # reference_point = extended_xy_filtered[obs_len-1,:]
 
         # Compute agent's orientation
 
@@ -964,10 +965,10 @@ class MapFeaturesUtils:
                         obs_pred_lanes.append(past_lane_seq + future_lane_seq[1:])
                         obs_pred_lanes.append(future_lane_seq)
 
-                # Only future
-                for future_lane_seq in candidates_future:
-                    obs_pred_lanes.append(future_lane_seq[1:])
-
+                # # Only future
+                # for future_lane_seq in candidates_future:
+                #     obs_pred_lanes.append(future_lane_seq[1:])
+                
             # Removing overlapping lanes
             obs_pred_lanes = remove_overlapping_lane_seq(obs_pred_lanes)
 
@@ -982,6 +983,35 @@ class MapFeaturesUtils:
             else:
                 candidate_centerlines = avm.get_cl_from_lane_seq(
                     [obs_pred_lanes[0]], city_name)
+                
+            ## Additional ##
+
+            # Sort centerlines based on the distance to a reference point, usually the last observation
+
+            distances = []
+            for centerline in candidate_centerlines:
+                distances.append(min(np.linalg.norm((centerline - reference_point),axis=1)))
+            
+            # If we want to filter those lanes with the same distance to reference point
+            # TODO: Is this hypothesis correct?
+            
+            # unique_distances = list(set(distances))
+            # unique_distances.sort()
+            # unique_distances = unique_distances[:max_candidates]
+
+            # # print("unique distances: ", unique_distances)
+            # final_indeces = [np.where(distances == unique_distance)[0][0] for unique_distance in unique_distances]
+
+            # final_candidates = []
+            # for index in final_indeces:
+            #     final_candidates.append(candidate_centerlines[index])
+
+            sorted_indeces = np.argsort(distances)
+            final_candidates = []
+            for index in sorted_indeces:
+                final_candidates.append(candidate_centerlines[index])
+                
+            candidate_centerlines = final_candidates
 
         elif algorithm == "map_api": 
         # Compute centerlines using Argoverse Map API
@@ -1034,7 +1064,7 @@ class MapFeaturesUtils:
 
             ## Additional ##
 
-            # Sort centerlines based on the distance to the naive reference point (after extension)
+            # Sort centerlines based on the distance to a reference point, usually the last observation
 
             distances = []
             for centerline in candidate_centerlines:
@@ -1050,6 +1080,12 @@ class MapFeaturesUtils:
             final_candidates = []
             for index in final_indeces:
                 final_candidates.append(candidate_centerlines[index])
+
+            # sorted_indeces = np.argsort(distances)
+            # sorted_indeces = sorted_indeces[:max_candidates]
+            # final_candidates = []
+            # for index in sorted_indeces:
+            #     final_candidates.append(candidate_centerlines[index])
 
             candidate_centerlines = final_candidates
 
@@ -1262,11 +1298,11 @@ class MapFeaturesUtils:
             plt.title(f"Number of candidates = {len(candidate_centerlines)}")   
 
             if mode == "test":
-                filename = os.path.join(output_dir,f"{seq_id}_relevant_centerlines.png")
+                filename = os.path.join(output_dir,f"{seq_id}_{algorithm}_relevant_centerlines.png")
             else:
-                filename = os.path.join(output_dir,f"{seq_id}_oracle.png")
+                filename = os.path.join(output_dir,f"{seq_id}_{algorithm}_oracle.png")
             # print("filename: ", filename)
-            # plt.savefig(filename, bbox_inches='tight', facecolor="white", edgecolor='none', pad_inches=0)
+            plt.savefig(filename, bbox_inches='tight', facecolor="white", edgecolor='none', pad_inches=0)
 
             plt.show()
             plt.close('all')
