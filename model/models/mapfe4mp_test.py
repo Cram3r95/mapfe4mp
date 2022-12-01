@@ -40,7 +40,6 @@ OBS_LEN = 20
 PRED_LEN = 30
 NUM_PLAUSIBLE_AREA_POINTS = 512
 CENTERLINE_LENGTH = 40
-MAX_CENTERLINES = 3 # TODO: Should this parameter be variable?
 
 NUM_ATTENTION_HEADS = 4
 H_DIM_PHYSICAL = 128
@@ -51,7 +50,7 @@ CONV_FILTERS = 32 # 60
 APPLY_DROPOUT = True
 DROPOUT = 0.4
 
-HEAD = "SingleLinear" # SingleLinear, MultiLinear, Non-Autoregressive
+HEAD = "MultiLinear" # SingleLinear, MultiLinear, Non-Autoregressive
 
 def make_mlp(dim_list, activation_function="ReLU", batch_norm=False, dropout=0.0):
     """
@@ -88,18 +87,19 @@ def make_mlp(dim_list, activation_function="ReLU", batch_norm=False, dropout=0.0
     return nn.Sequential(*layers)
 
 class MotionEncoder(nn.Module):
-    def __init__(self, h_dim):
+    def __init__(self, h_dim, current_device):
         super(MotionEncoder, self).__init__()
 
         self.input_size = DATA_DIM
         self.hidden_size = h_dim
         self.num_layers = 1
+        self.current_device = current_device
 
         self.lstm = nn.LSTM(
             input_size=self.input_size,
             hidden_size=self.hidden_size,
             num_layers=self.num_layers
-        )
+        ).cuda(self.current_device)
 
     def forward(self, lstm_in):
         """_summary_
@@ -111,20 +111,25 @@ class MotionEncoder(nn.Module):
             _type_: _description_
         """
         
-        lstm_hidden_state = torch.randn(
-            self.num_layers, lstm_in.shape[1], self.hidden_size, device=lstm_in.device)
-        lstm_cell_state = torch.randn(
-            self.num_layers, lstm_in.shape[1], self.hidden_size, device=lstm_in.device)
-        lstm_hidden = (lstm_hidden_state, lstm_cell_state)
+        lstm_hidden_state = torch.randn(self.num_layers, 
+                                        lstm_in.shape[1], 
+                                        self.hidden_size, 
+                                        dtype=torch.float,
+                                        device=lstm_in.device)
+        lstm_cell_state = torch.randn(self.num_layers, 
+                                      lstm_in.shape[1], 
+                                      self.hidden_size,
+                                      dtype=torch.float, 
+                                      device=lstm_in.device)
 
-        lstm_out, (lstm_hidden, lstm_cell) = self.lstm(lstm_in, lstm_hidden)
-        
+        lstm_out, (lstm_hidden_state_, lstm_cell_state_) = self.lstm(lstm_in, (lstm_hidden_state, lstm_cell_state))
+
         # lstm_out is the hidden state over all time steps from the last LSTM layer
         # In this case, only the features of the last time step are used
 
-        if APPLY_DROPOUT: lstm_hidden = F.dropout(lstm_hidden, p=DROPOUT, training=self.training)
-        lstm_hidden_ = lstm_hidden.squeeze(dim=0)
-        return lstm_hidden_
+        if APPLY_DROPOUT: lstm_hidden_state_ = F.dropout(lstm_hidden_state_, p=DROPOUT, training=self.training)
+        lstm_hidden_state_ = lstm_hidden_state_.squeeze(dim=0)
+        return lstm_hidden_state_
 
 class GNN(nn.Module):
     def __init__(self, h_dim):
@@ -311,10 +316,11 @@ class Centerline_Encoder(nn.Module):
             _type_: _description_
         """
 
+        num_centerlines = phy_info.shape[0]
         phy_info_ = torch.clone(phy_info.permute(0,2,1))
         phy_info_ = self.bn0(phy_info_)
-
-        phy_info_ = self.conv1(phy_info_)
+        
+        phy_info_ = self.conv1(phy_info.permute(0,2,1))
         phy_info_ = self.bn1(phy_info_)
         phy_info_ = self.tanh(phy_info_)
         phy_info_ = self.maxpooling1(phy_info_)
@@ -327,7 +333,8 @@ class Centerline_Encoder(nn.Module):
         phy_info_ = self.linear(self.flatten(phy_info_))
         phy_info_ = F.dropout(phy_info_, p=DROPOUT, training=self.training)
 
-        # phy_info_ = phy_info_.permute(0,2,1)
+        # num_centerlines = phy_info.shape[0]
+        # phy_info_ = phy_info.permute(0,2,1)
         # phy_info_ = phy_info_.contiguous().view(num_centerlines, -1)
         # phy_info_ = self.mlp_centerlines(phy_info_)
 
@@ -512,7 +519,7 @@ class PredictionNet(nn.Module):
 ## CRAT-PRED
 
 class TrajectoryGenerator(nn.Module):
-    def __init__(self, PHYSICAL_CONTEXT="social"):
+    def __init__(self, PHYSICAL_CONTEXT="social", CURRENT_DEVICE="cpu"):
         super(TrajectoryGenerator, self).__init__()
 
         self.physical_context = PHYSICAL_CONTEXT
@@ -530,7 +537,7 @@ class TrajectoryGenerator(nn.Module):
 
         ## Social 
 
-        self.social_encoder = MotionEncoder(h_dim=self.h_dim_social)
+        self.motion_encoder = MotionEncoder(h_dim=self.h_dim_social,current_device=CURRENT_DEVICE)
         self.agent_gnn = GNN(h_dim=self.h_dim_social)
         self.sattn = MultiheadSelfAttention(h_dim=self.h_dim_social,
                                             num_heads=self.num_attention_heads)
@@ -567,7 +574,7 @@ class TrajectoryGenerator(nn.Module):
             self.concat_h_dim = self.h_dim_social + self.h_dim_physical
         elif PHYSICAL_CONTEXT == "plausible_centerlines":
             # encoded target pos and vel + social info + map information encoded
-            self.concat_h_dim = self.h_dim_social# + self.h_dim_physical
+            self.concat_h_dim = 3 * self.h_dim_social + 3 * self.h_dim_physical
 
         self.decoder = Multimodal_Decoder(decoder_h_dim=self.concat_h_dim)  
         # self.decoder = DecoderResidual(h_dim=self.concat_h_dim)
@@ -618,21 +625,22 @@ class TrajectoryGenerator(nn.Module):
         #     #     # phy_info = self.add_noise(phy_info)
         #     #     relevant_centerlines = self.add_noise(relevant_centerlines)
         
-        # Encoder
-
-        encoded_obs_traj = self.social_encoder(obs_traj)
-        encoded_obs_traj_rel = self.social_encoder(obs_traj_rel)
+        # Motion Encoder
+        
+        encoded_obs_traj = self.motion_encoder(obs_traj)
+        encoded_obs_traj_rel = self.motion_encoder(obs_traj_rel)
 
         target_agent_encoded_obs_traj = encoded_obs_traj[agent_idx,:]
         target_agent_encoded_obs_traj_rel = encoded_obs_traj_rel[agent_idx,:]
 
         ## Social information
 
-        centers_agents = obs_traj[-1,:,:] # x,y (abs coordinates)
+        centers = obs_traj[-1,:,:] # x,y (abs coordinates)
         agents_per_sample = (seq_start_end[:,1] - seq_start_end[:,0]).cpu().detach().numpy()
-        out_agent_gnn = self.agent_gnn(encoded_obs_traj_rel, centers_agents, agents_per_sample)
-        out_social_attention = self.sattn(out_agent_gnn, agents_per_sample)
-        encoded_social_info = torch.cat(out_social_attention,dim=0) # batch_size · num_agents x hidden_dim_social
+
+        out_agent_gnn = self.agent_gnn(encoded_obs_traj_rel, centers, agents_per_sample)
+        out_self_attention = self.sattn(out_agent_gnn, agents_per_sample)
+        encoded_social_info = torch.cat(out_self_attention,dim=0) # batch_size · num_agents x hidden_dim_social
 
         if np.any(agent_idx): # single agent
             encoded_social_info = encoded_social_info[agent_idx,:]
@@ -669,32 +677,22 @@ class TrajectoryGenerator(nn.Module):
             state_tuple = (decoder_h, decoder_c)
 
         elif self.physical_context == "plausible_centerlines":
-            
-            aux_ = relevant_centerlines.view(batch_size,MAX_CENTERLINES,-1).sum(dim = -1)
-            rows,cols = torch.where(aux_ != 0)
-            relevant_centerlines_concat = relevant_centerlines[rows,cols,:,:] # concatenated centerlines along dim=0 
-                                                                              # batch_size · centerlines_per_seq x length x data_dim
-            centers_centerlines = relevant_centerlines_concat[:,0,:] # take the first point of the centerline
-            centerlines_per_sample = torch.count_nonzero(aux_,dim=1)
-            most_plausible_centerline_index = torch.roll(torch.cumsum(centerlines_per_sample,dim=0),1)
-            most_plausible_centerline_index[0] = 0
+            NUM_CENTERLINES = 3 # TODO: This should be variable
+            centerlines_per_sample = NUM_CENTERLINES * np.ones(batch_size,dtype=int)
 
+            relevant_centerlines_ = relevant_centerlines.permute(1,0,2,3)
+            relevant_centerlines_concat = relevant_centerlines_.contiguous().view(-1,CENTERLINE_LENGTH,self.data_dim)
+            
             encoded_centerlines = self.centerline_encoder(relevant_centerlines_concat)
-            centerlines_per_sample_array = centerlines_per_sample.cpu().detach().numpy()
+            out_centerlines_gnn = self.centerline_gnn(encoded_centerlines, centers, centerlines_per_sample)
+            encoded_phy_info = self.pattn(out_centerlines_gnn, centerlines_per_sample)
+            encoded_phy_info = torch.stack(encoded_phy_info,dim=0).view(batch_size,-1)
 
-            out_centerlines_gnn = self.centerline_gnn(encoded_centerlines, centers_centerlines, centerlines_per_sample_array)
-            out_physical_attention = self.pattn(out_centerlines_gnn, centerlines_per_sample_array)
-            
-            encoded_physical_info = torch.cat(out_physical_attention,dim=0) # batch_size · num_agents x hidden_dim_social
-
-            if torch.any(most_plausible_centerline_index): # most plausible centerline
-                encoded_physical_info = encoded_physical_info[most_plausible_centerline_index,:]
-
-            # mlp_decoder_context_input = torch.cat([encoded_social_info, 
-            #                                        encoded_physical_info], 
-            #                                        dim=1)
-            
-            mlp_decoder_context_input = encoded_social_info
+            mlp_decoder_context_input = torch.cat([target_agent_encoded_obs_traj, 
+                                                   target_agent_encoded_obs_traj_rel, 
+                                                   encoded_social_info, 
+                                                   encoded_phy_info], 
+                                                   dim=1)
  
             decoder_h = mlp_decoder_context_input.unsqueeze(0)
             decoder_c = torch.randn(tuple(decoder_h.shape)).cuda(obs_traj.device)
@@ -709,5 +707,5 @@ class TrajectoryGenerator(nn.Module):
             
         end = time.time()
         # print("Time consumed by forward: ", end-start)
-        
+
         return pred_traj_fake_rel, conf

@@ -1,11 +1,11 @@
 #!/usr/bin/env python3.8
 # -*- coding: utf-8 -*-
 
-## Data augmentation functions
+## Visualization functions
 
 """
 Created on Sun Mar 06 23:47:19 2022
-@author: Carlos Gómez-Huélamo and Miguel Eduardo Ortiz Huamaní
+@author: Carlos Gómez-Huélamo
 """
 
 # General purpose imports
@@ -102,8 +102,10 @@ def viz_predictions_all(
         ade_metric: float = None,
         fde_metric: float = None,
         worst_scenes: list = [],
+        check_data_aug: bool = False,
 ) -> None:
-    """Visualize predicted trjectories.
+    """
+    Visualize predicted trjectories.
     Args:
         OBS: Track = Sequence
 
@@ -123,8 +125,6 @@ def viz_predictions_all(
     color_dict_obs = {"AGENT": "#ECA154", "OTHER": "#413839", "AV": "#0000A5"}
     color_dict_pred_gt = {"AGENT": "#d33e4c", "OTHER": "#686A6C", "AV": "#157DEC"}
 
-    query_search_range_manhattan_ = 2.5
-
     num_agents = input_abs.shape[0]
     num_modes = output_abs.shape[0]
     obs_len = input_abs.shape[1]
@@ -133,8 +133,10 @@ def viz_predictions_all(
     # Transform to global coordinates
 
     input_ = input_abs + map_origin
-    output = output_abs + map_origin
+    if np.any(output_abs):
+        output = output_abs + map_origin
     target = target_abs + map_origin
+    relevant_centerlines = relevant_centerlines_abs + map_origin
 
     fig = plt.figure(0, figsize=(8,8))
 
@@ -142,7 +144,7 @@ def viz_predictions_all(
     x_max = map_origin[0] + dist_rasterized_map
     y_min = map_origin[1] - dist_rasterized_map
     y_max = map_origin[1] + dist_rasterized_map
-
+  
     if ade_metric and fde_metric: # Debug 
         font = {
                 'family': 'serif',
@@ -151,7 +153,7 @@ def viz_predictions_all(
                 'size': 16,
                }
         plt.title(f"minADE: {round(ade_metric,3)} ; minFDE: {round(fde_metric,3)}", \
-                  fontdict=font, backgroundcolor= 'silver')
+                  fontdict=font, backgroundcolor='silver')
     else:
         plt.axis("off")
 
@@ -212,16 +214,16 @@ def viz_predictions_all(
             )
 
         # Centerlines (Optional)
-        
-        num_centerlines = relevant_centerlines_abs.shape[0]
+    
+        num_centerlines = relevant_centerlines.shape[0]
 
         count_rep_centerlines = np.zeros((num_centerlines))
         rep_centerlines = []
 
         # TODO: Prepare this code to deal with batch size != 1
-        if len(relevant_centerlines_abs) > 0:
-            for num_mode in range(num_centerlines):
-                centerline = relevant_centerlines_abs[num_mode,0,:,:]
+        if len(relevant_centerlines) > 0:
+            for id_centerline in range(num_centerlines):
+                centerline = relevant_centerlines[id_centerline,0,:,:] # We assume batch_size = 1 here
 
                 # Check repeated centerlines
 
@@ -231,7 +233,7 @@ def viz_predictions_all(
                         flag_repeated = True
                         count_rep_centerlines[index_centerline] += 1
                 if not flag_repeated:
-                    count_rep_centerlines[num_mode] += 1
+                    count_rep_centerlines[id_centerline] += 1
                     rep_centerlines.append(centerline)
 
                 # Centerline
@@ -262,7 +264,7 @@ def viz_predictions_all(
 
             for index_repeated in range(len(count_rep_centerlines)):
                 if count_rep_centerlines[index_repeated] > 0:
-                    centerline = relevant_centerlines_abs[index_repeated,0,:,:]
+                    centerline = relevant_centerlines[index_repeated,0,:,:]
 
                     plt.text(
                             centerline[-1, 0]+1,
@@ -270,7 +272,7 @@ def viz_predictions_all(
                             str(int(count_rep_centerlines[index_repeated])),
                             fontsize=12
                             )
-
+        
         if object_type == "AGENT":
             # Multimodal prediction (only AGENT of interest)
             for num_mode in range(num_modes):
@@ -297,8 +299,6 @@ def viz_predictions_all(
                     markersize=9,
                 )
 
-
-
     seq_lane_props = avm.city_lane_centerlines_dict[city_name]
 
     ### Get lane centerlines which lie within the range of trajectories
@@ -320,6 +320,7 @@ def viz_predictions_all(
 
     handles, labels = plt.gca().get_legend_handles_labels()
     by_label = OrderedDict(zip(labels, handles))
+    
     if show:
         plt.show()
 
@@ -334,7 +335,11 @@ def viz_predictions_all(
             print("Create trajs folder: ", output_dir)
             os.makedirs(output_dir) # makedirs creates intermediate folders
 
-        filename = os.path.join(results_path,subfolder,str(seq_id)+".png")
+        if check_data_aug:
+            filename = os.path.join(results_path,subfolder,str(seq_id)+"_data_aug.png")
+        else:
+            filename = os.path.join(results_path,subfolder,str(seq_id)+".png")
+            
         plt.savefig(filename, bbox_inches='tight', facecolor=fig.get_facecolor(), edgecolor='none', pad_inches=0)
 
     plt.cla()

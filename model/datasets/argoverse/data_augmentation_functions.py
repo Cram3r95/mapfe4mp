@@ -150,11 +150,11 @@ def add_gaussian_noise(traj,apply_gaussian_noise,num_agents,num_obs=20,multi_poi
 
     return noised_traj
 
-def rotate_traj(traj,angle,output_shape=(20,2)):
+def rotate_traj(traj,angle_rad):
     """
+    traj: torch.tensor
+    angle: torch.tensor in radians
     """
-
-    angle_rad = torch.deg2rad(torch.tensor(angle).float())
 
     c, s = torch.cos(angle_rad), torch.sin(angle_rad)
     R = torch.tensor([[c,-s],  # Rot around the map z-axis

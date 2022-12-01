@@ -73,7 +73,7 @@ class Checkpoint():
         self.config_cp["d_best_state_nl"] = config.d_best_state_nl
         self.config_cp["best_t_nl"] = config.best_t_nl
 
-def get_generator(model_path,config):
+def get_generator(model_path, config):
     """
     """
 
@@ -92,7 +92,8 @@ def get_generator(model_path,config):
 
     # TODO: Pass as argument only "config"
 
-    generator = TrajectoryGenerator(PHYSICAL_CONTEXT=config.hyperparameters.physical_context)
+    generator = TrajectoryGenerator(PHYSICAL_CONTEXT=config.hyperparameters.physical_context,
+                                    CURRENT_DEVICE=device)
 
     checkpoint = torch.load(model_path, map_location=current_cuda)
     generator.load_state_dict(checkpoint.config_cp['g_best_state'], strict=False)

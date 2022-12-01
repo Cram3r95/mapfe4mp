@@ -34,13 +34,9 @@ import model.datasets.argoverse.data_augmentation_functions as data_augmentation
 import model.datasets.argoverse.plot_functions as plot_functions
 import model.datasets.argoverse.goal_points_functions as goal_points_functions
 
-from argoverse.map_representation.map_api import ArgoverseMap
-
 #######################################
 
 # Global variables
-
-# avm = ArgoverseMap()
 
 RAW_DATA_FORMAT = {
     "TIMESTAMP": 0,
@@ -89,7 +85,7 @@ def seq_collate(data):
     data is computed.
     """
 
-    DEBUG_TIME = True
+    DEBUG_TIME = False
 
     start_seq_collate = time.time()
 
@@ -117,9 +113,8 @@ def seq_collate(data):
     object_cls = torch.cat(object_class_id_list, dim=0)
     obj_id = torch.cat(object_id_list, dim=0)
     map_origin = torch.stack(map_origin)
-    city_id = torch.stack(city_id)
     target_agent_orientation = torch.stack(target_agent_orientation)
-
+    
     # target_agent_orientation = 
     
     num_seq_list = torch.stack(num_seq_list)
@@ -149,8 +144,12 @@ def seq_collate(data):
         # Relevant centerlines from global (map) coordinates to absolute (around origin) coordinates
         
         relevant_centerlines = torch.stack(relevant_centerlines, dim=0)
-        _, max_centerlines, points_per_centerline, data_dim = relevant_centerlines.shape
-        rows,cols,_ = torch.where(relevant_centerlines[:,:,:,0] == 0.0) # identify padded centerlines
+        max_centerlines = relevant_centerlines.shape[1]
+        points_per_centerline = relevant_centerlines.shape[2]
+        data_dim = relevant_centerlines.shape[3]
+        aux_ = relevant_centerlines.view(batch_size,max_centerlines,-1).sum(dim = -1)
+        rows, cols = torch.where(aux_ == 0)
+        
         phy_info = relevant_centerlines - map_origin.unsqueeze(1)
         phy_info[rows,cols,:,:] = torch.zeros((points_per_centerline,data_dim))
         
@@ -182,16 +181,8 @@ def seq_collate(data):
         for start,end in seq_start_end.data:
             num_obstacles = (end-start).item() # int
             curr_object_class_id_list = object_class_id_list[i]
-            curr_map_origin = map_origin[i][0] # TODO: Save again the .npy data with 1D tensor [], 
-                                           # not 2D tensor [[]] for each element
+            curr_origin = map_origin[i][0] # TODO: Save again the .npy data with 1D tensor [], not 2D tensor [[]] for each element
             seq_id = num_seq_list[i].item()
-            curr_city = city_id[i]
-            if curr_city == 0:
-                curr_city = "PIT"
-            else:
-                curr_city = "MIA"
-                
-            curr_relevant_centerlines = phy_info[i,:,:,:].unsqueeze(1)
 
             # Original trajectories (observations and predictions)
 
@@ -200,7 +191,6 @@ def seq_collate(data):
             curr_obs_traj_rel = obs_traj_rel[:,start:end,:]
             curr_pred_traj_gt = pred_traj_gt[:,start:end,:]
             curr_pred_traj_gt_rel = pred_traj_gt_rel[:,start:end,:]
-            curr_target_agent_orientation = target_agent_orientation[i]
 
             # Apply data augmentation for every sequence (scenario) of the batch
 
@@ -256,45 +246,27 @@ def seq_collate(data):
             aug_pred_traj_gt_rel[:,start:end,:] = aug_curr_pred_traj_gt_rel
 
             if DEBUG_DATA_AUGMENTATION:
-                results_path = f"data/datasets/argoverse/motion-forecasting/train"
-                curr_pred_traj_fake = np.zeros((0,0,0))
-                
+                filename = f"data/datasets/argoverse/motion-forecasting/train/data_images/{seq_id}.png"
+
                 # Original observations (No data augmentation)
-                pdb.set_trace()
-                plot_functions.viz_predictions_all(seq_id,
-                                                   results_path,
-                                                   curr_obs_traj.permute(1,0,2).cpu().numpy(), # All obstacles
-                                                   curr_pred_traj_fake, # Only AGENT (MM prediction)
-                                                   curr_pred_traj_gt.permute(1,0,2).cpu().numpy(), # All obstacles
-                                                   curr_object_class_id_list.cpu().numpy(),
-                                                   curr_city,
-                                                   curr_map_origin.cpu().numpy(),
-                                                   avm,
-                                                   dist_rasterized_map=50,
-                                                   relevant_centerlines_abs=curr_relevant_centerlines,
-                                                   save=True)
+
+                curr_traj_rel = torch.cat((curr_obs_traj_rel,
+                                           curr_pred_traj_gt_rel),dim=0)
+
+                plot_functions.plot_trajectories(filename,curr_traj_rel,curr_first_obs,
+                                                 curr_origin,curr_object_class_id_list,dist_rasterized_map,
+                                                 rot_angle=-1,obs_len=obs_len,
+                                                 smoothen=False, save=True)
 
                 # New observations (after data augmentation)
-                
-                rotated_curr_obs_traj = data_augmentation_functions.rotate_traj(curr_obs_traj,curr_target_agent_orientation)
-                rotated_curr_pred_traj_gt = data_augmentation_functions.rotate_traj(curr_pred_traj_gt,curr_target_agent_orientation)
-                rotated_curr_map_origin = data_augmentation_functions.rotate_traj(curr_map_origin,curr_target_agent_orientation)
-                rotated_curr_relevant_centerlines = data_augmentation_functions.rotate_traj(curr_relevant_centerlines,curr_target_agent_orientation)
-                
-                plot_functions.viz_predictions_all(seq_id,
-                                                   results_path,
-                                                   rotated_curr_obs_traj.permute(1,0,2).cpu().numpy(), # All obstacles
-                                                   curr_pred_traj_fake, # Only AGENT (MM prediction)
-                                                   rotated_curr_pred_traj_gt.permute(1,0,2).cpu().numpy(), # All obstacles
-                                                   curr_object_class_id_list.cpu().numpy(),
-                                                   curr_city,
-                                                   rotated_curr_map_origin.cpu().numpy(),
-                                                   avm,
-                                                   dist_rasterized_map=50,
-                                                   relevant_centerlines_abs=rotated_curr_relevant_centerlines,
-                                                   save=True,
-                                                   check_data_aug=True)
 
+                aug_curr_traj_rel = torch.cat((aug_curr_obs_traj_rel,
+                                               aug_curr_pred_traj_gt_rel),dim=0)
+
+                plot_functions.plot_trajectories(filename,aug_curr_traj_rel,aug_curr_first_obs,
+                                                 curr_origin,curr_object_class_id_list,dist_rasterized_map,
+                                                 rot_angle=rot_angle,obs_len=obs_len,
+                                                 smoothen=False, save=True, data_aug=True)
             i += 1
 
         # Replace tensors

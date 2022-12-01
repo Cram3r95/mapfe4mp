@@ -15,7 +15,6 @@ import os
 import numpy as np
 import pdb
 import time
-import sys
 import copy
 
 # DL & Math imports
@@ -26,7 +25,6 @@ import torch.optim as optim
 import torch.optim.lr_scheduler as lrs
 
 from torch.utils.data import DataLoader
-from torch.cuda.amp import GradScaler, autocast 
 from torch.utils.tensorboard import SummaryWriter
 
 # Custom imports
@@ -47,7 +45,6 @@ from model.utils.utils import create_weights
 map_features_utils_instance = MapFeaturesUtils()
 
 torch.backends.cudnn.benchmark = True
-scaler = GradScaler()
 current_cuda = None
 absolute_root_folder = None
 
@@ -277,13 +274,17 @@ def model_trainer(config, logger):
     optim_parameters = config.optim_parameters
 
     ## Set specific device for both data and model
-
+    print("AAAA")
+    pdb.set_trace()
+    startttt = time.time()
     global current_cuda
     current_cuda = torch.device(f"cuda:{config.device_gpu}")
     device = torch.device(current_cuda if torch.cuda.is_available() else "cpu")
     
     long_dtype, float_dtype = get_dtypes(config.use_gpu)
-
+    endddddd = time.time()
+    print("Time consumed by this shit: ", endddddd-startttt)
+    pdb.set_trace()
     logger.info('Configuration: ')
     logger.info(config)
 
@@ -334,7 +335,7 @@ def model_trainer(config, logger):
                                                  extra_data_train=config.dataset.extra_data_train,
                                                  preprocess_data=config.dataset.preprocess_data,
                                                  save_data=config.dataset.save_data)
-                                     
+    print("BBBB")                                 
     val_loader = DataLoader(data_val,
                             batch_size=config.dataset.batch_size,
                             shuffle=False,
@@ -438,7 +439,7 @@ def model_trainer(config, logger):
     w_loss = create_weights(config.dataset.batch_size, 
                             min_weight, 
                             max_weight).cuda(current_cuda) # batch_size x pred_len, from min_weight to max_weight
-
+    print("CCCC")
     # Tensorboard
 
     if hyperparameters.tensorboard_active:

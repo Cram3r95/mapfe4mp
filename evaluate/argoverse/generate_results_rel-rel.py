@@ -45,7 +45,7 @@ import model.datasets.argoverse.dataset_utils as dataset_utils
 
 from model.datasets.argoverse.dataset import ArgoverseMotionForecastingDataset, seq_collate
 from model.utils.checkpoint_data import get_generator
-from model.trainers.trainer_sophie_mm import cal_ade_multimodal, cal_fde_multimodal
+from model.trainers.trainer_mapfe4mp import cal_ade_multimodal, cal_fde_multimodal
 
 from argoverse.evaluation.competition_util import generate_forecasting_h5
 from argoverse.map_representation.map_api import ArgoverseMap
@@ -71,8 +71,8 @@ ARGOVERSE_NUM_MODES = 6
 dist_around = 40
 dist_rasterized_map = [-dist_around, dist_around, -dist_around, dist_around]
 
-GENERATE_QUALITATIVE_RESULTS = True
-PLOT_WORST_SCENES = True
+GENERATE_QUALITATIVE_RESULTS = False
+PLOT_WORST_SCENES = False
 LIMIT_QUALITATIVE_RESULTS = 150
 
 COMPUTE_METRICS = True
@@ -185,7 +185,9 @@ def evaluate(loader, generator, config, split, current_cuda, pred_len, results_p
                 batch = [tensor.cuda(current_cuda) for tensor in batch if torch.is_tensor(tensor)]
 
                 (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel, non_linear_obj,
-                loss_mask, seq_start_end, object_cls, obj_id, map_origin, num_seq, norm, phy_info) = batch
+                 loss_mask, seq_start_end, object_cls, obj_id, map_origin, num_seq, norm, 
+                 target_agent_orientation, relevant_centerlines) = batch
+                
             elif config.hyperparameters.physical_context == "plausible_centerlines+area":
 
                 # TODO: In order to improve this, seq_collate should return a dictionary instead of a tuple
@@ -195,7 +197,8 @@ def evaluate(loader, generator, config, split, current_cuda, pred_len, results_p
                 batch = [tensor.cuda(current_cuda) for tensor in batch if torch.is_tensor(tensor)]
 
                 (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel, non_linear_obj,
-                loss_mask, seq_start_end, object_cls, obj_id, map_origin, num_seq, norm) = batch
+                 loss_mask, seq_start_end, object_cls, obj_id, map_origin, num_seq, norm, 
+                 target_agent_orientation) = batch
 
             seq_id = num_seq.cpu().item()
             print(f"{seq_id}.csv")
@@ -211,8 +214,6 @@ def evaluate(loader, generator, config, split, current_cuda, pred_len, results_p
             agent_idx = torch.where(object_cls==1)[0].cpu().numpy()
 
             # Get predictions
-
-            relevant_centerlines = []
 
             # TODO: Not used at this moment
             if config.hyperparameters.num_modes == 1: # The model is unimodal # TODO: -> conf here is 1/6
@@ -292,8 +293,9 @@ def evaluate(loader, generator, config, split, current_cuda, pred_len, results_p
 
                     pred_traj_fake_rel, conf = generator(obs_traj, obs_traj_rel, seq_start_end, agent_idx, phy_info=plausible_area, relevant_centerlines=relevant_centerlines)
                 else:
-                    pred_traj_fake_rel, conf = generator(obs_traj, obs_traj_rel, seq_start_end, agent_idx, phy_info=phy_info, relevant_centerlines=relevant_centerlines)
-
+                    # pred_traj_fake_rel, conf = generator(obs_traj, obs_traj_rel, seq_start_end, agent_idx, phy_info=phy_info, relevant_centerlines=relevant_centerlines)
+                    pred_traj_fake_rel, conf = generator(obs_traj, obs_traj_rel, seq_start_end, agent_idx, relevant_centerlines=relevant_centerlines)
+                    
                 ## Get predictions in absolute -> map coordinates
 
                 pred_traj_fake = dataset_utils.relative_to_abs_multimodal(pred_traj_fake_rel, obs_traj[-1,agent_idx,:])
@@ -354,10 +356,11 @@ def evaluate(loader, generator, config, split, current_cuda, pred_len, results_p
 
                 if config.hyperparameters.physical_context == "plausible_centerlines+area":
                     # K centerlines x batch_size x centerline length x 2
-                    relevant_centerlines_abs = relevant_centerlines.cpu().numpy() + map_origin.cpu().numpy()
+                    relevant_centerlines_abs = relevant_centerlines.cpu().numpy()
                 elif config.hyperparameters.physical_context == "oracle":
                     # 1 centerlines x batch_size x centerline length x 2
-                    relevant_centerlines_abs = phy_info.unsqueeze(0).cpu().numpy() + map_origin.cpu().numpy()
+                    # relevant_centerlines_abs = phy_info.unsqueeze(0).cpu().numpy() + map_origin.cpu().numpy()
+                    relevant_centerlines_abs = relevant_centerlines.unsqueeze(0).cpu().numpy()
                 else:
                     relevant_centerlines_abs = []
 
@@ -521,7 +524,7 @@ if __name__ == '__main__':
 # Best model at this moment (in terms of validation)
 """
 python evaluate/argoverse/generate_results_rel-rel.py \
---model_path "save/argoverse/sophie_mm/100.0_percent/test_oracle_check_rel2absmm/argoverse_motion_forecasting_dataset_0_with_model.pt" \
+--model_path "save/argoverse/mapfe4mp/100.0_percent/test_oracle_check_rel2absmm/argoverse_motion_forecasting_dataset_0_with_model.pt" \
 --device_gpu 0 --split "val"
 """
 
