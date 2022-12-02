@@ -658,7 +658,7 @@ class MapFeaturesUtils:
 
         lane_dir_vector = agent_xy[obs_len-1,:] - agent_xy[obs_len-2,:]
         yaw = math.atan2(lane_dir_vector[1],lane_dir_vector[0])
-
+        pdb.set_trace()
         return lane_dir_vector, yaw
 
     def apply_tf(source_location, transform):  

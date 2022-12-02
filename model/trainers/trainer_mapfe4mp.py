@@ -31,7 +31,8 @@ from torch.utils.tensorboard import SummaryWriter
 
 from model.datasets.argoverse.dataset import ArgoverseMotionForecastingDataset, seq_collate
 from model.models.mapfe4mp import TrajectoryGenerator
-from model.modules.losses import l2_loss_multimodal, mse, pytorch_neg_multi_log_likelihood_batch, evaluate_feasible_area_prediction
+from model.modules.losses import l2_loss_multimodal, mse, pytorch_neg_multi_log_likelihood_batch, \
+                                 evaluate_feasible_area_prediction, smoothL1
 from model.modules.evaluation_metrics import displacement_error, final_displacement_error
 from model.datasets.argoverse.dataset_utils import relative_to_abs_multimodal
 from model.datasets.argoverse.map_functions import MapFeaturesUtils
@@ -120,6 +121,23 @@ def calculate_mse_gt_loss_multimodal(gt, pred, loss_f, compute_ade=True, compute
         if compute_fde: loss_fde += loss_f(pred[i][-1].unsqueeze(0), gt[-1].unsqueeze(0), w_loss)
 
     return loss_ade/num_modes, loss_fde/num_modes
+
+def calculate_smoothL1_gt_loss_multimodal(gt, pred, loss_f):
+    """
+    gt: (pred_len, batch_size, data_dim)
+    pred: (batch_size, num_modes, pred_len, data_dim)
+    """
+    
+    batch_size, num_modes, pred_len, data_dim = pred.shape
+
+    pred = pred.permute(1,2,0,3) # num_modes, pred_len, batch_size, data_dim
+
+    loss_smoothL1 = torch.zeros(1).to(pred)
+
+    for i in range(num_modes):
+        loss_smoothL1 += loss_f(pred[i,:,:,:], gt)
+
+    return loss_smoothL1/num_modes
 
 def calculate_mse_gt_loss_unimodal(gt, pred, loss_f, w_loss=None):
     """
@@ -274,17 +292,13 @@ def model_trainer(config, logger):
     optim_parameters = config.optim_parameters
 
     ## Set specific device for both data and model
-    print("AAAA")
-    pdb.set_trace()
-    startttt = time.time()
+
     global current_cuda
     current_cuda = torch.device(f"cuda:{config.device_gpu}")
     device = torch.device(current_cuda if torch.cuda.is_available() else "cpu")
     
     long_dtype, float_dtype = get_dtypes(config.use_gpu)
-    endddddd = time.time()
-    print("Time consumed by this shit: ", endddddd-startttt)
-    pdb.set_trace()
+
     logger.info('Configuration: ')
     logger.info(config)
 
@@ -335,7 +349,7 @@ def model_trainer(config, logger):
                                                  extra_data_train=config.dataset.extra_data_train,
                                                  preprocess_data=config.dataset.preprocess_data,
                                                  save_data=config.dataset.save_data)
-    print("BBBB")                                 
+                              
     val_loader = DataLoader(data_val,
                             batch_size=config.dataset.batch_size,
                             shuffle=False,
@@ -431,6 +445,12 @@ def model_trainer(config, logger):
             "mse": mse,
             "nll": pytorch_neg_multi_log_likelihood_batch
         }
+    elif hyperparameters.loss_type_g == "mse+L1+nll":
+        loss_f = {
+            "mse": mse,
+            "smoothL1": smoothL1,
+            "nll": pytorch_neg_multi_log_likelihood_batch
+        }
     else:
         assert 1 == 0, "loss_type_g is not correct"
 
@@ -439,7 +459,7 @@ def model_trainer(config, logger):
     w_loss = create_weights(config.dataset.batch_size, 
                             min_weight, 
                             max_weight).cuda(current_cuda) # batch_size x pred_len, from min_weight to max_weight
-    print("CCCC")
+
     # Tensorboard
 
     if hyperparameters.tensorboard_active:
@@ -479,17 +499,21 @@ def model_trainer(config, logger):
             start = time.time()
             losses_g = generator_step(hyperparameters, batch, generator, optimizer_g, loss_f, w_loss)
             end = time.time()
+
             checkpoint.config_cp["norm_g"].append(get_total_norm(generator.parameters()))
             
             time_iterations += end - start
             time_per_iteration = time_iterations / (current_iteration+1)
 
             time_seq_collate += end_seq_collate - start_seq_collate
-            time_per_iteration = time_seq_collate / (current_iteration+1)
+            time_per_seq_collate = time_seq_collate / (current_iteration+1)
 
-            # Compute approximate time to compute train and val metrics
+            # Compute approximate time to compute train and val metrics when
+            # the model has run at least "print_every" iterations
 
-            if not flag_check_every:
+            if (current_iteration % hyperparameters.print_every == 0 
+            and current_iteration > 0
+            and not flag_check_every):
                 print("time per iteration: ", time_per_iteration)
                 print("time per seq collate: ", time_per_seq_collate)
                 total_time = time_per_seq_collate + time_per_iteration
@@ -542,7 +566,7 @@ def model_trainer(config, logger):
 
             # Print losses info
             
-            if current_iteration % hyperparameters.print_every == 0:
+            if current_iteration % hyperparameters.print_every == 0 and current_iteration > 0:
                 logger.info('Iteration = {} / {}'.format(t+1, hyperparameters.num_iterations + previous_t))
                 logger.info('Time per iteration: {}'.format(time_per_iteration))
                 logger.info('Time per seq collate: {}'.format(time_per_seq_collate))
@@ -800,63 +824,6 @@ def generator_step(hyperparameters, batch, generator, optimizer_g,
 
     optimizer_g.zero_grad()
 
-    # with autocast():
-    # Forward (If agent_idx != None, model prediction refers only to target agent)
-
-    # relevant_centerlines = []
-    # if hyperparameters.physical_context == "plausible_centerlines+area":
-    #     # TODO: Encapsulate this as a function
-
-    #     # Plausible area (discretized)
-
-    #     plausible_area_array = np.array([curr_phy_info["plausible_area_abs"] for curr_phy_info in phy_info]).astype(np.float32)
-    #     plausible_area = torch.from_numpy(plausible_area_array).type(torch.float).cuda(obs_traj.device)
-
-    #     # Compute relevant centerlines
-
-    #     num_relevant_centerlines = [len(curr_phy_info["relevant_centerlines_abs"]) for curr_phy_info in phy_info]
-    #     aux_indeces_list = []
-    #     for num_ in num_relevant_centerlines:
-    #         if num_ >= hyperparameters.num_modes: # Limit to the first hyperparameters.num_modes centerlines. We assume
-    #                                             # the oracle is here. TODO: Force this from the preprocessing 
-    #             aux_indeces = np.arange(hyperparameters.num_modes)
-    #             aux_indeces_list.append(aux_indeces)
-    #         else: # We have less centerlines than hyperparameters.num_modes
-    #             quotient = int(hyperparameters.num_modes / num_)
-    #             remainder = hyperparameters.num_modes % num_
-
-    #             aux_indeces = np.arange(num_)
-    #             aux_indeces = np.tile(aux_indeces,quotient)
-
-    #             if remainder != 0:
-    #                 aux_indeces_ = np.arange(remainder)
-    #                 aux_indeces = np.hstack((aux_indeces,aux_indeces_))
-                
-    #             assert len(aux_indeces) == hyperparameters.num_modes, "Number of centerlines does not match the number of required modes"
-    #             aux_indeces_list.append(aux_indeces)
-
-    #     centerlines_indeces = np.array(aux_indeces_list)
-
-    #     relevant_centerlines = []
-    #     for mode in range(hyperparameters.num_modes):
-
-    #         # Dynamic map info (one centerline per iteration -> Max Num_Modes iterations)
-
-    #         current_centerlines_indeces = centerlines_indeces[:,mode]
-    #         current_centerlines_list = []
-    #         for i in range(batch_size):
-    #             current_centerline = phy_info[i]["relevant_centerlines_abs"][current_centerlines_indeces[i]]
-    #             current_centerlines_list.append(current_centerline)
-
-    #         current_centerlines = torch.from_numpy(np.array(current_centerlines_list)).type(torch.float).cuda(obs_traj.device)
-    #         relevant_centerlines.append(current_centerlines.unsqueeze(0))
-
-    #     relevant_centerlines = torch.cat(relevant_centerlines,dim=0)
-
-    #     pred_traj_fake_rel, conf = generator(obs_traj, obs_traj_rel, seq_start_end, agent_idx, phy_info=plausible_area, relevant_centerlines=relevant_centerlines)
-    # else:
-    #     pred_traj_fake_rel, conf = generator(obs_traj, obs_traj_rel, seq_start_end, agent_idx, phy_info=phy_info, relevant_centerlines=relevant_centerlines)
-
     pred_traj_fake_rel, conf = generator(obs_traj, obs_traj_rel, seq_start_end, agent_idx, relevant_centerlines=relevant_centerlines)
 
     if hyperparameters.output_single_agent:
@@ -914,33 +881,33 @@ def generator_step(hyperparameters, batch, generator, optimizer_g,
             _, num_objs, _ = pred_traj_gt.shape
             w_loss_ = w_loss[:num_objs,:]
             loss_ade, loss_fde = calculate_mse_gt_loss_multimodal(pred_traj_gt, pred_traj_fake, loss_f["mse"], w_loss=w_loss_)
-            # if torch.is_tensor(relevant_centerlines):
-            #     loss_ade_centerlines = calculate_mse_centerlines_loss(relevant_centerlines, pred_traj_fake, loss_f["mse"], w_loss)
+           
         else:
             loss_ade, loss_fde = calculate_mse_gt_loss_multimodal(pred_traj_gt, pred_traj_fake, loss_f["mse"])
-            # loss_ade, loss_fde = calculate_mse_gt_loss_multimodal(pred_traj_gt_rel, pred_traj_fake_rel, loss_f["mse"])
-            
-            # _, loss_fde = calculate_mse_gt_loss_multimodal(pred_traj_gt, pred_traj_fake, loss_f["mse"])
-            # loss_ade, _ = calculate_mse_gt_loss_multimodal(pred_traj_gt_rel, pred_traj_fake_rel, loss_f["mse"])
-            # if torch.is_tensor(relevant_centerlines):
-            #     loss_ade_centerlines = calculate_mse_centerlines_loss(relevant_centerlines, pred_traj_fake, loss_f["mse"])
-
-        # _, loss_fde_goal = calculate_mse_gt_loss_multimodal(phy_info.permute(1,0,2), pred_traj_fake, loss_f["mse"], compute_ade=False)
-
+    
         loss_nll = calculate_nll_loss(pred_traj_gt, pred_traj_fake, loss_f["nll"], conf)
-        # loss_nll = calculate_nll_loss(pred_traj_gt_rel, pred_traj_fake_rel, loss_f["nll"], conf)
         
         loss = hyperparameters.loss_ade_weight*loss_ade + \
                 hyperparameters.loss_fde_weight*loss_fde + \
-                hyperparameters.loss_nll_weight*loss_nll #+ \
-            #    0.5*loss_fde_goal
-            #    hyperparameters.loss_ade_centerlines_weight*loss_ade_centerlines 
+                hyperparameters.loss_nll_weight*loss_nll \
 
         losses["G_mse_ade_loss"] = loss_ade.item()
         losses["G_mse_fde_loss"] = loss_fde.item()
         losses["G_nll_loss"] = loss_nll.item()
-        # losses["G_mse_fde_goal_loss"] = loss_fde_goal.item()
-        # losses["G_mse_ade_centerlines_loss"] = loss_nll.item()
+
+    elif hyperparameters.loss_type_g == "mse+L1+nll":
+        loss_smoothL1 = calculate_smoothL1_gt_loss_multimodal(pred_traj_gt, pred_traj_fake, loss_f["smoothL1"])
+        _, loss_fde = calculate_mse_gt_loss_multimodal(pred_traj_gt, pred_traj_fake, loss_f["mse"], compute_ade=False)
+        loss_nll = calculate_nll_loss(pred_traj_gt, pred_traj_fake, loss_f["nll"], conf)
+        
+        loss = hyperparameters.loss_smoothL1_weight*loss_smoothL1 + \
+                hyperparameters.loss_fde_weight*loss_fde + \
+                hyperparameters.loss_nll_weight*loss_nll \
+
+        losses["G_smoothL1_loss"] = loss_ade.item()
+        losses["G_mse_fde_loss"] = loss_fde.item()
+        losses["G_nll_loss"] = loss_nll.item()
+        
     elif hyperparameters.loss_type_g == "centerlines+gt":
 
         loss_ade_centerlines, loss_fde_centerlines = calculate_mse_centerlines_loss(relevant_centerlines, pred_traj_fake, loss_f["mse"])

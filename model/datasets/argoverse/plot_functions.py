@@ -91,6 +91,7 @@ def viz_predictions_all(
         input_abs: np.ndarray, # Around 0,0
         output_abs: np.ndarray, # Around 0,0
         target_abs: np.ndarray, # Around 0,0
+        target_agent_orientation: float, 
         object_class_list: np.ndarray,
         city_name: str,
         map_origin: np.ndarray,
@@ -102,7 +103,7 @@ def viz_predictions_all(
         ade_metric: float = None,
         fde_metric: float = None,
         worst_scenes: list = [],
-        check_data_aug: bool = False,
+        check_data_aug: bool = False
 ) -> None:
     """
     Visualize predicted trjectories.
@@ -136,7 +137,11 @@ def viz_predictions_all(
     if np.any(output_abs):
         output = output_abs + map_origin
     target = target_abs + map_origin
+
+    _, _, points_per_centerline, data_dim = relevant_centerlines_abs.shape
+    rows,cols,_ = np.where(relevant_centerlines_abs[:,:,:,0] == 0.0) # only sum the origin to non-padded centerlines
     relevant_centerlines = relevant_centerlines_abs + map_origin
+    relevant_centerlines[rows,cols,:,:] = np.zeros((points_per_centerline,data_dim))
 
     fig = plt.figure(0, figsize=(8,8))
 
@@ -154,8 +159,8 @@ def viz_predictions_all(
                }
         plt.title(f"minADE: {round(ade_metric,3)} ; minFDE: {round(fde_metric,3)}", \
                   fontdict=font, backgroundcolor='silver')
-    else:
-        plt.axis("off")
+    # else:
+    #     plt.axis("off")
 
     for i in range(num_agents): # Sequences (.csv)
         object_type = translate_object_type(int(object_class_list[i]))
@@ -185,6 +190,15 @@ def viz_predictions_all(
             zorder=15,
             markersize=9,
         )
+        ori = str(np.around(target_agent_orientation,2))
+        if object_type == "AGENT":
+            plt.text(
+                input_[i, -1, 0] + 1,
+                input_[i, -1, 1] + 1,
+                f"yaw = {ori}",
+                fontsize=12,
+                zorder=20
+                )
 
         # Groundtruth prediction
 
@@ -225,6 +239,9 @@ def viz_predictions_all(
             for id_centerline in range(num_centerlines):
                 centerline = relevant_centerlines[id_centerline,0,:,:] # We assume batch_size = 1 here
 
+                if not np.any(centerline): # Avoid plotting padded centerlines
+                    continue
+                
                 # Check repeated centerlines
 
                 flag_repeated = False
@@ -267,8 +284,8 @@ def viz_predictions_all(
                     centerline = relevant_centerlines[index_repeated,0,:,:]
 
                     plt.text(
-                            centerline[-1, 0]+1,
-                            centerline[-1, 1]+1,
+                            centerline[-1, 0] + 1,
+                            centerline[-1, 1] + 1,
                             str(int(count_rep_centerlines[index_repeated])),
                             fontsize=12
                             )

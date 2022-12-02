@@ -19,6 +19,8 @@ import torch
 import random
 import numpy as np
 import cv2
+import torch.nn.functional as F
+
 from torch import Tensor
 
 #######################################
@@ -102,6 +104,21 @@ def mse(gt, pred, w_loss=None):
         pdb.set_trace()
     return l2
 
+def smoothL1(gt, pred):
+    """
+    With t = predicted points (pred_len)
+    gt: (t, b, 2)
+    pred: (t, b, 2)
+    """
+
+    try:
+        smoothL1_ = F.smooth_l1_loss(gt,pred) # reduction = "mean"
+
+    except Exception as e:
+        print(e)
+        pdb.set_trace()
+    return smoothL1_
+
 def pytorch_neg_multi_log_likelihood_batch(
     gt: Tensor,
     pred: Tensor,
@@ -162,7 +179,6 @@ def pytorch_neg_multi_log_likelihood_batch(
 
     # error (batch_size, num_modes, future_len)
 
-    
     error = torch.sum(
         ((gt - pred) * avails) ** 2, dim=-1
     )  # reduce coords and use availability

@@ -34,13 +34,9 @@ import model.datasets.argoverse.data_augmentation_functions as data_augmentation
 import model.datasets.argoverse.plot_functions as plot_functions
 import model.datasets.argoverse.goal_points_functions as goal_points_functions
 
-from argoverse.map_representation.map_api import ArgoverseMap
-
 #######################################
 
 # Global variables
-
-# avm = ArgoverseMap()
 
 RAW_DATA_FORMAT = {
     "TIMESTAMP": 0,
@@ -53,16 +49,21 @@ RAW_DATA_FORMAT = {
 
 # Data augmentation variables
 
+APPLY_DATA_ROTATION = False
 APPLY_DATA_AUGMENTATION = False
 DEBUG_DATA_AUGMENTATION = False
 
+if DEBUG_DATA_AUGMENTATION:
+    from argoverse.map_representation.map_api import ArgoverseMap
+    avm = ArgoverseMap()
+    
 decision = [0,1] # Not apply/apply
 dropout_prob = [0.3,0.7] # Not applied/applied probability
 gaussian_noise_prob = [0.2,0.8]
 rotation_prob = [0.3,0.7]
 
 points_dropout_percentage = 0.3
-mu_noise,std_noise = 0,0.2
+mu_noise,std_noise = 0,0.3
 rotation_angles = [90,180,270]
 rotation_angles_prob = [0.33,0.33,0.34]
 
@@ -90,9 +91,11 @@ def seq_collate(data):
     """
 
     DEBUG_TIME = True
+    if DEBUG_TIME: print("---------------------")
 
     start_seq_collate = time.time()
 
+    start_load_batch = time.time()
     (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel,
      non_linear_obj, loss_mask, seq_id_list, object_class_id_list, 
      object_id_list, city_id, map_origin, num_seq_list, norm, target_agent_orientation, 
@@ -120,23 +123,23 @@ def seq_collate(data):
     city_id = torch.stack(city_id)
     target_agent_orientation = torch.stack(target_agent_orientation)
 
-    # target_agent_orientation = 
-    
     num_seq_list = torch.stack(num_seq_list)
     norm = torch.stack(norm)
 
     obs_len = obs_traj.shape[0]
     batch_size = map_origin.shape[0]
     
+    end_load_batch = time.time()
+    if DEBUG_TIME: print(f"Time consumed by load batch information: {end_load_batch-start_load_batch}")
+    
     # Get physical information (image or goal points. Otherwise, use dummies)
 
     start_phy_info = time.time()
 
-    first_obs = obs_traj[0,:,:] # 1 x agents · batch_size x 2
-
     # if (PHYSICAL_CONTEXT == "visual"  # batch_size x channels x height x width 
     #  or PHYSICAL_CONTEXT == "goals" # batch_size x num_goal_points x 2 (x|y) (real-world coordinates (HDmap))
-    #  or PHYSICAL_CONTEXT == "plausible_centerlines+area"): #  
+    #  or PHYSICAL_CONTEXT == "plausible_centerlines+area"): # 
+    #     first_obs = obs_traj[0,:,:] # 1 x agents · batch_size x 2 
     #     phy_info = dataset_utils.load_physical_information(num_seq_list, obs_traj, obs_traj_rel, pred_traj_gt, pred_traj_gt_rel, first_obs, map_origin,
     #                                                        dist_rasterized_map, object_class_id_list, DATA_IMGS_FOLDER,
     #                                                        physical_context=PHYSICAL_CONTEXT,relevant_centerlines=relevant_centerlines,
@@ -147,7 +150,7 @@ def seq_collate(data):
     #         if PHYSICAL_CONTEXT == "visual": phy_info = phy_info.permute(0, 3, 1, 2)
     if PHYSICAL_CONTEXT == "plausible_centerlines":
         # Relevant centerlines from global (map) coordinates to absolute (around origin) coordinates
-        
+
         relevant_centerlines = torch.stack(relevant_centerlines, dim=0)
         _, max_centerlines, points_per_centerline, data_dim = relevant_centerlines.shape
         rows,cols,_ = torch.where(relevant_centerlines[:,:,:,0] == 0.0) # identify padded centerlines
@@ -165,155 +168,160 @@ def seq_collate(data):
         phy_info = torch.from_numpy(phy_info).type(torch.float)
 
     end_phy_info = time.time()
-
-    if DEBUG_TIME: print(f"Time consumed by load physical information function: {end_phy_info-start_phy_info}\n")
+    if DEBUG_TIME: print(f"Time consumed by load physical information function: {end_phy_info-start_phy_info}")
     
     # Data augmentation
 
+    start_clone_tensors = time.time()
+    
+    aug_obs_traj = torch.clone(obs_traj)
+    aug_obs_traj_rel = torch.clone(obs_traj_rel)
+    aug_pred_traj_gt = torch.clone(pred_traj_gt)
+    aug_pred_traj_gt_rel = torch.clone(pred_traj_gt_rel)
+    aug_obs_traj_aux = torch.clone(aug_obs_traj)
+    
+    end_clone_tensors = time.time()
+    if DEBUG_TIME: print(f"Time consumed by cloning functions: {end_clone_tensors-start_clone_tensors}")
+    
     if APPLY_DATA_AUGMENTATION and CURRENT_SPLIT == "train":
         start_data_aug = time.time()
+        
+        num_global_obstacles = obs_traj.shape[1]
+        apply_gaussian_noise = torch.full((1,num_global_obstacles),gaussian_noise_prob[1]).bernoulli_().view(-1)
+        apply_dropout = torch.full((1,num_global_obstacles),dropout_prob[1]).bernoulli_().view(-1)
+        
+        aug_obs_traj = data_augmentation_functions.add_gaussian_noise(aug_obs_traj,
+                                                                      apply_gaussian_noise,
+                                                                      num_global_obstacles,
+                                                                      num_obs=obs_len,
+                                                                      mu=mu_noise,sigma=std_noise)
 
-        aug_obs_traj = torch.zeros((obs_traj.shape))
-        aug_obs_traj_rel = torch.zeros((obs_traj_rel.shape))
-        aug_pred_traj_gt = torch.zeros((pred_traj_gt.shape))
-        aug_pred_traj_gt_rel = torch.zeros((pred_traj_gt_rel.shape))
+        aug_obs_traj_rel = torch.zeros((aug_obs_traj.shape))
+        aug_obs_traj_rel[1:,:,:] = torch.sub(aug_obs_traj_rel[1:,:,:],
+                                             aug_obs_traj_rel[:-1,:,:])
+        
+        aug_obs_traj_aux = torch.clone(aug_obs_traj)
+        
+        end_data_aug = time.time()
+        if DEBUG_TIME: print(f"Time consumed by data augmentation functions: {end_data_aug-start_data_aug}")
+        
+    # Apply rotation to every sequence to align the last observation of the target agent
+    # with the Y-axis (TODO: This must be out of the data augmentation function, since it is mandatory)
+    
+    if APPLY_DATA_ROTATION:
+        seq_index = 0
+        
+        start_data_rot = time.time()
+        
+        for start,end in seq_start_end.data:    
+            curr_relevant_centerlines = phy_info[seq_index,:,:,:].unsqueeze(1)
 
-        i = 0
-        for start,end in seq_start_end.data:
-            num_obstacles = (end-start).item() # int
-            curr_object_class_id_list = object_class_id_list[i]
-            curr_map_origin = map_origin[i][0] # TODO: Save again the .npy data with 1D tensor [], 
-                                           # not 2D tensor [[]] for each element
-            seq_id = num_seq_list[i].item()
-            curr_city = city_id[i]
-            if curr_city == 0:
-                curr_city = "PIT"
-            else:
-                curr_city = "MIA"
-                
-            curr_relevant_centerlines = phy_info[i,:,:,:].unsqueeze(1)
-
-            # Original trajectories (observations and predictions)
+            # Original trajectories (observations and predictions) for this sequence
 
             curr_obs_traj = obs_traj[:,start:end,:] 
-            curr_first_obs = curr_obs_traj[0,:,:]
-            curr_obs_traj_rel = obs_traj_rel[:,start:end,:]
             curr_pred_traj_gt = pred_traj_gt[:,start:end,:]
-            curr_pred_traj_gt_rel = pred_traj_gt_rel[:,start:end,:]
-            curr_target_agent_orientation = target_agent_orientation[i]
+            curr_target_agent_orientation = target_agent_orientation[seq_index]
 
-            # Apply data augmentation for every sequence (scenario) of the batch
-
-            aug_curr_obs_traj = copy.deepcopy(curr_obs_traj)
-            aug_curr_pred_traj_gt = copy.deepcopy(curr_pred_traj_gt)
-
-            apply_dropout = np.random.choice(decision,num_obstacles,p=dropout_prob) # For each obstacle of the sequence
-            apply_gaussian_noise = np.random.choice(decision,num_obstacles,p=gaussian_noise_prob) # For each obstacle of the sequence
-            apply_rotation = np.random.choice(decision,1,p=rotation_prob) # To the whole sequence
-     
-            # TODO: Dropout and gaussian noise required in Argoverse? The input data is already quite noisy
-            # in some samples
+            # Get augmented trajectories for this sequence
             
-            if np.any(apply_dropout): # Not apply if all elements are 0
-                aug_curr_obs_traj = data_augmentation_functions.dropout_points(aug_curr_obs_traj,
-                                                                               apply_dropout,
-                                                                               num_obs=obs_len,
-                                                                               percentage=points_dropout_percentage)
-            if np.any(apply_gaussian_noise): # Not apply if all elements are 0
-                aug_curr_obs_traj = data_augmentation_functions.add_gaussian_noise(aug_curr_obs_traj,
-                                                                                   apply_gaussian_noise,
-                                                                                   num_obstacles,
-                                                                                   num_obs=obs_len,
-                                                                                   mu=mu_noise,sigma=std_noise)
-
-            ## N.B. If you apply rotation as data augmentation, the groundtruth must be rotated too!
+            aug_curr_obs_traj = aug_obs_traj_aux[:,start:end,:]
             
-            rot_angle = 0
-            # if np.any(apply_rotation): 
-            #     rot_angle = np.random.choice(rotation_angles,1,p=rotation_angles_prob).item()
-
-            #     aug_curr_obs_traj = data_augmentation_functions.rotate_traj(aug_curr_obs_traj,rot_angle)
-            #     aug_curr_pred_traj_gt = data_augmentation_functions.rotate_traj(aug_curr_pred_traj_gt,rot_angle)
-
-            ## Get first obs and new relatives after data augmentation for this sequence
-
-            aug_curr_first_obs = aug_curr_obs_traj[0,:,:] 
-            aug_curr_obs_traj_rel = torch.zeros((aug_curr_obs_traj.shape))
-            aug_curr_obs_traj_rel[1:,:,:] = torch.sub(aug_curr_obs_traj[1:,:,:],
-                                                      aug_curr_obs_traj[:-1,:,:])
-
-            # rel_curr_obj_seq[:, 1:] = curr_obj_seq[:, 1:] - curr_obj_seq[:, :-1] # Get displacements between consecutive steps
-
-            aug_curr_pred_traj_gt_rel = torch.zeros((aug_curr_pred_traj_gt.shape))
-            aug_curr_pred_traj_gt_rel[1:,:,:] = torch.sub(aug_curr_pred_traj_gt[1:,:,:],
-                                                          aug_curr_pred_traj_gt[:-1,:,:])
-
+            yaw_aux = - (math.pi/2 - curr_target_agent_orientation) # Apply this angle to align the trajectory with the Y-axis
+                
+            rotated_aug_curr_obs_traj = data_augmentation_functions.rotate_traj(aug_curr_obs_traj,yaw_aux)
+            rotated_curr_pred_traj_gt = data_augmentation_functions.rotate_traj(curr_pred_traj_gt,yaw_aux)
+            rotated_curr_map_origin = data_augmentation_functions.rotate_traj(curr_map_origin,yaw_aux)
+            rotated_curr_relevant_centerlines = data_augmentation_functions.rotate_traj(curr_relevant_centerlines,yaw_aux)
+            
+            # Overwrite tensors with rotated trajectories
+            
+            aug_curr_obs_traj_rel = torch.zeros((rotated_aug_curr_obs_traj.shape))
+            aug_curr_obs_traj_rel[1:,:,:] = torch.sub(rotated_aug_curr_obs_traj[1:,:,:],
+                                                      rotated_aug_curr_obs_traj[:-1,:,:])
+            
+            aug_curr_pred_traj_gt_rel = torch.zeros((rotated_curr_pred_traj_gt.shape))
+            aug_curr_pred_traj_gt_rel[1:,:,:] = torch.sub(rotated_curr_pred_traj_gt[1:,:,:],
+                                                          rotated_curr_pred_traj_gt[:-1,:,:])
+            
             ## Fill torch tensor (whole batch)
 
-            aug_obs_traj[:,start:end,:] = aug_curr_obs_traj
+            aug_obs_traj[:,start:end,:] = rotated_aug_curr_obs_traj
             aug_obs_traj_rel[:,start:end,:] = aug_curr_obs_traj_rel
-            aug_pred_traj_gt[:,start:end,:] = aug_curr_pred_traj_gt
+            aug_pred_traj_gt[:,start:end,:] = rotated_curr_pred_traj_gt
             aug_pred_traj_gt_rel[:,start:end,:] = aug_curr_pred_traj_gt_rel
-
+            
             if DEBUG_DATA_AUGMENTATION:
                 results_path = f"data/datasets/argoverse/motion-forecasting/train"
                 curr_pred_traj_fake = np.zeros((0,0,0))
                 
+                # Get auxiliar variables
+                
+                num_obstacles = (end-start).item() # int
+                curr_object_class_id_list = object_class_id_list[seq_index]
+                curr_map_origin = map_origin[seq_index][0] # TODO: Save again the .npy data with 1D tensor [], 
+                                                # not 2D tensor [[]] for each element
+                seq_id = num_seq_list[seq_index].item()
+                curr_city = city_id[seq_index]
+                if curr_city == 0:
+                    curr_city = "PIT"
+                else:
+                    curr_city = "MIA"
+                
                 # Original observations (No data augmentation)
-                pdb.set_trace()
+
                 plot_functions.viz_predictions_all(seq_id,
                                                    results_path,
                                                    curr_obs_traj.permute(1,0,2).cpu().numpy(), # All obstacles
                                                    curr_pred_traj_fake, # Only AGENT (MM prediction)
                                                    curr_pred_traj_gt.permute(1,0,2).cpu().numpy(), # All obstacles
+                                                   curr_target_agent_orientation.cpu().numpy(),
                                                    curr_object_class_id_list.cpu().numpy(),
                                                    curr_city,
                                                    curr_map_origin.cpu().numpy(),
                                                    avm,
                                                    dist_rasterized_map=50,
-                                                   relevant_centerlines_abs=curr_relevant_centerlines,
+                                                   relevant_centerlines_abs=curr_relevant_centerlines.cpu().numpy(),
                                                    save=True)
 
-                # New observations (after data augmentation)
-                
-                rotated_curr_obs_traj = data_augmentation_functions.rotate_traj(curr_obs_traj,curr_target_agent_orientation)
-                rotated_curr_pred_traj_gt = data_augmentation_functions.rotate_traj(curr_pred_traj_gt,curr_target_agent_orientation)
-                rotated_curr_map_origin = data_augmentation_functions.rotate_traj(curr_map_origin,curr_target_agent_orientation)
-                rotated_curr_relevant_centerlines = data_augmentation_functions.rotate_traj(curr_relevant_centerlines,curr_target_agent_orientation)
-                
+                # New observations (after data augmentation and rotation)
+
                 plot_functions.viz_predictions_all(seq_id,
                                                    results_path,
-                                                   rotated_curr_obs_traj.permute(1,0,2).cpu().numpy(), # All obstacles
+                                                   rotated_aug_curr_obs_traj.permute(1,0,2).cpu().numpy(), # All obstacles
                                                    curr_pred_traj_fake, # Only AGENT (MM prediction)
                                                    rotated_curr_pred_traj_gt.permute(1,0,2).cpu().numpy(), # All obstacles
+                                                   np.array(math.pi/2), # Target agent orientation after rotation
                                                    curr_object_class_id_list.cpu().numpy(),
                                                    curr_city,
                                                    rotated_curr_map_origin.cpu().numpy(),
                                                    avm,
                                                    dist_rasterized_map=50,
-                                                   relevant_centerlines_abs=rotated_curr_relevant_centerlines,
+                                                   relevant_centerlines_abs=rotated_curr_relevant_centerlines.cpu().numpy(),
                                                    save=True,
                                                    check_data_aug=True)
 
-            i += 1
+            seq_index += 1
 
-        # Replace tensors
+        end_data_rot = time.time()
+        if DEBUG_TIME: print(f"Time consumed by data rotation functions: {end_data_rot-start_data_rot}")
+        
+    # Replace tensors
 
-        obs_traj = aug_obs_traj
-        obs_traj_rel = aug_obs_traj_rel
-        pred_traj_gt = aug_pred_traj_gt
-        pred_traj_gt_rel = aug_pred_traj_gt_rel
-
-        end_data_aug = time.time()
-
-        if DEBUG_TIME: print(f"Time consumed by data augmentation functions: {end_data_aug-start_data_aug}\n")
+    start_final_tensors = time.time()
+    obs_traj = aug_obs_traj
+    obs_traj_rel = aug_obs_traj_rel
+    pred_traj_gt = aug_pred_traj_gt
+    pred_traj_gt_rel = aug_pred_traj_gt_rel
 
     out = [obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel, non_linear_obj,
            loss_mask, seq_start_end, object_cls, obj_id, map_origin, num_seq_list, norm, target_agent_orientation,
            phy_info]
 
+    end_final_tensors = time.time()
+    if DEBUG_TIME: print(f"Time consumed by replacing final tensors: {end_final_tensors-start_final_tensors}")
+    
     end_seq_collate = time.time()
-    if DEBUG_TIME: print(f">>>>>>>>>>>>>> Time consumed by seq_collate function: {end_seq_collate-start_seq_collate}\n")
+    if DEBUG_TIME: print(f">>>>>>>>>>>>>> Time consumed by seq_collate function: {end_seq_collate-start_seq_collate}")
 
     return tuple(out)
 

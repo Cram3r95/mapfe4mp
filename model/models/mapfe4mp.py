@@ -608,7 +608,7 @@ class TrajectoryGenerator(nn.Module):
         Returns:
             _type_: _description_
         """
-        pdb.set_trace()
+        # pdb.set_trace()
         start = time.time()
         batch_size = seq_start_end.shape[0]
         

@@ -64,9 +64,9 @@ config.dataset.start_from_percentage = 0.0
 
 # Preprocess data
                          # Split, Process, Split percentage
-splits_to_process = dict({"train":[True,1.0], # 0.01 (1 %), 0.1 (10 %), 1.0 (100 %)
-                          "val":  [True,1.0],
-                          "test": [True,1.0]})
+splits_to_process = dict({"train":[True,0.01], # 0.01 (1 %), 0.1 (10 %), 1.0 (100 %)
+                          "val":  [False,1.0],
+                          "test": [False,1.0]})
 modes_centerlines = ["test"] # "train","test" 
 # if train -> compute the best candidate (oracle), only using the "competition" algorithm
 # if test, return N plausible candidates. Choose between "competition", "map_api" and "get_around" algorithms

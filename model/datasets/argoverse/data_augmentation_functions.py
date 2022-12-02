@@ -130,25 +130,22 @@ def add_gaussian_noise(traj,apply_gaussian_noise,num_agents,num_obs=20,multi_poi
     By default, multi_point = True since it is more challenging.
     """
 
-    noised_traj = copy.deepcopy(traj)
-
-    if multi_point:
-        size = (num_obs,num_agents)
-    else:
-        size = (1,num_agents)
+    data_dim = 2
     
-    x_offset, y_offset = np.random.normal(mu,sigma,size=size), np.random.normal(mu,sigma,size=size) # TODO: Do this with PyTorch
-
+    if multi_point:
+        size = (num_obs,num_agents,data_dim)
+    else:
+        size = (1,num_agents,data_dim)
+    
+    offset = torch.normal(mu,sigma,size=size)
+    
     # Not apply in the following objects
 
-    indeces = np.where(apply_gaussian_noise == 0)
-    x_offset[:,indeces] = 0
-    y_offset[:,indeces] = 0
+    indeces = torch.where(apply_gaussian_noise == 0)[0]
+    offset[:,indeces,:] = 0
+    traj += offset
 
-    noised_traj[:,:,0] += x_offset
-    noised_traj[:,:,1] += y_offset
-
-    return noised_traj
+    return traj
 
 def rotate_traj(traj,angle_rad):
     """
