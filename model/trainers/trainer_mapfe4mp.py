@@ -46,6 +46,8 @@ from model.utils.utils import create_weights
 map_features_utils_instance = MapFeaturesUtils()
 
 torch.backends.cudnn.benchmark = True
+torch.set_float32_matmul_precision("medium")
+
 current_cuda = None
 absolute_root_folder = None
 
@@ -904,7 +906,7 @@ def generator_step(hyperparameters, batch, generator, optimizer_g,
                 hyperparameters.loss_fde_weight*loss_fde + \
                 hyperparameters.loss_nll_weight*loss_nll \
 
-        losses["G_smoothL1_loss"] = loss_ade.item()
+        losses["G_smoothL1_loss"] = loss_smoothL1.item()
         losses["G_mse_fde_loss"] = loss_fde.item()
         losses["G_nll_loss"] = loss_nll.item()
         

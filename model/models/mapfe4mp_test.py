@@ -268,43 +268,43 @@ class Centerline_Encoder(nn.Module):
         self.pooling_size = 2
         self.tanh = torch.nn.Tanh()
         
-        self.bn0 = nn.BatchNorm1d(self.data_dim)
-        self.conv1 = nn.Conv1d(self.data_dim,self.num_filters,self.kernel_size)
-        self.maxpooling1 = nn.MaxPool1d(self.pooling_size)
-        self.bn1 = nn.BatchNorm1d(self.num_filters)
+        # self.bn0 = nn.BatchNorm1d(self.data_dim)
+        # self.conv1 = nn.Conv1d(self.data_dim,self.num_filters,self.kernel_size)
+        # self.maxpooling1 = nn.MaxPool1d(self.pooling_size)
+        # self.bn1 = nn.BatchNorm1d(self.num_filters)
         
-        self.conv2 = nn.Conv1d(self.num_filters,self.num_filters,self.kernel_size)
-        self.maxpooling2 = nn.MaxPool1d(self.pooling_size)
-        self.bn2 = nn.BatchNorm1d(self.num_filters)
+        # self.conv2 = nn.Conv1d(self.num_filters,self.num_filters,self.kernel_size)
+        # self.maxpooling2 = nn.MaxPool1d(self.pooling_size)
+        # self.bn2 = nn.BatchNorm1d(self.num_filters)
 
-        # Compute centerline length after convolution+pooling
+        # # Compute centerline length after convolution+pooling
 
-        num_convs = num_poolings = 0
-        for key in self._modules.keys():
-            if "conv" in key:
-                num_convs += 1
-            elif "pooling" in key:
-                num_poolings += 1
+        # num_convs = num_poolings = 0
+        # for key in self._modules.keys():
+        #     if "conv" in key:
+        #         num_convs += 1
+        #     elif "pooling" in key:
+        #         num_poolings += 1
 
-        sub_ = 0
-        for i in range(1,num_convs+1):
-            sub_ += pow(2,i)
+        # sub_ = 0
+        # for i in range(1,num_convs+1):
+        #     sub_ += pow(2,i)
 
-        aux_length = int(math.floor((self.lane_length-sub_)/pow(2,num_poolings)))
-        assert aux_length >= 2 # TODO: Minimum number here?
+        # aux_length = int(math.floor((self.lane_length-sub_)/pow(2,num_poolings)))
+        # assert aux_length >= 2 # TODO: Minimum number here?
 
-        # N convolutional filters * aux_length
+        # # N convolutional filters * aux_length
 
-        self.flatten = torch.nn.Flatten(start_dim=1,end_dim=-1)
-        self.linear = nn.Linear(self.num_filters*aux_length,self.h_dim)
+        # self.flatten = torch.nn.Flatten(start_dim=1,end_dim=-1)
+        # self.linear = nn.Linear(self.num_filters*aux_length,self.h_dim)
         
         # TODO: What is better, centerline encoder using conv+pooling, or MLP?
-        # mid_dim = math.ceil((self.lane_length*self.data_dim + self.h_dim)/2)
-        # dims = [self.lane_length*self.data_dim, mid_dim, self.h_dim]
-        # self.mlp_centerlines = make_mlp(dims,
-        #                      activation_function="Tanh",
-        #                      batch_norm=True,
-        #                      dropout=DROPOUT)
+        mid_dim = math.ceil((self.lane_length*self.data_dim + self.h_dim)/2)
+        dims = [self.lane_length*self.data_dim, mid_dim, self.h_dim]
+        self.mlp_centerlines = make_mlp(dims,
+                             activation_function="Tanh",
+                             batch_norm=True,
+                             dropout=DROPOUT)
 
     def forward(self, phy_info):
         """_summary_
@@ -316,27 +316,27 @@ class Centerline_Encoder(nn.Module):
             _type_: _description_
         """
 
-        num_centerlines = phy_info.shape[0]
-        phy_info_ = torch.clone(phy_info.permute(0,2,1))
-        phy_info_ = self.bn0(phy_info_)
-        
-        phy_info_ = self.conv1(phy_info.permute(0,2,1))
-        phy_info_ = self.bn1(phy_info_)
-        phy_info_ = self.tanh(phy_info_)
-        phy_info_ = self.maxpooling1(phy_info_)
-         
-        phy_info_ = self.conv2(phy_info_)
-        phy_info_ = self.bn2(phy_info_)
-        phy_info_ = self.tanh(phy_info_)
-        phy_info_ = self.maxpooling2(phy_info_)
-
-        phy_info_ = self.linear(self.flatten(phy_info_))
-        phy_info_ = F.dropout(phy_info_, p=DROPOUT, training=self.training)
-
         # num_centerlines = phy_info.shape[0]
-        # phy_info_ = phy_info.permute(0,2,1)
-        # phy_info_ = phy_info_.contiguous().view(num_centerlines, -1)
-        # phy_info_ = self.mlp_centerlines(phy_info_)
+        # phy_info_ = torch.clone(phy_info.permute(0,2,1))
+        # phy_info_ = self.bn0(phy_info_)
+        
+        # phy_info_ = self.conv1(phy_info.permute(0,2,1))
+        # phy_info_ = self.bn1(phy_info_)
+        # phy_info_ = self.tanh(phy_info_)
+        # phy_info_ = self.maxpooling1(phy_info_)
+         
+        # phy_info_ = self.conv2(phy_info_)
+        # phy_info_ = self.bn2(phy_info_)
+        # phy_info_ = self.tanh(phy_info_)
+        # phy_info_ = self.maxpooling2(phy_info_)
+
+        # phy_info_ = self.linear(self.flatten(phy_info_))
+        # phy_info_ = F.dropout(phy_info_, p=DROPOUT, training=self.training)
+
+        num_centerlines = phy_info.shape[0]
+        phy_info_ = phy_info.permute(0,2,1)
+        phy_info_ = phy_info_.contiguous().view(num_centerlines, -1)
+        phy_info_ = self.mlp_centerlines(phy_info_)
 
         if torch.any(phy_info_.isnan()):
             pdb.set_trace()
@@ -440,7 +440,7 @@ class Multimodal_Decoder(nn.Module):
             pred_traj_fake_rel = pred_traj_fake_rel.view(self.pred_len, batch_size, self.num_modes, -1)
             pred_traj_fake_rel = pred_traj_fake_rel.permute(1,2,0,3) # batch_size, num_modes, pred_len, data_dim
 
-        conf = self.confidences(state_tuple_h.contiguous().view(-1, self.decoder_h_dim))
+        conf = self.confidences(state_tuple_h_.contiguous().view(-1, self.decoder_h_dim))
 
         conf = torch.softmax(conf, dim=1) # batch_size, num_modes
         if not torch.allclose(torch.sum(conf, dim=1), conf.new_ones((batch_size,))):
@@ -608,6 +608,7 @@ class TrajectoryGenerator(nn.Module):
         Returns:
             _type_: _description_
         """
+        # pdb.set_trace()
         start = time.time()
         batch_size = seq_start_end.shape[0]
         
