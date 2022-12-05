@@ -14,7 +14,7 @@
 
 **News 🚀🚀**
 
-- [10/2022] GNN attention-based method will be released. We will extend the baslines :)
+- [10/2022] GNN attention-based method will be released. We will extend the baselines :)
 - [09/2022] Ongoing repo update. The most recent work was presented at IEEE ITSC 2022
 
 ------------------
@@ -79,6 +79,7 @@ pip install \
     thop \
     fvcore \
     torchstat \
+    torchsummary \
     ipykernel
 ```
 In order to install torch-geometric and associated modules for the GNN computations, please check the following documentation:

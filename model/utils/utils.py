@@ -47,4 +47,17 @@ def load_weights(model, checkpoint, layer_name="decoder."):
 def count_parameters(model):
     """
     """
-    return sum(p.numel() for p in model.parameters() if p.requires_grad)
+
+    trainable_params = 0
+
+    modules = [module for module in model.modules()]
+    params = [param.shape for param in model.parameters()]
+    
+    pdb.set_trace()
+    
+    for param in model.parameters():
+        if param.requires_grad:
+            
+            trainable_params = trainable_params + param.numel()
+            print("params: ", trainable_params)
+    return trainable_params

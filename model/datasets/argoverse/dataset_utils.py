@@ -307,10 +307,12 @@ def load_physical_information(num_seq_list, obs_traj, obs_traj_rel, pred_traj_gt
 
         obs_len = curr_obs_traj_rel.shape[0]
         
-        if split_name == "test":
-            curr_map_origin = map_origin[i]
-        else:
-            curr_map_origin = map_origin[i][0] # TODO: Check this in the next preprocessing
+        curr_map_origin = map_origin[i]
+        
+        # if split_name == "test":
+        #     curr_map_origin = map_origin[i]
+        # else:
+        #     curr_map_origin = map_origin[i][0] # TODO: Check this in the next preprocessing
                                                      
         filename = os.path.join(data_imgs_folder,str(curr_num_seq) + ".png")
 

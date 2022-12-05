@@ -223,7 +223,7 @@ def evaluate(loader, generator, config, split, current_cuda, pred_len, results_p
 
                 for _ in range(ARGOVERSE_NUM_MODES):
                     ## Get predictions (relative displacements)
-
+                    
                     pred_traj_fake_rel = generator(obs_traj, obs_traj_rel, seq_start_end, agent_idx)
                     pred_traj_fake_rel_list.append(pred_traj_fake_rel)
 
@@ -433,6 +433,7 @@ def main(args):
 
     config.dataset.num_workers = 0
     config.dataset.class_balance = -1.0 # Do not consider class balance in the split test
+    config.dataset.hard_mining = -1.0
     config.dataset.shuffle = False
     config.dataset.data_augmentation = False
     if config.dataset.split == "test": # In test, 0 (we do not have the gt). Otherwise, 30
@@ -456,6 +457,7 @@ def main(args):
                                                    split_percentage=config.dataset.split_percentage,
                                                    batch_size=config.dataset.batch_size,
                                                    class_balance=config.dataset.class_balance,
+                                                   hard_mining=config.dataset.hard_mining,
                                                    obs_origin=config.hyperparameters.obs_origin,
                                                    physical_context=config.hyperparameters.physical_context)
 

@@ -54,9 +54,9 @@ absolute_root_folder = None
 USE_SCALER = False # Do not use this scaler, first learn how to use it properly
 CHECK_ACCURACY_TRAIN = False
 CHECK_ACCURACY_VAL = True
-MAX_TIME_TO_CHECK_TRAIN = 60 # minutes
-MAX_TIME_TO_CHECK_VAL = 60 # minutes
-MAX_TIME_PATIENCE_LR_SCHEDULER = 60 # 60 # minutes
+MAX_TIME_TO_CHECK_TRAIN = 120 # minutes
+MAX_TIME_TO_CHECK_VAL = 120 # minutes
+MAX_TIME_PATIENCE_LR_SCHEDULER = 120 # minutes
 
 min_ade_ = 50000
 g_lr = 0.001
@@ -323,8 +323,10 @@ def model_trainer(config, logger):
                                                    class_balance=config.dataset.class_balance,
                                                    obs_origin=config.hyperparameters.obs_origin,
                                                    data_augmentation=config.dataset.data_augmentation,
+                                                   apply_rotation=config.dataset.apply_rotation,
                                                    physical_context=config.hyperparameters.physical_context,
                                                    extra_data_train=config.dataset.extra_data_train,
+                                                   hard_mining=config.dataset.hard_mining,
                                                    preprocess_data=config.dataset.preprocess_data,
                                                    save_data=config.dataset.save_data)
 
@@ -347,6 +349,7 @@ def model_trainer(config, logger):
                                                  split_percentage=config.dataset.split_percentage,
                                                  class_balance=-1,
                                                  obs_origin=config.hyperparameters.obs_origin,
+                                                 apply_rotation=config.dataset.apply_rotation,
                                                  physical_context=config.hyperparameters.physical_context,
                                                  extra_data_train=config.dataset.extra_data_train,
                                                  preprocess_data=config.dataset.preprocess_data,

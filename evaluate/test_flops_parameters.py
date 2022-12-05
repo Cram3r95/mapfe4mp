@@ -21,6 +21,8 @@ from prodict import Prodict
 # DL & Math
 
 import torch
+
+from torchsummary import summary
 from thop import profile, clever_format
 # https://github.com/facebookresearch/fvcore/blob/main/docs/flop_count.md
 from fvcore.nn import FlopCountAnalysis, flop_count_table
@@ -33,9 +35,7 @@ sys.path.append(BASE_DIR)
 
 import model.utils.utils as utils
 
-from model.models.sophie_mm import TrajectoryGenerator as TG_Sophie_MM
-from model.models.sophie_mm import TrajectoryGenerator as TG_So_LSTM_MHSA
-from model.models.social_set_transformer_mm import TrajectoryGenerator as TG_So_SET_Trans_MM
+from model.models.mapfe4mp import TrajectoryGenerator
 
 #######################################
 
@@ -49,12 +49,43 @@ agents = 20
 
 # SoPhie MM
 
-m_train = TG_Sophie_MM(PHYSICAL_CONTEXT="plausible_centerlines+area").train()
+# m_train = TrajectoryGenerator(PHYSICAL_CONTEXT="plausible_centerlines",CURRENT_DEVICE="cuda:0").train()
+m_non_train = TrajectoryGenerator(PHYSICAL_CONTEXT="plausible_centerlines",CURRENT_DEVICE="cuda:0")
 
-m_non_train = TG_Sophie_MM(PHYSICAL_CONTEXT="plausible_centerlines+area")
-
-print("Only trainable parameters: ", utils.count_parameters(m_train))
+# print("Only trainable parameters: ", utils.count_parameters(m_train))
 print("All parameters: ", utils.count_parameters(m_non_train))
+
+# We assume bs = 1
+obs = torch.randn(20,agents,2).to(device)
+rel = torch.randn(20,agents,2).to(device)
+se = torch.tensor([[0,agents]]).to(device)
+idx = torch.tensor([1]).to(device)
+phy_info = torch.tensor([]).to(device)
+relevant_centerlines = torch.randn(3,40,2).to(device)
+
+# net = m_non_train
+# modules = [module for module in net.modules()]
+# params = [param.shape for param in net.parameters()]
+
+# # Print Model Summary
+# print(modules[0])
+# total_params=0
+# pdb.set_trace()
+# for i in range(1,len(modules)):
+#     print("module: ", modules[i])
+#    j = 2*i
+#    param = (params[j-2][1]*params[j-2][0])+params[j-1][0]
+#    total_params += param
+#    print("Layer",i,"->\t",end="")
+#    print("Weights:", params[j-2][0],"x",params[j-2][1],
+#          "\tBias: ",params[j-1][0], "\tParameters: ", param)
+# print("\nTotal Params: ", total_params)
+# pdb.set_trace()
+# macs, params = profile(m_non_train, inputs=(obs,rel,se,idx,phy_info,relevant_centerlines, ), custom_ops={})
+# macs, params = clever_format([macs, params], "%.3f")
+
+# print('{:<30}  {:<8}'.format('Computational complexity (MACs): ', macs))
+# print('{:<30}  {:<8}'.format('Number of parameters: ', params))
 
 # ## Social LSTM MHSA
 
