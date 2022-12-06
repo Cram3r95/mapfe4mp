@@ -51,7 +51,6 @@ torch.set_float32_matmul_precision("medium")
 current_cuda = None
 absolute_root_folder = None
 
-USE_SCALER = False # Do not use this scaler, first learn how to use it properly
 CHECK_ACCURACY_TRAIN = False
 CHECK_ACCURACY_VAL = True
 MAX_TIME_TO_CHECK_TRAIN = 120 # minutes
@@ -124,7 +123,7 @@ def calculate_mse_gt_loss_multimodal(gt, pred, loss_f, compute_ade=True, compute
 
     return loss_ade/num_modes, loss_fde/num_modes
 
-def calculate_smoothL1_gt_loss_multimodal(gt, pred, loss_f):
+def calculate_smoothL1_gt_loss_multimodal(gt, pred, loss_f, compute_ade=True, compute_fde=True):
     """
     gt: (pred_len, batch_size, data_dim)
     pred: (batch_size, num_modes, pred_len, data_dim)
@@ -134,12 +133,14 @@ def calculate_smoothL1_gt_loss_multimodal(gt, pred, loss_f):
 
     pred = pred.permute(1,2,0,3) # num_modes, pred_len, batch_size, data_dim
 
-    loss_smoothL1 = torch.zeros(1).to(pred)
-
+    loss_smoothL1_ade = torch.zeros(1).to(pred)
+    loss_smoothL1_fde = torch.zeros(1).to(pred)
+    
     for i in range(num_modes):
-        loss_smoothL1 += loss_f(pred[i,:,:,:], gt)
+        if compute_ade: loss_smoothL1_ade += loss_f(pred[i,:,:,:], gt)
+        if compute_fde: loss_smoothL1_fde += loss_f(pred[i][-1].unsqueeze(0), gt[-1].unsqueeze(0))
 
-    return loss_smoothL1/num_modes
+    return loss_smoothL1_ade/num_modes, loss_smoothL1_fde/num_modes
 
 def calculate_mse_gt_loss_unimodal(gt, pred, loss_f, w_loss=None):
     """
@@ -382,7 +383,7 @@ def model_trainer(config, logger):
     if restore_path is not None and os.path.isfile(restore_path):
         logger.info('Restoring from checkpoint {}'.format(restore_path))
         checkpoint = torch.load(restore_path, map_location=current_cuda)
-        
+
         generator.load_state_dict(checkpoint.config_cp['g_best_state'], strict=False)
         optimizer_g.load_state_dict(checkpoint.config_cp['g_optim_state'])
 
@@ -901,16 +902,19 @@ def generator_step(hyperparameters, batch, generator, optimizer_g,
         losses["G_nll_loss"] = loss_nll.item()
 
     elif hyperparameters.loss_type_g == "mse+L1+nll":
-        loss_smoothL1 = calculate_smoothL1_gt_loss_multimodal(pred_traj_gt, pred_traj_fake, loss_f["smoothL1"])
-        _, loss_fde = calculate_mse_gt_loss_multimodal(pred_traj_gt, pred_traj_fake, loss_f["mse"], compute_ade=False)
+        loss_smoothL1_ade, loss_smoothL1_fde = calculate_smoothL1_gt_loss_multimodal(pred_traj_gt, pred_traj_fake, loss_f["smoothL1"])
+        # _, loss_fde = calculate_mse_gt_loss_multimodal(pred_traj_gt, pred_traj_fake, loss_f["mse"], compute_ade=False)
         loss_nll = calculate_nll_loss(pred_traj_gt, pred_traj_fake, loss_f["nll"], conf)
         
-        loss = hyperparameters.loss_smoothL1_weight*loss_smoothL1 + \
-                hyperparameters.loss_fde_weight*loss_fde + \
-                hyperparameters.loss_nll_weight*loss_nll \
-
-        losses["G_smoothL1_loss"] = loss_smoothL1.item()
-        losses["G_mse_fde_loss"] = loss_fde.item()
+        # loss = hyperparameters.loss_smoothL1_weight*loss_smoothL1 + \
+        #         hyperparameters.loss_fde_weight*loss_fde + \
+        #         hyperparameters.loss_nll_weight*loss_nll \
+        loss = hyperparameters.loss_smoothL1_weight*loss_smoothL1_ade + \
+               hyperparameters.loss_smoothL1_weight*loss_smoothL1_fde + \
+               hyperparameters.loss_nll_weight*loss_nll \
+            
+        losses["G_smoothL1_ade_loss"] = loss_smoothL1_ade.item()
+        losses["G_smoothL1_fde_loss"] = loss_smoothL1_fde.item()
         losses["G_nll_loss"] = loss_nll.item()
         
     elif hyperparameters.loss_type_g == "centerlines+gt":
@@ -939,13 +943,8 @@ def generator_step(hyperparameters, batch, generator, optimizer_g,
             generator.parameters(), hyperparameters.clipping_threshold_g
         )
 
-    if USE_SCALER:
-        scaler.scale(loss).backward()
-        scaler.step(optimizer_g)
-        scaler.update()
-    else:
-        loss.backward()
-        optimizer_g.step()
+    loss.backward()
+    optimizer_g.step()
 
     return losses
 

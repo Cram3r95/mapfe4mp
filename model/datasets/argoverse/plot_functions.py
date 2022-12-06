@@ -113,7 +113,7 @@ def viz_predictions_all(
         input_ (numpy array): Input Trajectory with shape (num_tracks x obs_len x 2)
         output (numpy array): Top-k predicted trajectories, each with shape (num_tracks x pred_len x 2)
         target (numpy array): Ground Truth Trajectory with shape (num_tracks x pred_len x 2)
-        centerlines (numpy array of list of centerlines): Centerlines (Oracle/Top-k) for each trajectory
+        centerlines (numpy array of list of centerlines): Centerlines (Oracle/Top-k) for each trajectory: 1 x N x length x 2
         city_names (numpy array): city names for each trajectory
         show (bool): if True, show
     """
@@ -138,7 +138,7 @@ def viz_predictions_all(
         output = output_abs + map_origin
     target = target_abs + map_origin
 
-    _, _, points_per_centerline, data_dim = relevant_centerlines_abs.shape
+    _, num_centerlines, points_per_centerline, data_dim = relevant_centerlines_abs.shape
     rows,cols,_ = np.where(relevant_centerlines_abs[:,:,:,0] == 0.0) # only sum the origin to non-padded centerlines
     relevant_centerlines = relevant_centerlines_abs + map_origin
     relevant_centerlines[rows,cols,:,:] = np.zeros((points_per_centerline,data_dim))
@@ -229,15 +229,13 @@ def viz_predictions_all(
 
         # Centerlines (Optional)
     
-        num_centerlines = relevant_centerlines.shape[0]
-
         count_rep_centerlines = np.zeros((num_centerlines))
         rep_centerlines = []
 
         # TODO: Prepare this code to deal with batch size != 1
         if len(relevant_centerlines) > 0:
             for id_centerline in range(num_centerlines):
-                centerline = relevant_centerlines[id_centerline,0,:,:] # We assume batch_size = 1 here
+                centerline = relevant_centerlines[0,id_centerline,:,:] # TODO: We assume batch_size = 1 here
 
                 if not np.any(centerline): # Avoid plotting padded centerlines
                     continue
@@ -281,7 +279,7 @@ def viz_predictions_all(
 
             for index_repeated in range(len(count_rep_centerlines)):
                 if count_rep_centerlines[index_repeated] > 0:
-                    centerline = relevant_centerlines[index_repeated,0,:,:]
+                    centerline = relevant_centerlines[0,index_repeated,:,:] # TODO: We assume batch_size = 1 here
 
                     plt.text(
                             centerline[-1, 0] + 1,

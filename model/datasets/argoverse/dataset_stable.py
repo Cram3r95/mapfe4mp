@@ -21,6 +21,7 @@ import sys
 
 # DL & Math imports
 
+import pandas as pd
 import numpy as np
 import torch
 
@@ -34,35 +35,32 @@ import model.datasets.argoverse.data_augmentation_functions as data_augmentation
 import model.datasets.argoverse.plot_functions as plot_functions
 import model.datasets.argoverse.goal_points_functions as goal_points_functions
 
-#######################################
-
-# Global variables
-
-RAW_DATA_FORMAT = {
-    "TIMESTAMP": 0,
-    "TRACK_ID": 1,
-    "OBJECT_TYPE": 2,
-    "X": 3,
-    "Y": 4,
-    "CITY_NAME": 5,
-}
-
-# Data augmentation variables
-
-APPLY_DATA_AUGMENTATION = False
 DEBUG_DATA_AUGMENTATION = False
 
+#######################################
+
+# Global variables (modified using config file)
+
+## Data augmentation variables (Modified using config file)
+
+APPLY_DATA_AUGMENTATION = False
+APPLY_DATA_ROTATION = False
+
+if DEBUG_DATA_AUGMENTATION:
+    from argoverse.map_representation.map_api import ArgoverseMap
+    avm = ArgoverseMap()
+    
 decision = [0,1] # Not apply/apply
 dropout_prob = [0.3,0.7] # Not applied/applied probability
 gaussian_noise_prob = [0.2,0.8]
 rotation_prob = [0.3,0.7]
 
 points_dropout_percentage = 0.3
-mu_noise,std_noise = 0,0.2
+mu_noise,std_noise = 0,0.3
 rotation_angles = [90,180,270]
 rotation_angles_prob = [0.33,0.33,0.34]
 
-# Auxiliar variables
+## Auxiliar variables
 
 CURRENT_SPLIT = "dummy"
 DATA_IMGS_FOLDER = "dummy"
@@ -86,13 +84,15 @@ def seq_collate(data):
     """
 
     DEBUG_TIME = False
+    if DEBUG_TIME: print("---------------------")
 
     start_seq_collate = time.time()
 
+    start_load_batch = time.time()
     (obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel,
      non_linear_obj, loss_mask, seq_id_list, object_class_id_list, 
      object_id_list, city_id, map_origin, num_seq_list, norm, target_agent_orientation, 
-     oracle_centerlines, relevant_centerlines) = zip(*data)
+     oracle_centerlines, relevant_centerlines, split_hm) = zip(*data)
 
     _len = [len(seq) for seq in obs_traj]
     cum_start_idx = [0] + np.cumsum(_len).tolist()
@@ -113,44 +113,43 @@ def seq_collate(data):
     object_cls = torch.cat(object_class_id_list, dim=0)
     obj_id = torch.cat(object_id_list, dim=0)
     map_origin = torch.stack(map_origin)
+    city_id = torch.stack(city_id)
     target_agent_orientation = torch.stack(target_agent_orientation)
-    
-    # target_agent_orientation = 
-    
+
     num_seq_list = torch.stack(num_seq_list)
     norm = torch.stack(norm)
 
     obs_len = obs_traj.shape[0]
     batch_size = map_origin.shape[0]
     
+    end_load_batch = time.time()
+    if DEBUG_TIME: print(f"Time consumed by load batch information: {end_load_batch-start_load_batch}")
+    
     # Get physical information (image or goal points. Otherwise, use dummies)
 
     start_phy_info = time.time()
 
-    first_obs = obs_traj[0,:,:] # 1 x agents · batch_size x 2
-
-    # if (PHYSICAL_CONTEXT == "visual"  # batch_size x channels x height x width 
-    #  or PHYSICAL_CONTEXT == "goals" # batch_size x num_goal_points x 2 (x|y) (real-world coordinates (HDmap))
-    #  or PHYSICAL_CONTEXT == "plausible_centerlines+area"): #  
-    #     phy_info = dataset_utils.load_physical_information(num_seq_list, obs_traj, obs_traj_rel, pred_traj_gt, pred_traj_gt_rel, first_obs, map_origin,
-    #                                                        dist_rasterized_map, object_class_id_list, DATA_IMGS_FOLDER,
-    #                                                        physical_context=PHYSICAL_CONTEXT,relevant_centerlines=relevant_centerlines,
-    #                                                        DEBUG_IMAGES=False, DEBUG_TIME=DEBUG_TIME)
-    #     if PHYSICAL_CONTEXT != "plausible_centerlines+area":
-    #         # Here we have a np.array, only number
-    #         phy_info = torch.from_numpy(phy_info).type(torch.float)
-    #         if PHYSICAL_CONTEXT == "visual": phy_info = phy_info.permute(0, 3, 1, 2)
-    if PHYSICAL_CONTEXT == "plausible_centerlines":
+    if (PHYSICAL_CONTEXT == "visual"  # batch_size x channels x height x width 
+     or PHYSICAL_CONTEXT == "goals" # batch_size x num_goal_points x 2 (x|y) (real-world coordinates (HDmap))
+     or PHYSICAL_CONTEXT == "plausible_centerlines+area"): # 
+        first_obs = obs_traj[0,:,:] # 1 x agents · batch_size x 2 
+        phy_info = dataset_utils.load_physical_information(num_seq_list, obs_traj, obs_traj_rel, pred_traj_gt, pred_traj_gt_rel, first_obs, map_origin,
+                                                           dist_rasterized_map, object_class_id_list, DATA_IMGS_FOLDER,
+                                                           physical_context=PHYSICAL_CONTEXT,relevant_centerlines=relevant_centerlines,
+                                                           DEBUG_IMAGES=False, DEBUG_TIME=DEBUG_TIME)
+        if PHYSICAL_CONTEXT != "plausible_centerlines+area":
+            # Here we have a np.array, only number
+            phy_info = torch.from_numpy(phy_info).type(torch.float)
+            if PHYSICAL_CONTEXT == "visual": phy_info = phy_info.permute(0, 3, 1, 2)
+            
+    elif PHYSICAL_CONTEXT == "plausible_centerlines":
         # Relevant centerlines from global (map) coordinates to absolute (around origin) coordinates
-        
+
         relevant_centerlines = torch.stack(relevant_centerlines, dim=0)
-        max_centerlines = relevant_centerlines.shape[1]
-        points_per_centerline = relevant_centerlines.shape[2]
-        data_dim = relevant_centerlines.shape[3]
-        aux_ = relevant_centerlines.view(batch_size,max_centerlines,-1).sum(dim = -1)
-        rows, cols = torch.where(aux_ == 0)
-        
-        phy_info = relevant_centerlines - map_origin.unsqueeze(1)
+        _, max_centerlines, points_per_centerline, data_dim = relevant_centerlines.shape
+        rows,cols,_ = torch.where(relevant_centerlines[:,:,:,0] == 0.0) # identify padded centerlines
+ 
+        phy_info = relevant_centerlines - map_origin.unsqueeze(1).unsqueeze(1)
         phy_info[rows,cols,:,:] = torch.zeros((points_per_centerline,data_dim))
         
     elif PHYSICAL_CONTEXT == "oracle":
@@ -164,128 +163,170 @@ def seq_collate(data):
         phy_info = torch.from_numpy(phy_info).type(torch.float)
 
     end_phy_info = time.time()
+    if DEBUG_TIME: print(f"Time consumed by load physical information function: {end_phy_info-start_phy_info}")
 
-    if DEBUG_TIME: print(f"Time consumed by load physical information function: {end_phy_info-start_phy_info}\n")
-    
     # Data augmentation
-
+    
     if APPLY_DATA_AUGMENTATION and CURRENT_SPLIT == "train":
         start_data_aug = time.time()
+        
+        num_global_obstacles = obs_traj.shape[1]
+        apply_dropout = torch.tensor(np.random.choice(decision,num_global_obstacles,p=dropout_prob)) # For each obstacle of the sequence
+        apply_gaussian_noise = torch.tensor(np.random.choice(decision,num_global_obstacles,p=gaussian_noise_prob)) # For each obstacle of the sequence
+        apply_rotation = torch.tensor(np.random.choice(decision,1,p=rotation_prob)) # To the whole sequence
+        
+        obs_traj = data_augmentation_functions.add_gaussian_noise(obs_traj,
+                                                                      apply_gaussian_noise,
+                                                                      num_global_obstacles,
+                                                                      num_obs=obs_len,
+                                                                      mu=mu_noise,sigma=std_noise)
 
-        aug_obs_traj = torch.zeros((obs_traj.shape))
-        aug_obs_traj_rel = torch.zeros((obs_traj_rel.shape))
-        aug_pred_traj_gt = torch.zeros((pred_traj_gt.shape))
-        aug_pred_traj_gt_rel = torch.zeros((pred_traj_gt_rel.shape))
+        obs_traj_rel = torch.zeros((obs_traj_rel.shape))
+        obs_traj_rel[1:,:,:] = torch.sub(obs_traj_rel[1:,:,:],
+                                             obs_traj_rel[:-1,:,:])
+        
+        obs_traj_aux = torch.clone(obs_traj)
+        
+        end_data_aug = time.time()
+        if DEBUG_TIME: print(f"Time consumed by data augmentation functions: {end_data_aug-start_data_aug}")
+    else:
+        obs_traj_aux = torch.clone(obs_traj)
+        
+    # Apply rotation to every sequence to align the last observation of the target agent with the Y-axis
 
-        i = 0
-        for start,end in seq_start_end.data:
-            num_obstacles = (end-start).item() # int
-            curr_object_class_id_list = object_class_id_list[i]
-            curr_origin = map_origin[i][0] # TODO: Save again the .npy data with 1D tensor [], not 2D tensor [[]] for each element
-            seq_id = num_seq_list[i].item()
+    if APPLY_DATA_ROTATION:
+        seq_index = 0
+        
+        start_clone_tensors = time.time()
+    
+        cloned_obs_traj = torch.clone(obs_traj)
+        cloned_pred_traj_gt = torch.clone(pred_traj_gt)
+        
+        end_clone_tensors = time.time()
+        if DEBUG_TIME: print(f"Time consumed by cloning functions: {end_clone_tensors-start_clone_tensors}")
+        
+        start_data_rot = time.time()
+        
+        for start,end in seq_start_end.data:  
+            # Get auxiliar variables
 
-            # Original trajectories (observations and predictions)
+            curr_split_hm = split_hm[seq_index]
+            curr_num_obstacles = (end-start).item() # int
+            curr_object_class_id_list = object_class_id_list[seq_index]
+            curr_map_origin = map_origin[seq_index]
+            seq_id = num_seq_list[seq_index].item()
+            curr_city = city_id[seq_index]
+            if curr_city == 0:
+                curr_city = "PIT"
+            else:
+                curr_city = "MIA"  
+                
+            # Get current centerlines
 
-            curr_obs_traj = obs_traj[:,start:end,:] 
-            curr_first_obs = curr_obs_traj[0,:,:]
-            curr_obs_traj_rel = obs_traj_rel[:,start:end,:]
-            curr_pred_traj_gt = pred_traj_gt[:,start:end,:]
-            curr_pred_traj_gt_rel = pred_traj_gt_rel[:,start:end,:]
+            if PHYSICAL_CONTEXT == "plausible_centerlines": # N centerlines
+                curr_relevant_centerlines = phy_info[seq_index,:,:,:].unsqueeze(1) # N x 1 x centerline_length x 2
+            elif PHYSICAL_CONTEXT == "oracle": # Only the most plausible
+                curr_relevant_centerlines = phy_info[seq_index,:,:].unsqueeze(1) # 1 x 1 x centerline_length x 2
+            else:
+                curr_relevant_centerlines = torch.tensor([])
+                
+            # Original trajectories (observations and predictions) for this sequence
 
-            # Apply data augmentation for every sequence (scenario) of the batch
+            curr_obs_traj = cloned_obs_traj[:,start:end,:] # Original observations
+            curr_pred_traj_gt = cloned_pred_traj_gt[:,start:end,:]
+            curr_target_agent_orientation = target_agent_orientation[seq_index]
 
-            aug_curr_obs_traj = copy.deepcopy(curr_obs_traj)
-            aug_curr_pred_traj_gt = copy.deepcopy(curr_pred_traj_gt)
-
-            apply_dropout = np.random.choice(decision,num_obstacles,p=dropout_prob) # For each obstacle of the sequence
-            apply_gaussian_noise = np.random.choice(decision,num_obstacles,p=gaussian_noise_prob) # For each obstacle of the sequence
-            apply_rotation = np.random.choice(decision,1,p=rotation_prob) # To the whole sequence
-     
-            # TODO: Dropout and gaussian noise required in Argoverse? The input data is already quite noisy
-            # in some samples
+            # Get augmented trajectories for this sequence
             
-            if np.any(apply_dropout): # Not apply if all elements are 0
-                aug_curr_obs_traj = data_augmentation_functions.dropout_points(aug_curr_obs_traj,
-                                                                               apply_dropout,
-                                                                               num_obs=obs_len,
-                                                                               percentage=points_dropout_percentage)
-            if np.any(apply_gaussian_noise): # Not apply if all elements are 0
-                aug_curr_obs_traj = data_augmentation_functions.add_gaussian_noise(aug_curr_obs_traj,
-                                                                                   apply_gaussian_noise,
-                                                                                   num_obstacles,
-                                                                                   num_obs=obs_len,
-                                                                                   mu=mu_noise,sigma=std_noise)
-
-            ## N.B. If you apply rotation as data augmentation, the groundtruth must be rotated too!
+            aug_curr_obs_traj = obs_traj_aux[:,start:end,:]
             
-            rot_angle = 0
-            # if np.any(apply_rotation): 
-            #     rot_angle = np.random.choice(rotation_angles,1,p=rotation_angles_prob).item()
+            yaw_aux = - (math.pi/2 - curr_target_agent_orientation) # Apply this angle to align the trajectory with the Y-axis
+            c, s = torch.cos(yaw_aux), torch.sin(yaw_aux)
+            R = torch.tensor([[c,-s],  # Rot around the map z-axis
+                              [s, c]])
+            ss = time.time()
+            rotated_aug_curr_obs_traj = data_augmentation_functions.rotate_traj(aug_curr_obs_traj,R)
+            rotated_curr_pred_traj_gt = data_augmentation_functions.rotate_traj(curr_pred_traj_gt,R)
 
-            #     aug_curr_obs_traj = data_augmentation_functions.rotate_traj(aug_curr_obs_traj,rot_angle)
-            #     aug_curr_pred_traj_gt = data_augmentation_functions.rotate_traj(aug_curr_pred_traj_gt,rot_angle)
+            rotated_curr_map_origin = data_augmentation_functions.rotate_traj(curr_map_origin,R)
+            rotated_curr_relevant_centerlines = data_augmentation_functions.rotate_traj(curr_relevant_centerlines,R)
+            rr = time.time()
+            if DEBUG_TIME: print(f"Time consumed by data rotation functions: {rr-ss}")
+            # Overwrite tensors with rotated trajectories
+            
+            aug_curr_obs_traj_rel = torch.zeros((rotated_aug_curr_obs_traj.shape))
+            aug_curr_obs_traj_rel[1:,:,:] = torch.sub(rotated_aug_curr_obs_traj[1:,:,:],
+                                                      rotated_aug_curr_obs_traj[:-1,:,:])
+            
+            aug_curr_pred_traj_gt_rel = torch.zeros((rotated_curr_pred_traj_gt.shape))
+            aug_curr_pred_traj_gt_rel[1:,:,:] = torch.sub(rotated_curr_pred_traj_gt[1:,:,:],
+                                                          rotated_curr_pred_traj_gt[:-1,:,:])
+            
+            ## Update torch tensor (whole batch)
 
-            ## Get first obs and new relatives after data augmentation for this sequence
-
-            aug_curr_first_obs = aug_curr_obs_traj[0,:,:] 
-            aug_curr_obs_traj_rel = torch.zeros((aug_curr_obs_traj.shape))
-            aug_curr_obs_traj_rel[1:,:,:] = torch.sub(aug_curr_obs_traj[1:,:,:],
-                                                      aug_curr_obs_traj[:-1,:,:])
-
-            # rel_curr_obj_seq[:, 1:] = curr_obj_seq[:, 1:] - curr_obj_seq[:, :-1] # Get displacements between consecutive steps
-
-            aug_curr_pred_traj_gt_rel = torch.zeros((aug_curr_pred_traj_gt.shape))
-            aug_curr_pred_traj_gt_rel[1:,:,:] = torch.sub(aug_curr_pred_traj_gt[1:,:,:],
-                                                          aug_curr_pred_traj_gt[:-1,:,:])
-
-            ## Fill torch tensor (whole batch)
-
-            aug_obs_traj[:,start:end,:] = aug_curr_obs_traj
-            aug_obs_traj_rel[:,start:end,:] = aug_curr_obs_traj_rel
-            aug_pred_traj_gt[:,start:end,:] = aug_curr_pred_traj_gt
-            aug_pred_traj_gt_rel[:,start:end,:] = aug_curr_pred_traj_gt_rel
+            obs_traj[:,start:end,:] = rotated_aug_curr_obs_traj
+            obs_traj_rel[:,start:end,:] = aug_curr_obs_traj_rel
+            pred_traj_gt[:,start:end,:] = rotated_curr_pred_traj_gt
+            pred_traj_gt_rel[:,start:end,:] = aug_curr_pred_traj_gt_rel
 
             if DEBUG_DATA_AUGMENTATION:
-                filename = f"data/datasets/argoverse/motion-forecasting/train/data_images/{seq_id}.png"
-
+                if "train" in curr_split_hm:
+                    results_path = f"data/datasets/argoverse/motion-forecasting/train"
+                elif "val" in curr_split_hm:
+                    results_path = f"data/datasets/argoverse/motion-forecasting/val"
+                    
+                curr_pred_traj_fake = np.zeros((0,0,0))
+                
                 # Original observations (No data augmentation)
 
-                curr_traj_rel = torch.cat((curr_obs_traj_rel,
-                                           curr_pred_traj_gt_rel),dim=0)
+                plot_functions.viz_predictions_all(seq_id,
+                                                   results_path,
+                                                   curr_obs_traj.permute(1,0,2).cpu().numpy(), # All obstacles
+                                                   curr_pred_traj_fake, # Only AGENT (MM prediction)
+                                                   curr_pred_traj_gt.permute(1,0,2).cpu().numpy(), # All obstacles
+                                                   curr_target_agent_orientation.cpu().numpy(),
+                                                   curr_object_class_id_list.cpu().numpy(),
+                                                   curr_city,
+                                                   curr_map_origin.cpu().numpy(),
+                                                   avm,
+                                                   dist_rasterized_map=50,
+                                                   relevant_centerlines_abs=curr_relevant_centerlines.cpu().numpy(),
+                                                   save=True)
 
-                plot_functions.plot_trajectories(filename,curr_traj_rel,curr_first_obs,
-                                                 curr_origin,curr_object_class_id_list,dist_rasterized_map,
-                                                 rot_angle=-1,obs_len=obs_len,
-                                                 smoothen=False, save=True)
+                # New observations (after data augmentation and rotation)
 
-                # New observations (after data augmentation)
+                plot_functions.viz_predictions_all(seq_id,
+                                                   results_path,
+                                                   rotated_aug_curr_obs_traj.permute(1,0,2).cpu().numpy(), # All obstacles
+                                                   curr_pred_traj_fake, # Only AGENT (MM prediction)
+                                                   rotated_curr_pred_traj_gt.permute(1,0,2).cpu().numpy(), # All obstacles
+                                                   np.array(math.pi/2), # Target agent orientation after rotation
+                                                   curr_object_class_id_list.cpu().numpy(),
+                                                   curr_city,
+                                                   rotated_curr_map_origin.cpu().numpy(),
+                                                   avm,
+                                                   dist_rasterized_map=50,
+                                                   relevant_centerlines_abs=rotated_curr_relevant_centerlines.cpu().numpy(),
+                                                   save=True,
+                                                   check_data_aug=True)
 
-                aug_curr_traj_rel = torch.cat((aug_curr_obs_traj_rel,
-                                               aug_curr_pred_traj_gt_rel),dim=0)
+            seq_index += 1
 
-                plot_functions.plot_trajectories(filename,aug_curr_traj_rel,aug_curr_first_obs,
-                                                 curr_origin,curr_object_class_id_list,dist_rasterized_map,
-                                                 rot_angle=rot_angle,obs_len=obs_len,
-                                                 smoothen=False, save=True, data_aug=True)
-            i += 1
+        end_data_rot = time.time()
+        if DEBUG_TIME: print(f"Time consumed by data rotation functions: {end_data_rot-start_data_rot}")
+    if DEBUG_DATA_AUGMENTATION: pdb.set_trace()
 
-        # Replace tensors
-
-        obs_traj = aug_obs_traj
-        obs_traj_rel = aug_obs_traj_rel
-        pred_traj_gt = aug_pred_traj_gt
-        pred_traj_gt_rel = aug_pred_traj_gt_rel
-
-        end_data_aug = time.time()
-
-        if DEBUG_TIME: print(f"Time consumed by data augmentation functions: {end_data_aug-start_data_aug}\n")
+    start_final_tensors = time.time()
 
     out = [obs_traj, pred_traj_gt, obs_traj_rel, pred_traj_gt_rel, non_linear_obj,
            loss_mask, seq_start_end, object_cls, obj_id, map_origin, num_seq_list, norm, target_agent_orientation,
            phy_info]
 
+    end_final_tensors = time.time()
+    if DEBUG_TIME: print(f"Time consumed by replacing final tensors: {end_final_tensors-start_final_tensors}")
+    
     end_seq_collate = time.time()
-    if DEBUG_TIME: print(f">>>>>>>>>>>>>> Time consumed by seq_collate function: {end_seq_collate-start_seq_collate}\n")
+    if DEBUG_TIME: print(f">>>>>>>>>>>>>> Time consumed by seq_collate function: {end_seq_collate-start_seq_collate}")
 
     return tuple(out)
 
@@ -405,8 +446,8 @@ class ArgoverseMotionForecastingDataset(Dataset):
     """Dataloder for the Trajectory datasets"""
     def __init__(self, dataset_name, root_folder, imgs_folder, obs_len=20, pred_len=30, distance_threshold=30,
                  split='train', split_percentage=0.1, start_from_percentage=0.0, 
-                 batch_size=16, class_balance=-1.0, obs_origin=1, data_augmentation=False, 
-                 physical_context="dummy", extra_data_train=-1.0, preprocess_data=False, save_data=False):
+                 batch_size=16, class_balance=-1.0, obs_origin=1, data_augmentation=False, apply_rotation=False, 
+                 physical_context="dummy", extra_data_train=-1.0, hard_mining=-1.0, preprocess_data=False, save_data=False):
         super(ArgoverseMotionForecastingDataset, self).__init__()
 
         # Initialize class variables
@@ -424,9 +465,11 @@ class ArgoverseMotionForecastingDataset(Dataset):
         self.cont_seqs = 0
         self.cont_curved_trajs = 0
         self.data_augmentation = data_augmentation
+        self.apply_rotation = apply_rotation
         self.physical_context = physical_context
         self.extra_data_train = extra_data_train
-
+        self.hard_mining = hard_mining
+        
         self.dataset_name = dataset_name
         self.root_folder = root_folder
         self.imgs_folder = imgs_folder
@@ -434,13 +477,12 @@ class ArgoverseMotionForecastingDataset(Dataset):
                                                   self.split,
                                                   f"data_processed_{str(int(split_percentage*100))}_percent")
                                              
-        if self.extra_data_train != -1.0:
+        if self.extra_data_train != -1.0 or self.hard_mining != -1.0:
             self.extra_data_processed_folder = os.path.join(root_folder,
                                                             "val",
                                                             f"data_processed_{str(int(split_percentage*100))}_percent")
             self.class_balance = -1.0 # TODO: If we merge data from validation and train, then the stored variables
                                         # to do class balance are useless. Check this
-                                        #  
             if self.split == "val":
                 self.extra_data_train = 1 - self.extra_data_train # Use remaining files for validation
 
@@ -561,6 +603,7 @@ class ArgoverseMotionForecastingDataset(Dataset):
             print("Dataset time: ", time.time() - t0)
 
             self.num_seq = len(seq_list)
+            
             seq_list = np.concatenate(seq_list, axis=0) # Objects x 2 x seq_len
             seq_list_rel = np.concatenate(seq_list_rel, axis=0)
             loss_mask_list = np.concatenate(loss_mask_list, axis=0)
@@ -609,20 +652,76 @@ class ArgoverseMotionForecastingDataset(Dataset):
             straight_trajectories_list, curved_trajectories_list, city_ids, norm, target_agent_orientation, \
             oracle_centerlines, relevant_centerlines  = \
                 operator.itemgetter(*required_variables_name_list)(preprocess_data_dict)
-
-            # TODO: Refactorize this
-            if self.extra_data_train != -1:
-                extra_preprocess_data_dict = dataset_utils.load_processed_files_from_npy(self.extra_data_processed_folder)
+            
+            # TODO: Correct this for train and val. Map origin should be N x 2, not N x 1 x 2
+            if self.split != "test":
+                ego_vehicle_origin = ego_vehicle_origin.squeeze(1)
+                
+            if self.extra_data_train != -1 or self.hard_mining != -1.0:
+                extra_preprocess_data_dict = dataset_utils.load_processed_files_from_npy(self.extra_data_processed_folder, required_variables_name_list)
         
                 ex_seq_list, ex_seq_list_rel, ex_loss_mask_list, ex_non_linear_obj, ex_num_objs_in_seq, \
                 ex_seq_id_list, ex_object_class_id_list, ex_object_id_list, ex_ego_vehicle_origin, ex_num_seq_list, \
-                ex_straight_trajectories_list, ex_curved_trajectories_list, ex_city_ids, ex_norm  = \
+                ex_straight_trajectories_list, ex_curved_trajectories_list, ex_city_ids, ex_norm, ex_target_agent_orientation, \
+                ex_oracle_centerlines, ex_relevant_centerlines  = \
                     operator.itemgetter(*required_variables_name_list)(extra_preprocess_data_dict)
 
+                # TODO: Correct this for train and val. Map origin should be N x 2, not N x 1 x 2
+                if self.split != "test":
+                    ex_ego_vehicle_origin = ex_ego_vehicle_origin.squeeze(1)
+                
                 num_val_files = len(ex_num_seq_list)
                 ex_cum_start_idx = [0] + np.cumsum(ex_num_objs_in_seq).tolist()
                 ex_seq_start_end = [(start, end) for start, end in zip(ex_cum_start_idx, ex_cum_start_idx[1:])]
 
+            if self.hard_mining != -1.0 and split_percentage == 1.0: 
+                # In this file, we can see the most difficult sequences of the validation split
+                file_csv = "results/mapfe4mp/100.0_percent/test_oracle_check_rel2absmm/val/metrics_sorted_ade.csv"
+                
+                df = pd.read_csv(file_csv,sep=" ")
+                seq_index = df["Index"][:-2].astype(int) # from 0 to N-1, not num_seq.csv
+                self.hardest_sequences = seq_index[-2000:].values
+                # self.hardest_sequences = seq_index[-self.batch_size:].values # If we have batch_size = N, at most we can
+                # introduce N hardest val sequences (if hard_mining = 1.0) in the batch
+
+                ## Create torch data
+
+                self.hm_obs_traj = torch.from_numpy(ex_seq_list[:, :, :self.obs_len]).type(torch.float)
+                self.hm_pred_traj_gt = torch.from_numpy(ex_seq_list[:, :, self.obs_len:]).type(torch.float)
+                self.hm_obs_traj_rel = torch.from_numpy(ex_seq_list_rel[:, :, :self.obs_len]).type(torch.float)
+                self.hm_pred_traj_gt_rel = torch.from_numpy(ex_seq_list_rel[:, :, self.obs_len:]).type(torch.float)
+
+                self.hm_loss_mask = torch.from_numpy(ex_loss_mask_list).type(torch.float)
+                self.hm_non_linear_obj = torch.from_numpy(ex_non_linear_obj).type(torch.float)
+                self.hm_cum_start_idx = ex_cum_start_idx
+                self.hm_seq_start_end = ex_seq_start_end
+
+                self.hm_seq_id_list = torch.from_numpy(ex_seq_id_list).type(torch.float)
+                self.hm_object_class_id_list = torch.from_numpy(ex_object_class_id_list).type(torch.float)
+                self.hm_object_id_list = torch.from_numpy(ex_object_id_list).type(torch.float)
+                
+                self.hm_ego_vehicle_origin = torch.from_numpy(ex_ego_vehicle_origin).type(torch.float)
+   
+                self.hm_city_ids = torch.from_numpy(ex_city_ids).type(torch.float)
+                self.hm_straight_trajectories_list = torch.from_numpy(ex_straight_trajectories_list).type(torch.int)
+                self.hm_curved_trajectories_list = torch.from_numpy(ex_curved_trajectories_list).type(torch.int)
+                self.hm_norm = torch.from_numpy(np.array(ex_norm))
+
+                # Shuffle the straight and curved trajectories
+                
+                self.hm_num_straight_trajs = len(self.hm_straight_trajectories_list)
+                self.hm_num_curve_trajs = len(self.hm_curved_trajectories_list)
+                self.hm_straight_aux_list_random = self.hm_straight_trajectories_list[torch.randperm(self.hm_num_straight_trajs)]
+                self.hm_curved_aux_list_random = self.hm_curved_trajectories_list[torch.randperm(self.hm_num_curve_trajs)]
+                
+                self.hm_num_seq_list = torch.from_numpy(ex_num_seq_list).type(torch.int)
+
+                self.hm_target_agent_orientation = torch.from_numpy(ex_target_agent_orientation).type(torch.float)
+                self.hm_oracle_centerlines = torch.from_numpy(ex_oracle_centerlines).type(torch.float)
+                self.hm_relevant_centerlines = torch.from_numpy(ex_relevant_centerlines).type(torch.float)
+
+            if self.extra_data_train != -1 and self.hard_mining == -1.0: # Do not apply extra data train and 
+                                                                         # hard mining at the same time
                 if self.split == "train":
                     
                     # Take a percentage of this validation files
@@ -710,16 +809,24 @@ class ArgoverseMotionForecastingDataset(Dataset):
         self.seq_id_list = torch.from_numpy(seq_id_list).type(torch.float)
         self.object_class_id_list = torch.from_numpy(object_class_id_list).type(torch.float)
         self.object_id_list = torch.from_numpy(object_id_list).type(torch.float)
+        
         self.ego_vehicle_origin = torch.from_numpy(ego_vehicle_origin).type(torch.float)
+  
         self.city_ids = torch.from_numpy(city_ids).type(torch.float)
         self.straight_trajectories_list = torch.from_numpy(straight_trajectories_list).type(torch.int)
         self.curved_trajectories_list = torch.from_numpy(curved_trajectories_list).type(torch.int)
-        self.curved_aux_list = copy.deepcopy(self.curved_trajectories_list)
         self.norm = torch.from_numpy(np.array(norm))
+
+        # Shuffle the straight and curved trajectories
+        
+        self.num_straight_trajs = len(self.straight_trajectories_list)
+        self.num_curve_trajs = len(self.curved_trajectories_list)
+        self.straight_aux_list_random = self.straight_trajectories_list[torch.randperm(self.num_straight_trajs)]
+        self.curved_aux_list_random = self.curved_trajectories_list[torch.randperm(self.num_curve_trajs)]
         
         self.num_seq_list = torch.from_numpy(num_seq_list).type(torch.int)
         self.num_seq = len(num_seq_list)
-
+        
         self.target_agent_orientation = torch.from_numpy(target_agent_orientation).type(torch.float)
         self.oracle_centerlines = torch.from_numpy(oracle_centerlines).type(torch.float)
         self.relevant_centerlines = torch.from_numpy(relevant_centerlines).type(torch.float)
@@ -738,22 +845,25 @@ class ArgoverseMotionForecastingDataset(Dataset):
         32 because maybe there are not 34 csvs before this one)
         """
 
-        global APPLY_DATA_AUGMENTATION, PHYSICAL_CONTEXT, DATA_IMGS_FOLDER, CURRENT_SPLIT
+        global APPLY_DATA_AUGMENTATION, APPLY_DATA_ROTATION, PHYSICAL_CONTEXT, DATA_IMGS_FOLDER, CURRENT_SPLIT
 
         if not self.init_global_variables: # Execute only once
             APPLY_DATA_AUGMENTATION = self.data_augmentation
+            APPLY_DATA_ROTATION = self.apply_rotation
             PHYSICAL_CONTEXT = self.physical_context
-
-            self.init_global_variables = True
-
-        if self.split != CURRENT_SPLIT: # We have changed to another split
             DATA_IMGS_FOLDER = os.path.join(self.root_folder,self.split,self.imgs_folder)
             CURRENT_SPLIT = self.split
 
+            self.init_global_variables = True
+
+        DEBUG_TIME = False    
+        start_time = time.time()
         if self.class_balance >= 0.0 and CURRENT_SPLIT == "train": # Only during training
+
             if self.cont_seqs % self.batch_size == 0: # Get a new batch
                 self.cont_straight_traj = []
                 self.cont_curved_traj = []
+                self.cont_seqs = 0
 
             if self.cont_seqs % self.batch_size == (self.batch_size-1):
                 assert len(self.cont_straight_traj) <= self.class_balance*self.batch_size
@@ -761,65 +871,90 @@ class ArgoverseMotionForecastingDataset(Dataset):
             trajectory_index = self.num_seq_list[index]
             straight_traj = True
 
-            if trajectory_index in self.curved_trajectories_list:
+            if torch.any(torch.where(self.curved_trajectories_list == trajectory_index)[0]):
                 straight_traj = False
-                
+            
             if straight_traj:
-                if len(self.cont_straight_traj) >= int(self.class_balance*self.batch_size):
-                    # Take a random curved trajectory from the dataset
+                if len(self.cont_straight_traj) >= int(self.class_balance*self.batch_size): # Include curve
+                    aux_index = self.curved_aux_list_random[0] # Number of .csv
+                    index = int(torch.where(self.num_seq_list == aux_index)[0]) # We actually need the number from 0 to N-1
 
-                    aux_index = random.choice(self.curved_aux_list)
-                    
-                    # Update index to be included in the batch
-
-                    index = int(np.where(self.num_seq_list == aux_index)[0])
                     self.cont_curved_traj.append(index)
-
-                    # Remove that index from auxiliar list
-
-                    self.curved_aux_list = \
-                        self.curved_aux_list[torch.where(self.curved_aux_list != aux_index)]
+                    self.curved_aux_list_random = self.curved_aux_list_random[1:] # Remove first element
                     
-                    ## We run out all curves. Delete variable and re-initialize the list. Doing this
-                    ## we ensure that the training runs over all possible curved (non-linear) trajectories
+                    if len(self.curved_aux_list_random) == 0: # The tensor is empty
+                        self.curved_aux_list_random = self.curved_trajectories_list[torch.randperm(self.num_curve_trajs)]
+                        
+                else: # Include straight
+                    aux_index = self.straight_aux_list_random[0] # Number of .csv
+                    index = int(torch.where(self.num_seq_list == aux_index)[0]) # We actually need the number from 0 to N-1
 
-                    if len(self.curved_aux_list) == 0: 
-                        del self.curved_aux_list
-                        self.curved_aux_list = copy.deepcopy(self.curved_trajectories_list)
-                else:
                     self.cont_straight_traj.append(index)
-            else:
-                self.cont_curved_traj.append(index)
+                    self.straight_aux_list_random = self.straight_aux_list_random[1:] # Remove first element
+                    
+                    if len(self.straight_aux_list_random) == 0: # The tensor is empty
+                        self.straight_aux_list_random = self.straight_trajectories_list[torch.randperm(self.num_straight_trajs)]
+            else: # Include curve
+                aux_index = self.curved_aux_list_random[0] # Number of .csv
+                index = int(torch.where(self.num_seq_list == aux_index)[0]) # We actually need the number from 0 to N-1
 
-        start, end = self.seq_start_end[index]
-    
-        try: # Bad done (for train and val) -> origin is N x 1 x 2
+                self.cont_curved_traj.append(index)
+                self.curved_aux_list_random = self.curved_aux_list_random[1:] # Remove first element
+                
+                if len(self.curved_aux_list_random) == 0: # The tensor is empty
+                    self.curved_aux_list_random = self.curved_trajectories_list[torch.randperm(self.num_curve_trajs)]
+        
+        end_time = time.time()
+        if DEBUG_TIME: print("Time consumed by class balance: ", end_time-start_time)
+            
+        remainder = index % 2
+        
+        if self.cont_seqs % self.batch_size == 0: # Get a new batch
+            self.cont_standard_traj = []
+            self.cont_hm_traj = []
+            self.cont_seqs = 0
+ 
+        if self.hard_mining == -1.0 or \
+           (self.hard_mining != -1.0 and remainder == 0 
+            and len(self.cont_standard_traj) < int((1-self.hard_mining)*self.batch_size)):
+              
+            msg = f"{self.split}" 
+            
+            self.cont_standard_traj.append(index)
+            
+            start, end = self.seq_start_end[index]
+            
             out = [
                     self.obs_traj[start:end, :, :], self.pred_traj_gt[start:end, :, :],
                     self.obs_traj_rel[start:end, :, :], self.pred_traj_gt_rel[start:end, :, :],
                     self.non_linear_obj[start:end], self.loss_mask[start:end, :],
                     self.seq_id_list[start:end, :, :], self.object_class_id_list[start:end], 
-                    self.object_id_list[start:end], self.city_ids[index], self.ego_vehicle_origin[index,:,:],
+                    self.object_id_list[start:end], self.city_ids[index], self.ego_vehicle_origin[index,:], 
                     self.num_seq_list[index], self.norm, self.target_agent_orientation[index],
-                    self.oracle_centerlines[index,:,:], self.relevant_centerlines[index,:,:,:]
-                    # self.relevant_centerlines[str(self.file_id_list[index])]
-                  ] 
-        except: # Well done (for test) -> origin is N x 2
-            out = [
-                    self.obs_traj[start:end, :, :], self.pred_traj_gt[start:end, :, :],
-                    self.obs_traj_rel[start:end, :, :], self.pred_traj_gt_rel[start:end, :, :],
-                    self.non_linear_obj[start:end], self.loss_mask[start:end, :],
-                    self.seq_id_list[start:end, :, :], self.object_class_id_list[start:end], 
-                    self.object_id_list[start:end], self.city_ids[index], self.ego_vehicle_origin[index,:], # HERE THE DIFFERENCE
-                    self.num_seq_list[index], self.norm, self.target_agent_orientation[index],
-                    self.oracle_centerlines[index,:,:], self.relevant_centerlines[index,:,:,:]
+                    self.oracle_centerlines[index,:,:], self.relevant_centerlines[index,:,:,:], msg
                     # self.relevant_centerlines[str(self.file_id_list[index])]
                 ]
+        else:        
+            msg = "val:hard_mining" 
+            
+            hm_index = np.random.choice(self.hardest_sequences)
+            hm_start, hm_end = self.hm_seq_start_end[hm_index]
+            
+            out = [
+                self.hm_obs_traj[hm_start:hm_end, :, :], self.hm_pred_traj_gt[hm_start:hm_end, :, :],
+                self.hm_obs_traj_rel[hm_start:hm_end, :, :], self.hm_pred_traj_gt_rel[hm_start:hm_end, :, :],
+                self.hm_non_linear_obj[hm_start:hm_end], self.hm_loss_mask[hm_start:hm_end, :],
+                self.hm_seq_id_list[hm_start:hm_end, :, :], self.hm_object_class_id_list[hm_start:hm_end], 
+                self.hm_object_id_list[hm_start:hm_end], self.hm_city_ids[hm_index], self.hm_ego_vehicle_origin[hm_index,:], 
+                self.hm_num_seq_list[hm_index], self.hm_norm, self.hm_target_agent_orientation[hm_index],
+                self.hm_oracle_centerlines[hm_index,:,:], self.hm_relevant_centerlines[hm_index,:,:,:], msg
+                # self.relevant_centerlines[str(self.file_id_list[hm_index])]
+                  ]
 
         # Increase file count
         
         self.cont_seqs += 1
-
+            
         return out
 
 

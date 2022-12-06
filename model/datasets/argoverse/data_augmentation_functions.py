@@ -155,5 +155,5 @@ def rotate_traj(traj,R):
 
     # traj = torch.matmul(traj,R) # (N x 2) x (2 x 2)
     traj = np.matmul(traj,R).float() # (N x 2) x (2 x 2)
-    
+   
     return traj

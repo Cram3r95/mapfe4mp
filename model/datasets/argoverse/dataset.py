@@ -224,9 +224,9 @@ def seq_collate(data):
             # Get current centerlines
 
             if PHYSICAL_CONTEXT == "plausible_centerlines": # N centerlines
-                curr_relevant_centerlines = phy_info[seq_index,:,:,:].unsqueeze(1) # N x 1 x centerline_length x 2
+                curr_relevant_centerlines = phy_info[seq_index,:,:,:].unsqueeze(0) # 1 (sequence) x N centerlines x centerline_length x 2
             elif PHYSICAL_CONTEXT == "oracle": # Only the most plausible
-                curr_relevant_centerlines = phy_info[seq_index,:,:].unsqueeze(1) # 1 x 1 x centerline_length x 2
+                curr_relevant_centerlines = phy_info[seq_index,:,:].unsqueeze(0) # 1 (sequence) x 1 centerline x centerline_length x 2
             else:
                 curr_relevant_centerlines = torch.tensor([])
                 
@@ -262,13 +262,15 @@ def seq_collate(data):
             aug_curr_pred_traj_gt_rel[1:,:,:] = torch.sub(rotated_curr_pred_traj_gt[1:,:,:],
                                                           rotated_curr_pred_traj_gt[:-1,:,:])
             
-            ## Fill torch tensor (whole batch)
+            ## Update torch tensor (whole batch)
 
             obs_traj[:,start:end,:] = rotated_aug_curr_obs_traj
             obs_traj_rel[:,start:end,:] = aug_curr_obs_traj_rel
             pred_traj_gt[:,start:end,:] = rotated_curr_pred_traj_gt
             pred_traj_gt_rel[:,start:end,:] = aug_curr_pred_traj_gt_rel
-
+            map_origin[seq_index] = rotated_curr_map_origin
+            phy_info[seq_index,:,:,:] = rotated_curr_relevant_centerlines
+            
             if DEBUG_DATA_AUGMENTATION:
                 if "train" in curr_split_hm:
                     results_path = f"data/datasets/argoverse/motion-forecasting/train"
@@ -674,13 +676,14 @@ class ArgoverseMotionForecastingDataset(Dataset):
                 ex_cum_start_idx = [0] + np.cumsum(ex_num_objs_in_seq).tolist()
                 ex_seq_start_end = [(start, end) for start, end in zip(ex_cum_start_idx, ex_cum_start_idx[1:])]
 
-            if self.hard_mining != -1.0: 
+            if self.hard_mining != -1.0 and split_percentage == 1.0: 
                 # In this file, we can see the most difficult sequences of the validation split
                 file_csv = "results/mapfe4mp/100.0_percent/test_oracle_check_rel2absmm/val/metrics_sorted_ade.csv"
                 
                 df = pd.read_csv(file_csv,sep=" ")
                 seq_index = df["Index"][:-2].astype(int) # from 0 to N-1, not num_seq.csv
-                self.hardest_sequences = seq_index[-self.batch_size:].values # If we have batch_size = N, at most we can
+                self.hardest_sequences = seq_index[-2000:].values
+                # self.hardest_sequences = seq_index[-self.batch_size:].values # If we have batch_size = N, at most we can
                 # introduce N hardest val sequences (if hard_mining = 1.0) in the batch
 
                 ## Create torch data

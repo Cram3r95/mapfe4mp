@@ -566,9 +566,9 @@ class TrajectoryGenerator(nn.Module):
         self.centerline_gnn = GNN(h_dim=self.h_dim_physical)
         self.pattn = MultiheadSelfAttention(h_dim=self.h_dim_physical,
                                             num_heads=self.num_attention_heads)
-        # mlp_phy_attn_dims = [self.num_centerlines*self.h_dim_physical, self.h_dim_physical]
-        # self.mlp_phy_attn = make_mlp(mlp_phy_attn_dims,
-        #                              activation_function="Tanh")
+        mlp_phy_attn_dims = [self.num_centerlines*self.h_dim_physical, self.h_dim_physical]
+        self.mlp_phy_attn = make_mlp(mlp_phy_attn_dims,
+                                     activation_function="Tanh")
         
         # Decoder
 

@@ -30,8 +30,10 @@ from prodict import Prodict
 
 # DL & Math imports
 
+import math
 import numpy as np
 import torch
+
 from torch.utils.data import DataLoader
 
 # Custom imports
@@ -42,6 +44,7 @@ sys.path.append(BASE_DIR)
 
 import model.datasets.argoverse.plot_functions as plot_functions
 import model.datasets.argoverse.dataset_utils as dataset_utils
+import model.datasets.argoverse.data_augmentation_functions as data_augmentation_functions
 
 from model.datasets.argoverse.dataset import ArgoverseMotionForecastingDataset, seq_collate
 from model.utils.checkpoint_data import get_generator
@@ -71,7 +74,7 @@ ARGOVERSE_NUM_MODES = 6
 dist_around = 40
 dist_rasterized_map = [-dist_around, dist_around, -dist_around, dist_around]
 
-GENERATE_QUALITATIVE_RESULTS = False
+GENERATE_QUALITATIVE_RESULTS = True
 PLOT_WORST_SCENES = False
 LIMIT_QUALITATIVE_RESULTS = 150
 
@@ -293,7 +296,6 @@ def evaluate(loader, generator, config, split, current_cuda, pred_len, results_p
 
                     pred_traj_fake_rel, conf = generator(obs_traj, obs_traj_rel, seq_start_end, agent_idx, phy_info=plausible_area, relevant_centerlines=relevant_centerlines)
                 else:
-                    # pred_traj_fake_rel, conf = generator(obs_traj, obs_traj_rel, seq_start_end, agent_idx, phy_info=phy_info, relevant_centerlines=relevant_centerlines)
                     pred_traj_fake_rel, conf = generator(obs_traj, obs_traj_rel, seq_start_end, agent_idx, relevant_centerlines=relevant_centerlines)
                     
                 ## Get predictions in absolute -> map coordinates
@@ -308,7 +310,32 @@ def evaluate(loader, generator, config, split, current_cuda, pred_len, results_p
             # same forward)
 
             ade_min, fde_min = None, None
+            
+            # Transform to CPU (to acelerate the rotation and plot qualitative results)
+            
+            obs_traj = obs_traj.cpu()
+            pred_traj_gt = pred_traj_gt.cpu()
+            pred_traj_fake = pred_traj_fake.cpu()
+            map_origin = map_origin.cpu()
+            relevant_centerlines = relevant_centerlines.cpu()
+            target_agent_orientation = target_agent_orientation.cpu()
+            non_linear_obj = non_linear_obj.cpu()
+            object_cls = object_cls.cpu()
+            
+            if config.dataset.apply_rotation: # We have to counter-rotate in order to have again the original sequence
+                yaw_aux = (math.pi/2 - target_agent_orientation) # Apply this angle to align the trajectory with the Y-axis
+                c, s = torch.cos(yaw_aux), torch.sin(yaw_aux)
+                R = torch.tensor([[c,-s],  # Rot around the map z-axis
+                                [s, c]])
 
+                obs_traj = data_augmentation_functions.rotate_traj(obs_traj,R)
+                pred_traj_gt = data_augmentation_functions.rotate_traj(pred_traj_gt,R)
+                pred_traj_fake = data_augmentation_functions.rotate_traj(pred_traj_fake,R)
+                map_origin = data_augmentation_functions.rotate_traj(map_origin,R)
+                relevant_centerlines = data_augmentation_functions.rotate_traj(relevant_centerlines,R)
+
+                pred_traj_fake_global = pred_traj_fake + map_origin
+                
             if COMPUTE_METRICS and split != "test":
                 agent_pred_gt = pred_traj_gt[:,agent_idx,:] # pred_len (30) x 1 (agent) x data_dim (2) -> "Abs" coordinates (around 0,0)
                 agent_pred_fake = pred_traj_fake
@@ -318,8 +345,8 @@ def evaluate(loader, generator, config, split, current_cuda, pred_len, results_p
 
                 agent_obj_id = obj_id[agent_idx]
                 agent_mask = np.where(agent_obj_id.cpu() == -1, 0, 1)
-                agent_mask = torch.tensor(agent_mask, device=agent_obj_id.device).reshape(-1)
-                
+                # agent_mask = torch.tensor(agent_mask, device=agent_obj_id.device).reshape(-1)
+
                 ade, ade_min = cal_ade_multimodal(agent_pred_gt, agent_pred_fake, agent_linear_obj, agent_non_linear_obj, agent_mask)
                 fde, fde_min = cal_fde_multimodal(agent_pred_gt, agent_pred_fake, agent_linear_obj, agent_non_linear_obj, agent_mask)
 
@@ -342,11 +369,11 @@ def evaluate(loader, generator, config, split, current_cuda, pred_len, results_p
                 plot_scene += 1
                 # Custom plot
 
+                curr_map_origin = map_origin[0]
+                
                 if split == "test":
-                    curr_map_origin = map_origin[0]
                     curr_traj = obs_traj
                 else:
-                    curr_map_origin = map_origin[0][0] # TODO: Generate again val and train data without [[]] in the map!
                     curr_traj = torch.cat((obs_traj,
                                            pred_traj_gt),dim=0)
 
@@ -354,28 +381,23 @@ def evaluate(loader, generator, config, split, current_cuda, pred_len, results_p
 
                 # Argoverse standard plot
 
-                if config.hyperparameters.physical_context == "plausible_centerlines+area":
-                    # K centerlines x batch_size x centerline length x 2
-                    relevant_centerlines_abs = relevant_centerlines.cpu().numpy()
-                elif config.hyperparameters.physical_context == "oracle":
-                    # 1 centerlines x batch_size x centerline length x 2
-                    # relevant_centerlines_abs = phy_info.unsqueeze(0).cpu().numpy() + map_origin.cpu().numpy()
-                    relevant_centerlines_abs = relevant_centerlines.unsqueeze(0).cpu().numpy()
-                else:
+                if config.hyperparameters.physical_context == "dummy" or config.hyperparameters.physical_context == "social":
                     relevant_centerlines_abs = []
-
+                else:
+                    relevant_centerlines_abs = relevant_centerlines.cpu().numpy()
+                    
                 plot_functions.viz_predictions_all(seq_id,
                                                    results_path,
-                                                   obs_traj.permute(1,0,2).cpu().numpy(), # All obstacles
-                                                   pred_traj_fake.squeeze(0).cpu().numpy(), # Only AGENT (MM prediction)
-                                                   pred_traj_gt.permute(1,0,2).cpu().numpy(), # All obstacles
-                                                   curr_object_class_id_list.cpu().numpy(),
+                                                   obs_traj.permute(1,0,2).numpy(), # All obstacles
+                                                   pred_traj_fake.squeeze(0).numpy(), # Only AGENT (MM prediction)
+                                                   pred_traj_gt.permute(1,0,2).numpy(), # All obstacles
+                                                   target_agent_orientation.numpy(),
+                                                   curr_object_class_id_list.numpy(),
                                                    city_name,
-                                                   curr_map_origin.cpu().numpy(),
+                                                   curr_map_origin.numpy(),
                                                    avm,
                                                    dist_rasterized_map=50,
                                                    relevant_centerlines_abs=relevant_centerlines_abs,
-                                                   show=False,
                                                    save=True,
                                                    ade_metric=ade_min,
                                                    fde_metric=fde_min,
@@ -446,7 +468,7 @@ def main(args):
     # Dataloader
 
     print(f"Load {config.dataset.split} split...")
-
+    
     data_split = ArgoverseMotionForecastingDataset(dataset_name=config.dataset_name,
                                                    root_folder=config.dataset.path,
                                                    imgs_folder=config.dataset.imgs_folder,
@@ -455,11 +477,14 @@ def main(args):
                                                    distance_threshold=config.hyperparameters.distance_threshold,
                                                    split=config.dataset.split,
                                                    split_percentage=config.dataset.split_percentage,
-                                                   batch_size=config.dataset.batch_size,
                                                    class_balance=config.dataset.class_balance,
                                                    hard_mining=config.dataset.hard_mining,
                                                    obs_origin=config.hyperparameters.obs_origin,
-                                                   physical_context=config.hyperparameters.physical_context)
+                                                   apply_rotation=config.dataset.apply_rotation,
+                                                   physical_context=config.hyperparameters.physical_context,
+                                                   extra_data_train=config.dataset.extra_data_train,
+                                                   preprocess_data=config.dataset.preprocess_data,
+                                                   save_data=config.dataset.save_data)
 
     split_loader = DataLoader(data_split,
                               batch_size=config.dataset.batch_size,
@@ -534,6 +559,6 @@ python evaluate/argoverse/generate_results_rel-rel.py \
 
 """
 python evaluate/argoverse/generate_results_rel-rel.py \
---model_path "save/argoverse/sophie_mm/100.0_percent/stable_model_test_gnn_mhsa_centerlines_2/argoverse_motion_forecasting_dataset_0_with_model.pt" \
---device_gpu 0 --split "val"
+--model_path "save/argoverse/mapfe4mp/100.0_percent/mapfe4mp_7/argoverse_motion_forecasting_dataset_0_with_model.pt" \
+--device_gpu 0 --split "test"
 """
