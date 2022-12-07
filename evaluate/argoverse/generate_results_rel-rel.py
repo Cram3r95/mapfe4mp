@@ -75,7 +75,7 @@ dist_around = 40
 dist_rasterized_map = [-dist_around, dist_around, -dist_around, dist_around]
 
 GENERATE_QUALITATIVE_RESULTS = True
-PLOT_WORST_SCENES = False
+PLOT_WORST_SCENES = True
 LIMIT_QUALITATIVE_RESULTS = 150
 
 COMPUTE_METRICS = True

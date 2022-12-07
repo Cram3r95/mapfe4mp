@@ -45,7 +45,6 @@ NUM_CENTERLINES = 3
 NUM_ATTENTION_HEADS = 4
 H_DIM_PHYSICAL = 128
 H_DIM_SOCIAL = 128
-INIT_ZEROS = True
 EMBEDDING_DIM = 16
 CONV_FILTERS = 60 # 60
 
@@ -115,28 +114,16 @@ class MotionEncoder(nn.Module):
             _type_: _description_
         """
         
-        if INIT_ZEROS:
-            lstm_hidden_state = torch.zeros(self.num_layers, 
-                                            lstm_in.shape[1], 
-                                            self.hidden_size, 
-                                            dtype=torch.float,
-                                            device=lstm_in.device)
-            lstm_cell_state = torch.zeros(self.num_layers, 
+        lstm_hidden_state = torch.zeros(self.num_layers, 
                                         lstm_in.shape[1], 
-                                        self.hidden_size,
-                                        dtype=torch.float, 
+                                        self.hidden_size, 
+                                        dtype=torch.float,
                                         device=lstm_in.device)
-        else:
-            lstm_hidden_state = torch.randn(self.num_layers, 
-                                            lstm_in.shape[1], 
-                                            self.hidden_size, 
-                                            dtype=torch.float,
-                                            device=lstm_in.device)
-            lstm_cell_state = torch.randn(self.num_layers, 
-                                        lstm_in.shape[1], 
-                                        self.hidden_size,
-                                        dtype=torch.float, 
-                                        device=lstm_in.device)
+        lstm_cell_state = torch.zeros(self.num_layers, 
+                                      lstm_in.shape[1], 
+                                      self.hidden_size,
+                                      dtype=torch.float, 
+                                      device=lstm_in.device)
 
         lstm_out, (lstm_hidden_state_, lstm_cell_state_) = self.lstm(lstm_in, (lstm_hidden_state, lstm_cell_state))
 
@@ -582,8 +569,7 @@ class TrajectoryGenerator(nn.Module):
             #                                        dim=1)
 
             decoder_h = mlp_decoder_context_input.unsqueeze(0)
-            if INIT_ZEROS: decoder_c = torch.zeros(tuple(decoder_h.shape)).cuda(obs_traj.device)
-            else: decoder_c = torch.randn(tuple(decoder_h.shape)).cuda(obs_traj.device)
+            decoder_c = torch.zeros(tuple(decoder_h.shape)).cuda(obs_traj.device)
 
             state_tuple = (decoder_h, decoder_c)
 

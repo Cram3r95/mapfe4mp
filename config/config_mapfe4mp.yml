@@ -62,10 +62,10 @@ hyperparameters:
                                     # checkpoint_val_percentage * total_num_iterations
     checkpoint_train_percentage: 0.1 # 0.2 # (0 - 1)
 
-    loss_type_g: "mse+L1+nll" # (mse|mse_w), nll, (mse|mse_w)+nll, (mse|mse_w)+fa, centerlines+gt
-    loss_ade_weight: 1 # 1.1 
-    loss_fde_weight: 1 # 1.4
-    loss_nll_weight: 0.25 # 2.2 
+    loss_type_g: "nll" # (mse|mse_w), nll, (mse|mse_w)+nll, (mse|mse_w)+fa, centerlines+gt
+    loss_ade_weight: 1.1 # 1.1 
+    loss_fde_weight: 1.4 # 1.4
+    loss_nll_weight: 2.2 # 2.2 
     loss_ade_centerlines_weight: 1
     loss_smoothL1_weight: 1 # 2
     loss_fa_weight: 1
@@ -79,7 +79,7 @@ hyperparameters:
     clipping_threshold_g: 1.1
     
     save_root_dir: "save/argoverse"
-    exp_name: "test_6" 
+    exp_name: "test_9" 
     # exp_name: "test_plausible_centerlines_40_points_last_obs_multilinear" # If no specific exp_name is used, fill with current day and hour
     # cp oracle_centerlines_last_obs_30_points.npy oracle_centerlines.npy && cp relevant_centerlines_last_obs_30_points.npz relevant_centerlines.npz
     # cp oracle_centerlines_map_api_first_obs_40_points.npy oracle_centerlines.npy && cp relevant_centerlines_map_api_first_obs_40_points.npy relevant_centerlines.npy
@@ -87,10 +87,7 @@ hyperparameters:
     
     output_dir: # To be filled in the code (save_root_dir/model_name/split_percentage/exp)
     checkpoint_start_from:
-    exp_description: "From test 3: fix a rotation bug with map origin and relevant centerlines
-                      Encoded target vel (128) + Encoded target pos (128) + Encoded social info (128) + 
-                      3*relevant centerlines (128) -> 768.
-                      BS = 1024, HM = 0.4, Data Aug. = True"
+    exp_description: "From test 5: Only NLL"
     tensorboard_active: True
 
 # Model

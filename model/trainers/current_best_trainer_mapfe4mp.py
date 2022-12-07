@@ -434,11 +434,6 @@ def model_trainer(config, logger):
 
     if hyperparameters.loss_type_g == "mse" or hyperparameters.loss_type_g == "mse_w":
         loss_f = mse
-    elif hyperparameters.loss_type_g == "mse+L1":
-        loss_f = {
-            "mse": mse,
-            "smoothL1": smoothL1
-        }
     elif hyperparameters.loss_type_g == "nll":
         loss_f = pytorch_neg_multi_log_likelihood_batch
     elif hyperparameters.loss_type_g == "mse+fa" or hyperparameters.loss_type_g == "mse_w+fa":
@@ -868,18 +863,9 @@ def generator_step(hyperparameters, batch, generator, optimizer_g,
 
         losses["G_mse_ade_loss"] = loss_ade.item()
         losses["G_mse_fde_loss"] = loss_fde.item()
-        
-    elif hyperparameters.loss_type_g == "mse+L1":
-        loss_smoothL1_ade, loss_smoothL1_fde = calculate_smoothL1_gt_loss_multimodal(pred_traj_gt, pred_traj_fake, loss_f["smoothL1"])
 
-        loss = hyperparameters.loss_smoothL1_weight*loss_smoothL1_ade + \
-               hyperparameters.loss_smoothL1_weight*loss_smoothL1_fde
-            
-        losses["G_smoothL1_ade_loss"] = loss_smoothL1_ade.item()
-        losses["G_smoothL1_fde_loss"] = loss_smoothL1_fde.item()
-        
     elif hyperparameters.loss_type_g == "nll":
-        loss = calculate_nll_loss(pred_traj_gt, pred_traj_fake, loss_f, conf)
+        loss = calculate_nll_loss(pred_traj_gt, pred_traj_fake,loss_f)
         losses["G_nll_loss"] = loss.item()
 
     elif hyperparameters.loss_type_g == "mse+fa" or hyperparameters.loss_type_g == "mse_w+fa":
