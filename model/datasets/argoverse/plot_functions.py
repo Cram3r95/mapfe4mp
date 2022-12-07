@@ -89,9 +89,10 @@ def viz_predictions_all(
         seq_id: int,
         results_path: str,
         input_abs: np.ndarray, # Around 0,0
-        output_abs: np.ndarray, # Around 0,0
-        target_abs: np.ndarray, # Around 0,0
-        target_agent_orientation: float, 
+        output_predictions_abs: np.ndarray, # Around 0,0
+        output_confidences: np.ndarray,
+        output_agent_orientation: float, 
+        gt_abs: np.ndarray, # Around 0,0
         object_class_list: np.ndarray,
         city_name: str,
         map_origin: np.ndarray,
@@ -102,21 +103,12 @@ def viz_predictions_all(
         save: bool = False,
         ade_metric: float = None,
         fde_metric: float = None,
+        plot_agent_yaw: bool = False,
+        plot_output_confidences: bool = False,
         worst_scenes: list = [],
         check_data_aug: bool = False
 ) -> None:
-    """
-    Visualize predicted trjectories.
-    Args:
-        OBS: Track = Sequence
 
-        input_ (numpy array): Input Trajectory with shape (num_tracks x obs_len x 2)
-        output (numpy array): Top-k predicted trajectories, each with shape (num_tracks x pred_len x 2)
-        target (numpy array): Ground Truth Trajectory with shape (num_tracks x pred_len x 2)
-        centerlines (numpy array of list of centerlines): Centerlines (Oracle/Top-k) for each trajectory: 1 x N x length x 2
-        city_names (numpy array): city names for each trajectory
-        show (bool): if True, show
-    """
     
     splits_name = ["train","val","test"]
     split_name = results_path.split('/')[-1]
@@ -127,16 +119,16 @@ def viz_predictions_all(
     color_dict_pred_gt = {"AGENT": "#d33e4c", "OTHER": "#686A6C", "AV": "#157DEC"}
 
     num_agents = input_abs.shape[0]
-    num_modes = output_abs.shape[0]
+    num_modes = output_predictions_abs.shape[0]
     obs_len = input_abs.shape[1]
-    pred_len = target_abs.shape[1]
+    pred_len = gt_abs.shape[1]
 
     # Transform to global coordinates
 
-    input_ = input_abs + map_origin
-    if np.any(output_abs):
-        output = output_abs + map_origin
-    target = target_abs + map_origin
+    input = input_abs + map_origin
+    if np.any(output_predictions_abs):
+        output_predictions = output_predictions_abs + map_origin
+    gt = gt_abs + map_origin
 
     _, num_centerlines, points_per_centerline, data_dim = relevant_centerlines_abs.shape
     rows,cols,_ = np.where(relevant_centerlines_abs[:,:,:,0] == 0.0) # only sum the origin to non-padded centerlines
@@ -168,10 +160,10 @@ def viz_predictions_all(
         # Observation
 
         plt.plot(
-            input_[i, :, 0],
-            input_[i, :, 1],
+            input[i, :, 0],
+            input[i, :, 1],
             color=color_dict_obs[object_type],
-            label="Observed",
+            label="Input",
             alpha=1,
             linewidth=3,
             zorder=15,
@@ -180,34 +172,35 @@ def viz_predictions_all(
         # Last observation
 
         plt.plot(
-            input_[i, -1, 0],
-            input_[i, -1, 1],
+            input[i, -1, 0],
+            input[i, -1, 1],
             "o",
             color=color_dict_obs[object_type],
-            label="Observed",
+            label="Input",
             alpha=1,
             linewidth=3,
             zorder=15,
             markersize=9,
         )
-        ori = str(np.around(target_agent_orientation,2))
-        if object_type == "AGENT":
-            plt.text(
-                input_[i, -1, 0] + 1,
-                input_[i, -1, 1] + 1,
-                f"yaw = {ori}",
-                fontsize=12,
-                zorder=20
-                )
+        if plot_agent_yaw:
+            ori = str(np.around(output_agent_orientation,2))
+            if object_type == "AGENT":
+                plt.text(
+                    input[i, -1, 0] + 1,
+                    input[i, -1, 1] + 1,
+                    f"yaw = {ori}",
+                    fontsize=12,
+                    zorder=20
+                    )
 
         # Groundtruth prediction
 
         if split_name != "test":
             plt.plot(
-                target[i, :, 0],
-                target[i, :, 1],
+                gt[i, :, 0],
+                gt[i, :, 1],
                 color=color_dict_pred_gt[object_type],
-                label="Target",
+                label="GT",
                 alpha=1,
                 linewidth=3,
                 zorder=20,
@@ -216,11 +209,11 @@ def viz_predictions_all(
             # Groundtruth end-point
 
             plt.plot(
-                target[i, -1, 0],
-                target[i, -1, 1],
+                gt[i, -1, 0],
+                gt[i, -1, 1],
                 "D",
                 color=color_dict_pred_gt[object_type],
-                label="Target",
+                label="GT",
                 alpha=1,
                 linewidth=3,
                 zorder=20,
@@ -290,29 +283,47 @@ def viz_predictions_all(
         
         if object_type == "AGENT":
             # Multimodal prediction (only AGENT of interest)
+            
+            sorted_confidences = np.sort(output_confidences)
+            slope = (1 - 1/num_modes) / (num_modes - 1)
+            
             for num_mode in range(num_modes):
+                
+                _, conf_index = np.where(output_confidences[0,num_mode] == sorted_confidences)
+                transparency = round(slope * (conf_index.item()+1),2)
+                
                 # Prediction
                 plt.plot(
-                    output[num_mode, :, 0],
-                    output[num_mode, :, 1],
+                    output_predictions[num_mode, :, 0],
+                    output_predictions[num_mode, :, 1],
                     color="#007672",
-                    label="Predicted",
-                    alpha=1,
+                    label="Output",
+                    alpha=transparency,
                     linewidth=3,
                     zorder=15,
                 )
                 # Prediction endpoint
                 plt.plot(
-                    output[num_mode, -1, 0],
-                    output[num_mode, -1, 1],
+                    output_predictions[num_mode, -1, 0],
+                    output_predictions[num_mode, -1, 1],
                     "*",
                     color="#007672",
-                    label="Predicted",
-                    alpha=1,
+                    label="Output",
+                    alpha=transparency,
                     linewidth=3,
                     zorder=15,
                     markersize=9,
                 )
+                
+                if plot_output_confidences:
+                    # Confidence
+                    plt.text(
+                            output_predictions[num_mode, -1, 0] + 1,
+                            output_predictions[num_mode, -1, 1] + 1,
+                            str(round(output_confidences[0,num_mode],2)),
+                            zorder=21,
+                            fontsize=9
+                            )
 
     seq_lane_props = avm.city_lane_centerlines_dict[city_name]
 

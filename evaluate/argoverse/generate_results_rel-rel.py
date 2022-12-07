@@ -316,9 +316,11 @@ def evaluate(loader, generator, config, split, current_cuda, pred_len, results_p
             obs_traj = obs_traj.cpu()
             pred_traj_gt = pred_traj_gt.cpu()
             pred_traj_fake = pred_traj_fake.cpu()
-            map_origin = map_origin.cpu()
-            relevant_centerlines = relevant_centerlines.cpu()
+            conf = conf.cpu()
+            
             target_agent_orientation = target_agent_orientation.cpu()
+            map_origin = map_origin.cpu()
+            relevant_centerlines = relevant_centerlines.cpu()  
             non_linear_obj = non_linear_obj.cpu()
             object_cls = object_cls.cpu()
             
@@ -385,13 +387,14 @@ def evaluate(loader, generator, config, split, current_cuda, pred_len, results_p
                     relevant_centerlines_abs = []
                 else:
                     relevant_centerlines_abs = relevant_centerlines.cpu().numpy()
-                    
+
                 plot_functions.viz_predictions_all(seq_id,
                                                    results_path,
                                                    obs_traj.permute(1,0,2).numpy(), # All obstacles
                                                    pred_traj_fake.squeeze(0).numpy(), # Only AGENT (MM prediction)
-                                                   pred_traj_gt.permute(1,0,2).numpy(), # All obstacles
+                                                   conf.numpy(), # Only AGENT (MM confidence)
                                                    target_agent_orientation.numpy(),
+                                                   pred_traj_gt.permute(1,0,2).numpy(), # All obstacles                                                  
                                                    curr_object_class_id_list.numpy(),
                                                    city_name,
                                                    curr_map_origin.numpy(),
@@ -401,6 +404,7 @@ def evaluate(loader, generator, config, split, current_cuda, pred_len, results_p
                                                    save=True,
                                                    ade_metric=ade_min,
                                                    fde_metric=fde_min,
+                                                   plot_output_confidences=True,
                                                    worst_scenes=worst_scenes)
 
             pred_traj_fake_global_aux = pred_traj_fake_global.squeeze(0).view(ARGOVERSE_NUM_MODES, PRED_LEN, 2)
@@ -551,14 +555,6 @@ if __name__ == '__main__':
 # Best model at this moment (in terms of validation)
 """
 python evaluate/argoverse/generate_results_rel-rel.py \
---model_path "save/argoverse/mapfe4mp/100.0_percent/test_oracle_check_rel2absmm/argoverse_motion_forecasting_dataset_0_with_model.pt" \
+--model_path "save/argoverse/mapfe4mp/100.0_percent/test_5/argoverse_motion_forecasting_dataset_0_with_model.pt" \
 --device_gpu 0 --split "val"
-"""
-
-####
-
-"""
-python evaluate/argoverse/generate_results_rel-rel.py \
---model_path "save/argoverse/mapfe4mp/100.0_percent/mapfe4mp_7/argoverse_motion_forecasting_dataset_0_with_model.pt" \
---device_gpu 0 --split "test"
 """
