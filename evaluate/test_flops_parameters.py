@@ -56,12 +56,12 @@ m_non_train = TrajectoryGenerator(PHYSICAL_CONTEXT="plausible_centerlines",CURRE
 print("All parameters: ", utils.count_parameters(m_non_train))
 
 # We assume bs = 1
-obs = torch.randn(20,agents,2).to(device)
-rel = torch.randn(20,agents,2).to(device)
-se = torch.tensor([[0,agents]]).to(device)
-idx = torch.tensor([1]).to(device)
-phy_info = torch.tensor([]).to(device)
-relevant_centerlines = torch.randn(3,40,2).to(device)
+# obs = torch.randn(20,agents,2).to(device)
+# rel = torch.randn(20,agents,2).to(device)
+# se = torch.tensor([[0,agents]]).to(device)
+# idx = torch.tensor([1]).to(device)
+# phy_info = torch.tensor([]).to(device)
+# relevant_centerlines = torch.randn(3,40,2).to(device)
 
 # net = m_non_train
 # modules = [module for module in net.modules()]

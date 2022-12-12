@@ -279,9 +279,10 @@ class Centerline_Encoder(nn.Module):
         self.h_dim = h_dim
         self.kernel_size = kernel_size
         self.lane_length = CENTERLINE_LENGTH
-
-        mid_dim = math.ceil((self.lane_length*self.data_dim + self.h_dim)/2)
-        dims = [self.lane_length*self.data_dim, mid_dim, self.h_dim]
+        self.num_centerlines = NUM_CENTERLINES
+        
+        mid_dim = math.ceil((self.num_centerlines*self.lane_length*self.data_dim + self.h_dim)/2)
+        dims = [self.num_centerlines*self.lane_length*self.data_dim, mid_dim, self.h_dim]
         self.mlp_centerlines = make_mlp(dims,
                              activation_function="ReLU",
                              batch_norm=True,
@@ -297,11 +298,13 @@ class Centerline_Encoder(nn.Module):
             _type_: _description_
         """
 
-        num_centerlines = phy_info.shape[0]
-        phy_info_ = phy_info.permute(0,2,1)
-        phy_info_ = phy_info_.contiguous().view(num_centerlines, -1)
-        phy_info_ = self.mlp_centerlines(phy_info_)
+        # num_centerlines = phy_info.shape[0]
+        # phy_info_ = phy_info.permute(0,2,1)
+        # phy_info_ = phy_info_.contiguous().view(num_centerlines, -1)
+        # phy_info_ = self.mlp_centerlines(phy_info_)
 
+        phy_info_ = self.mlp_centerlines(phy_info)
+        
         if torch.any(phy_info_.isnan()):
             pdb.set_trace()
             
@@ -326,8 +329,8 @@ class Multimodal_Decoder(nn.Module):
         if HEAD == "MultiLinear":
             pred = []
             for _ in range(self.num_modes):
-                # pred.append(PredictionNet(self.decoder_h_dim,self.data_dim))
-                pred.append(nn.Linear(self.decoder_h_dim,self.data_dim))
+                pred.append(PredictionNet(self.decoder_h_dim,self.data_dim))
+                # pred.append(nn.Linear(self.decoder_h_dim,self.data_dim))
             self.hidden2pos = nn.ModuleList(pred) 
 
         # self.confidences = nn.Sequential(nn.Linear(PRED_LEN*DATA_DIM,32),
@@ -384,6 +387,40 @@ class Multimodal_Decoder(nn.Module):
 
         return pred_traj_fake_rel, conf
 
+class DecoderResidual(nn.Module):
+    def __init__(self, h_dim, output_dim):
+        super(DecoderResidual, self).__init__()
+
+        self.pred_len = PRED_LEN
+        self.h_dim = h_dim
+        self.output_dim = output_dim
+        
+        output = []
+        for i in range(NUM_MODES):
+            output.append(PredictionNet(self.h_dim, self.pred_len*self.output_dim))
+        self.output = nn.ModuleList(output)
+        
+        self.confidences = PredictionNet(PRED_LEN*DATA_DIM,1,norm=False)
+
+    def forward(self, decoder_in):
+        batch_size = decoder_in.shape[0]
+        pred = []
+
+        for out_subnet in self.output:
+            pred.append(out_subnet(decoder_in))
+
+        decoder_out = torch.stack(pred)
+        decoder_out = decoder_out.permute(1,0,2)
+        
+        pred_traj_fake_rel = decoder_out.view(batch_size,NUM_MODES,PRED_LEN,DATA_DIM)
+
+        conf = self.confidences(pred_traj_fake_rel.contiguous().view(batch_size,NUM_MODES,-1))
+        conf = torch.softmax(conf.view(batch_size,-1), dim=1) # batch_size, num_modes
+        if not torch.allclose(torch.sum(conf, dim=1), conf.new_ones((batch_size,))):
+            pdb.set_trace()
+
+        return pred_traj_fake_rel, conf
+    
 class PredictionNet(nn.Module):
     def __init__(self, h_dim, output_dim, norm=True):
         super(PredictionNet, self).__init__()
@@ -455,13 +492,13 @@ class TrajectoryGenerator(nn.Module):
         ## Physical 
 
         self.centerline_encoder = Centerline_Encoder(h_dim=self.h_dim_physical)
-        self.centerline_gnn = GNN(h_dim=self.h_dim_physical)
-        self.pattn = MultiheadSelfAttention(h_dim=self.h_dim_physical,
-                                            num_heads=self.num_attention_heads)
-        mid_dim = math.ceil((self.num_centerlines*self.h_dim_physical + self.h_dim_physical)/2)
-        mlp_phy_attn_dims = [self.num_centerlines*self.h_dim_physical, mid_dim, self.h_dim_physical]
-        self.mlp_phy_attn = make_mlp(mlp_phy_attn_dims,
-                                     activation_function="Tanh")
+        # self.centerline_gnn = GNN(h_dim=self.h_dim_physical)
+        # self.pattn = MultiheadSelfAttention(h_dim=self.h_dim_physical,
+        #                                     num_heads=self.num_attention_heads)
+        # mid_dim = math.ceil((self.num_centerlines*self.h_dim_physical + self.h_dim_physical)/2)
+        # mlp_phy_attn_dims = [self.num_centerlines*self.h_dim_physical, mid_dim, self.h_dim_physical]
+        # self.mlp_phy_attn = make_mlp(mlp_phy_attn_dims,
+        #                              activation_function="Tanh")
         
         # Decoder
 
@@ -472,11 +509,11 @@ class TrajectoryGenerator(nn.Module):
             self.concat_h_dim = self.h_dim_social + self.h_dim_physical
             
         elif PHYSICAL_CONTEXT == "plausible_centerlines":
-            self.concat_h_dim = 3 * self.h_dim_social + 3 * self.h_dim_physical
-            # self.concat_h_dim = self.h_dim_social + self.h_dim_physical
+            # self.concat_h_dim = 3 * self.h_dim_social + 3 * self.h_dim_physical
+            self.concat_h_dim = self.h_dim_social + self.h_dim_physical
 
         self.decoder = Multimodal_Decoder(decoder_h_dim=self.concat_h_dim)  
-        # self.decoder = DecoderResidual(h_dim=self.concat_h_dim)
+        # self.decoder = DecoderResidual(h_dim=self.concat_h_dim,output_dim=self.data_dim)
 
     def add_noise(self, input, factor=1):
         """_summary_
@@ -560,26 +597,12 @@ class TrajectoryGenerator(nn.Module):
         elif self.physical_context == "plausible_centerlines":
             centerlines_per_sample = self.num_centerlines * np.ones(batch_size,dtype=int)
 
-            relevant_centerlines_concat = relevant_centerlines.contiguous().view(-1,CENTERLINE_LENGTH,self.data_dim)
-            
-            centerlines_centers = relevant_centerlines_concat[:,-1,:]
-            
+            relevant_centerlines_concat = relevant_centerlines.contiguous().view(batch_size,-1)
             encoded_centerlines = self.centerline_encoder(relevant_centerlines_concat)
-            out_centerlines_gnn = self.centerline_gnn(encoded_centerlines, centerlines_centers, centerlines_per_sample)
-            encoded_phy_info = self.pattn(out_centerlines_gnn, centerlines_per_sample)
-            encoded_phy_info = torch.stack(encoded_phy_info,dim=0).view(batch_size,-1)
-            
-            # encoded_phy_info = self.mlp_phy_attn(encoded_phy_info)
-
-            mlp_decoder_context_input = torch.cat([target_agent_encoded_obs_traj.contiguous().view(-1,self.h_dim_social),
-                                                   target_agent_encoded_obs_traj_rel.contiguous().view(-1,self.h_dim_social),
-                                                   encoded_social_info.contiguous().view(-1,self.h_dim_social),
-                                                   encoded_phy_info.contiguous().view(-1,self.num_centerlines*self.h_dim_physical)],
+       
+            mlp_decoder_context_input = torch.cat([encoded_social_info.contiguous(),
+                                                   encoded_centerlines.contiguous()],
                                                    dim=1)
-            
-            # mlp_decoder_context_input = torch.cat([encoded_social_info.contiguous(),
-            #                                        encoded_phy_info.contiguous()],
-            #                                        dim=1)
 
             decoder_h = mlp_decoder_context_input.unsqueeze(0)
             if INIT_ZEROS: decoder_c = torch.zeros(tuple(decoder_h.shape)).cuda(obs_traj.device)
@@ -587,7 +610,8 @@ class TrajectoryGenerator(nn.Module):
 
             state_tuple = (decoder_h, decoder_c)
 
-        pred_traj_fake_rel, conf = self.decoder(last_pos, last_pos_rel, state_tuple)
+        pred_traj_fake_rel, conf = self.decoder(last_pos, last_pos_rel, state_tuple) # LSTM
+        # pred_traj_fake_rel, conf = self.decoder(mlp_decoder_context_input) # Residual
         
         if torch.any(pred_traj_fake_rel.isnan()) or torch.any(conf.isnan()):
             pdb.set_trace()

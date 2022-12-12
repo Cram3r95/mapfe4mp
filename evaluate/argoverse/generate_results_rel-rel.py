@@ -74,12 +74,11 @@ ARGOVERSE_NUM_MODES = 6
 dist_around = 40
 dist_rasterized_map = [-dist_around, dist_around, -dist_around, dist_around]
 
-GENERATE_QUALITATIVE_RESULTS = True
-PLOT_WORST_SCENES = True
+GENERATE_QUALITATIVE_RESULTS = False
+PLOT_WORST_SCENES = False
 LIMIT_QUALITATIVE_RESULTS = 150
 
 COMPUTE_METRICS = True
-SAVE_METRICS = True
 
 def generate_csv(results_path,ade_list,fde_list,num_seq_list,traj_kind_list,sort=False):
     """
@@ -536,12 +535,12 @@ def main(args):
         print("Create results path folder: ", results_path)
         os.makedirs(results_path) # os.makedirs create intermediate directories. os.mkdir only the last one
 
-    if config.dataset.split == "test" and SAVE_METRICS:
+    if config.dataset.split == "test" and config.dataset.split_percentage == 1.0:
         # Generate h5 file for Argoverse Motion-Forecasting competition (only test split)   
 
         generate_forecasting_h5(output_predictions, results_path, probabilities=output_probabilities)
 
-    elif COMPUTE_METRICS and SAVE_METRICS and not PLOT_WORST_SCENES: # val or train
+    elif COMPUTE_METRICS and not PLOT_WORST_SCENES: # val or train
 
         # Write results (ade and fde with the corresponding trajectory type) in CSV
 
@@ -556,5 +555,11 @@ if __name__ == '__main__':
 """
 python evaluate/argoverse/generate_results_rel-rel.py \
 --model_path "save/argoverse/mapfe4mp/100.0_percent/test_5/argoverse_motion_forecasting_dataset_0_with_model.pt" \
+--device_gpu 0 --split "val"
+"""
+
+"""
+python evaluate/argoverse/generate_results_rel-rel.py \
+--model_path "save/argoverse/mapfe4mp/100.0_percent/test_9/argoverse_motion_forecasting_dataset_0_with_model.pt" \
 --device_gpu 0 --split "val"
 """

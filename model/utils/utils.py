@@ -53,16 +53,14 @@ def count_parameters(model):
     modules = [module for module in model.modules()]
     params = [param.shape for param in model.parameters()]
     
-    for name, param in model.named_parameters():
-        if param.requires_grad:
-            # print (name, param.data)
-            print (name, param.shape)
-        
-    pdb.set_trace()
+    # for name, param in model.named_parameters():
+    #     if param.requires_grad:
+    #         # print (name, param.data)
+    #         # print (name, param.shape)
     
     for param in model.parameters():
         if param.requires_grad:
             
             trainable_params = trainable_params + param.numel()
-            print("params: ", trainable_params)
+            # print("params: ", trainable_params)
     return trainable_params

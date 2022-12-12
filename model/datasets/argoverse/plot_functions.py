@@ -154,6 +154,8 @@ def viz_predictions_all(
     # else:
     #     plt.axis("off")
 
+    # Social information
+    
     for i in range(num_agents): # Sequences (.csv)
         object_type = translate_object_type(int(object_class_list[i]))
 
@@ -220,68 +222,9 @@ def viz_predictions_all(
                 markersize=9,
             )
 
-        # Centerlines (Optional)
-    
-        count_rep_centerlines = np.zeros((num_centerlines))
-        rep_centerlines = []
+        # Model predictions
 
-        # TODO: Prepare this code to deal with batch size != 1
-        if len(relevant_centerlines) > 0:
-            for id_centerline in range(num_centerlines):
-                centerline = relevant_centerlines[0,id_centerline,:,:] # TODO: We assume batch_size = 1 here
-
-                if not np.any(centerline): # Avoid plotting padded centerlines
-                    continue
-                
-                # Check repeated centerlines
-
-                flag_repeated = False
-                for index_centerline, aux_centerline in enumerate(rep_centerlines):
-                    if np.allclose(centerline,aux_centerline):
-                        flag_repeated = True
-                        count_rep_centerlines[index_centerline] += 1
-                if not flag_repeated:
-                    count_rep_centerlines[id_centerline] += 1
-                    rep_centerlines.append(centerline)
-
-                # Centerline
-
-                plt.plot(
-                    centerline[:, 0],
-                    centerline[:, 1],
-                    "--",
-                    color="black",
-                    alpha=1,
-                    linewidth=1,
-                    zorder=16,
-                )
-
-                # Goal point (end point of plausible centerline)
-
-                plt.plot(
-                    centerline[-1, 0],
-                    centerline[-1, 1],
-                    "*",
-                    color="black",
-                    alpha=1,
-                    linewidth=1,
-                    zorder=16,
-                )
-
-            # Plot the number of repetitions for each centerline
-
-            for index_repeated in range(len(count_rep_centerlines)):
-                if count_rep_centerlines[index_repeated] > 0:
-                    centerline = relevant_centerlines[0,index_repeated,:,:] # TODO: We assume batch_size = 1 here
-
-                    plt.text(
-                            centerline[-1, 0] + 1,
-                            centerline[-1, 1] + 1,
-                            str(int(count_rep_centerlines[index_repeated])),
-                            fontsize=12
-                            )
-        
-        if object_type == "AGENT":
+        if object_type == "AGENT" and num_modes > 0:
             # Multimodal prediction (only AGENT of interest)
             
             sorted_confidences = np.sort(output_confidences)
@@ -325,6 +268,67 @@ def viz_predictions_all(
                             fontsize=9
                             )
 
+    # Relevant centerlines
+    
+    count_rep_centerlines = np.zeros((num_centerlines))
+    rep_centerlines = []
+
+    # TODO: Prepare this code to deal with batch size != 1
+    if len(relevant_centerlines) > 0:
+        for id_centerline in range(num_centerlines):
+            centerline = relevant_centerlines[0,id_centerline,:,:] # TODO: We assume batch_size = 1 here
+
+            if not np.any(centerline): # Avoid plotting padded centerlines
+                continue
+            
+            # Check repeated centerlines
+
+            flag_repeated = False
+            for index_centerline, aux_centerline in enumerate(rep_centerlines):
+                if np.allclose(centerline,aux_centerline):
+                    flag_repeated = True
+                    count_rep_centerlines[index_centerline] += 1
+            if not flag_repeated:
+                count_rep_centerlines[id_centerline] += 1
+                rep_centerlines.append(centerline)
+
+            # Centerline
+
+            plt.plot(
+                centerline[:, 0],
+                centerline[:, 1],
+                "--",
+                color="black",
+                alpha=1,
+                linewidth=1,
+                zorder=16,
+            )
+
+            # Goal point (end point of plausible centerline)
+
+            plt.plot(
+                centerline[-1, 0],
+                centerline[-1, 1],
+                "*",
+                color="black",
+                alpha=1,
+                linewidth=1,
+                zorder=16,
+            )
+
+        # Plot the number of repetitions for each centerline
+
+        for index_repeated in range(len(count_rep_centerlines)):
+            if count_rep_centerlines[index_repeated] > 0:
+                centerline = relevant_centerlines[0,index_repeated,:,:] # TODO: We assume batch_size = 1 here
+
+                plt.text(
+                        centerline[-1, 0] + 1,
+                        centerline[-1, 1] + 1,
+                        str(int(count_rep_centerlines[index_repeated])),
+                        fontsize=12
+                        )
+                    
     seq_lane_props = avm.city_lane_centerlines_dict[city_name]
 
     ### Get lane centerlines which lie within the range of trajectories

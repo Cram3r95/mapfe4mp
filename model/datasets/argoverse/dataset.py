@@ -149,7 +149,20 @@ def seq_collate(data):
         _, max_centerlines, points_per_centerline, data_dim = relevant_centerlines.shape
         rows,cols,_ = torch.where(relevant_centerlines[:,:,:,0] == 0.0) # identify padded centerlines
  
-        phy_info = relevant_centerlines - map_origin.unsqueeze(1).unsqueeze(1)
+        if APPLY_DATA_AUGMENTATION and CURRENT_SPLIT == "train":
+            relevant_centerlines = relevant_centerlines.view(-1,points_per_centerline,data_dim)
+            relevant_centerlines = relevant_centerlines.permute(1,0,2)
+            num_total_centerlines = relevant_centerlines.shape[1]
+            apply_gaussian_noise = torch.tensor(np.ones(num_total_centerlines))
+            relevant_centerlines = data_augmentation_functions.add_gaussian_noise(relevant_centerlines,
+                                                                                  apply_gaussian_noise,
+                                                                                  num_total_centerlines,
+                                                                                  num_obs=points_per_centerline,
+                                                                                  mu=mu_noise,sigma=std_noise)
+            relevant_centerlines = relevant_centerlines.permute(1,0,2)
+            relevant_centerlines = relevant_centerlines.view(batch_size,max_centerlines,points_per_centerline, data_dim)
+
+        phy_info = relevant_centerlines - map_origin.unsqueeze(1).unsqueeze(1)   
         phy_info[rows,cols,:,:] = torch.zeros((points_per_centerline,data_dim))
         
     elif PHYSICAL_CONTEXT == "oracle":
@@ -201,6 +214,8 @@ def seq_collate(data):
     
         cloned_obs_traj = torch.clone(obs_traj)
         cloned_pred_traj_gt = torch.clone(pred_traj_gt)
+        cloned_phy_info = torch.clone(phy_info)
+        cloned_map_origin = torch.clone(map_origin)
         
         end_clone_tensors = time.time()
         if DEBUG_TIME: print(f"Time consumed by cloning functions: {end_clone_tensors-start_clone_tensors}")
@@ -211,9 +226,9 @@ def seq_collate(data):
             # Get auxiliar variables
 
             curr_split_hm = split_hm[seq_index]
-            curr_num_obstacles = (end-start).item() # int
+            curr_num_obstacles = (end-start).item()
             curr_object_class_id_list = object_class_id_list[seq_index]
-            curr_map_origin = map_origin[seq_index]
+            curr_map_origin = cloned_map_origin[seq_index]
             seq_id = num_seq_list[seq_index].item()
             curr_city = city_id[seq_index]
             if curr_city == 0:
@@ -224,9 +239,9 @@ def seq_collate(data):
             # Get current centerlines
 
             if PHYSICAL_CONTEXT == "plausible_centerlines": # N centerlines
-                curr_relevant_centerlines = phy_info[seq_index,:,:,:].unsqueeze(0) # 1 (sequence) x N centerlines x centerline_length x 2
+                curr_relevant_centerlines = cloned_phy_info[seq_index,:,:,:].unsqueeze(0) # 1 (sequence) x N centerlines x centerline_length x 2
             elif PHYSICAL_CONTEXT == "oracle": # Only the most plausible
-                curr_relevant_centerlines = phy_info[seq_index,:,:].unsqueeze(0) # 1 (sequence) x 1 centerline x centerline_length x 2
+                curr_relevant_centerlines = cloned_phy_info[seq_index,:,:].unsqueeze(0) # 1 (sequence) x 1 centerline x centerline_length x 2
             else:
                 curr_relevant_centerlines = torch.tensor([])
                 
@@ -245,11 +260,12 @@ def seq_collate(data):
             R = torch.tensor([[c,-s],  # Rot around the map z-axis
                               [s, c]])
             ss = time.time()
+
             rotated_aug_curr_obs_traj = data_augmentation_functions.rotate_traj(aug_curr_obs_traj,R)
             rotated_curr_pred_traj_gt = data_augmentation_functions.rotate_traj(curr_pred_traj_gt,R)
-
             rotated_curr_map_origin = data_augmentation_functions.rotate_traj(curr_map_origin,R)
             rotated_curr_relevant_centerlines = data_augmentation_functions.rotate_traj(curr_relevant_centerlines,R)
+
             rr = time.time()
             if DEBUG_TIME: print(f"Time consumed by data rotation functions: {rr-ss}")
             # Overwrite tensors with rotated trajectories
@@ -270,14 +286,18 @@ def seq_collate(data):
             pred_traj_gt_rel[:,start:end,:] = aug_curr_pred_traj_gt_rel
             map_origin[seq_index] = rotated_curr_map_origin
             phy_info[seq_index,:,:,:] = rotated_curr_relevant_centerlines
-            
+
             if DEBUG_DATA_AUGMENTATION:
                 if "train" in curr_split_hm:
                     results_path = f"data/datasets/argoverse/motion-forecasting/train"
                 elif "val" in curr_split_hm:
                     results_path = f"data/datasets/argoverse/motion-forecasting/val"
-                    
+                
+                print("seq id: ", seq_id)
+                print("results path: ", results_path)
+                
                 curr_pred_traj_fake = np.zeros((0,0,0))
+                curr_confidences = np.zeros((0,0))
                 
                 # Original observations (No data augmentation)
 
@@ -285,8 +305,9 @@ def seq_collate(data):
                                                    results_path,
                                                    curr_obs_traj.permute(1,0,2).cpu().numpy(), # All obstacles
                                                    curr_pred_traj_fake, # Only AGENT (MM prediction)
-                                                   curr_pred_traj_gt.permute(1,0,2).cpu().numpy(), # All obstacles
+                                                   curr_confidences,
                                                    curr_target_agent_orientation.cpu().numpy(),
+                                                   curr_pred_traj_gt.permute(1,0,2).cpu().numpy(), # All obstacles                                                  
                                                    curr_object_class_id_list.cpu().numpy(),
                                                    curr_city,
                                                    curr_map_origin.cpu().numpy(),
@@ -301,8 +322,9 @@ def seq_collate(data):
                                                    results_path,
                                                    rotated_aug_curr_obs_traj.permute(1,0,2).cpu().numpy(), # All obstacles
                                                    curr_pred_traj_fake, # Only AGENT (MM prediction)
-                                                   rotated_curr_pred_traj_gt.permute(1,0,2).cpu().numpy(), # All obstacles
+                                                   curr_confidences,
                                                    np.array(math.pi/2), # Target agent orientation after rotation
+                                                   rotated_curr_pred_traj_gt.permute(1,0,2).cpu().numpy(), # All obstacles                                                   
                                                    curr_object_class_id_list.cpu().numpy(),
                                                    curr_city,
                                                    rotated_curr_map_origin.cpu().numpy(),
