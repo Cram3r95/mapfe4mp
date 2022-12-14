@@ -16,6 +16,7 @@ import os
 # DL & Math imports
 
 import torch
+import torch.nn as nn
 import random
 import numpy as np
 import cv2
@@ -24,6 +25,8 @@ import torch.nn.functional as F
 from torch import Tensor
 
 #######################################
+
+smooth_l1_loss = nn.SmoothL1Loss(reduction="none")
 
 # Adversarial losses
 
@@ -118,6 +121,60 @@ def smoothL1(gt, pred):
         print(e)
         pdb.set_trace()
     return smoothL1_
+
+def l1_ewta_loss(prediction, target, k=6):
+    """_summary_
+
+    Args:
+        prediction (_type_): _description_
+        target (_type_): _description_
+        k (int, optional): _description_. Defaults to 6.
+
+    Returns:
+        _type_: _description_
+    """
+    num_mixtures = prediction.shape[1]
+
+    target = target.unsqueeze(1).expand(-1, num_mixtures, -1, -1)
+    l1_loss = nn.functional.l1_loss(prediction, target, reduction='none').sum(dim=[2, 3])
+
+    # Get loss from top-k mixtures for each timestep
+    mixture_loss_sorted, mixture_ranks = torch.sort(l1_loss, descending=False)
+    mixture_loss_topk = mixture_loss_sorted.narrow(1, 0, k)
+
+    # Aggregate loss across timesteps and batch
+    loss = mixture_loss_topk.sum()
+    loss = loss / target.size(0)
+    loss = loss / target.size(2)
+    loss = loss / k
+    return loss
+
+def l1_wta_loss(prediction, target, conf):
+    """_summary_
+
+    Args:
+        prediction (_type_): _description_
+        target (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
+ 
+    num_modes = prediction.shape[1]
+
+    target_ = target.unsqueeze(1)
+    target_ = torch.repeat_interleave(target_, num_modes, dim=1)
+    
+    loss_single = smooth_l1_loss(prediction, target_) # bs x num_modes x pred_len x data_dim
+    loss_single_ = torch.sum(torch.sum(loss_single, dim=3), dim=2) 
+
+    min_loss_index = torch.argmin(loss_single_, dim=1)
+
+    min_loss_combined = [x[min_loss_index[i]] for i, x in enumerate(loss_single_)]
+
+    loss_out = torch.sum(torch.stack(min_loss_combined))
+
+    return loss_out
 
 def pytorch_neg_multi_log_likelihood_batch(
     gt: Tensor,

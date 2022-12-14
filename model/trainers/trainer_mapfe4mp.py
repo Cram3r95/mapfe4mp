@@ -32,7 +32,7 @@ from torch.utils.tensorboard import SummaryWriter
 from model.datasets.argoverse.dataset import ArgoverseMotionForecastingDataset, seq_collate
 from model.models.mapfe4mp import TrajectoryGenerator
 from model.modules.losses import l2_loss_multimodal, mse, pytorch_neg_multi_log_likelihood_batch, \
-                                 evaluate_feasible_area_prediction, smoothL1
+                                 evaluate_feasible_area_prediction, smoothL1, l1_ewta_loss, l1_wta_loss
 from model.modules.evaluation_metrics import displacement_error, final_displacement_error
 from model.datasets.argoverse.dataset_utils import relative_to_abs_multimodal
 from model.datasets.argoverse.map_functions import MapFeaturesUtils
@@ -230,14 +230,27 @@ def calculate_nll_loss(gt, pred, loss_f, confidences):
     NLL = Negative Log-Likelihood
     Compute NLL w.r.t. the groundtruth
     """
-    time, bs, _ = gt.shape
+    pred_len, bs, _ = gt.shape
     gt = gt.permute(1,0,2)
-    avails = torch.ones(bs,time).cuda(current_cuda)
+    avails = torch.ones(bs,pred_len).cuda(current_cuda)
     loss = loss_f(
         gt, 
         pred,
         confidences,
         avails
+    )
+    return loss
+
+def calculate_wta_loss(gt, pred, loss_f):
+    """
+    gt: pred_len x bs x 2
+    pred: bs x num_modes x pred_len x 2
+    """
+    time, bs, _ = gt.shape
+    gt = gt.permute(1,0,2)
+
+    loss = loss_f(
+        pred, gt
     )
     return loss
 
@@ -439,6 +452,10 @@ def model_trainer(config, logger):
             "mse": mse,
             "smoothL1": smoothL1
         }
+    elif hyperparameters.loss_type_g == "ewta":
+        loss_f = l1_ewta_loss
+    elif hyperparameters.loss_type_g == "wta":
+        loss_f = l1_wta_loss
     elif hyperparameters.loss_type_g == "nll":
         loss_f = pytorch_neg_multi_log_likelihood_batch
     elif hyperparameters.loss_type_g == "mse+fa" or hyperparameters.loss_type_g == "mse_w+fa":
@@ -882,6 +899,14 @@ def generator_step(hyperparameters, batch, generator, optimizer_g,
         loss = calculate_nll_loss(pred_traj_gt, pred_traj_fake, loss_f, conf)
         losses["G_nll_loss"] = loss.item()
 
+    elif hyperparameters.loss_type_g == "ewta":
+        loss = calculate_wta_loss(pred_traj_gt, pred_traj_fake, loss_f)
+        losses["G_ewta_loss"] = loss.item()
+
+    elif hyperparameters.loss_type_g == "wta":
+        loss = calculate_wta_loss(pred_traj_gt, pred_traj_fake, loss_f)
+        losses["G_wta_loss"] = loss.item()
+        
     elif hyperparameters.loss_type_g == "mse+fa" or hyperparameters.loss_type_g == "mse_w+fa":
         loss_ade, loss_fde = calculate_mse_gt_loss_multimodal(pred_traj_gt, pred_traj_fake, loss_f["mse"])
         loss_fa = evaluate_feasible_area_prediction(pred_traj_fake, pred_traj_gt, map_origin, num_seq, 

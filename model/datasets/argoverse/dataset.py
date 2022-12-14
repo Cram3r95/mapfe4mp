@@ -171,7 +171,7 @@ def seq_collate(data):
         oracle_centerlines = torch.stack(oracle_centerlines, dim=0)
         phy_info = oracle_centerlines - map_origin
 
-    elif PHYSICAL_CONTEXT == "dummy": # dummy phy_info
+    elif PHYSICAL_CONTEXT == "social": # dummy phy_info
         phy_info = np.random.randn(1,1,1,1)
         phy_info = torch.from_numpy(phy_info).type(torch.float)
 
@@ -242,7 +242,7 @@ def seq_collate(data):
                 curr_relevant_centerlines = cloned_phy_info[seq_index,:,:,:].unsqueeze(0) # 1 (sequence) x N centerlines x centerline_length x 2
             elif PHYSICAL_CONTEXT == "oracle": # Only the most plausible
                 curr_relevant_centerlines = cloned_phy_info[seq_index,:,:].unsqueeze(0) # 1 (sequence) x 1 centerline x centerline_length x 2
-            else:
+            elif PHYSICAL_CONTEXT == "social":
                 curr_relevant_centerlines = torch.tensor([])
                 
             # Original trajectories (observations and predictions) for this sequence
@@ -285,7 +285,8 @@ def seq_collate(data):
             pred_traj_gt[:,start:end,:] = rotated_curr_pred_traj_gt
             pred_traj_gt_rel[:,start:end,:] = aug_curr_pred_traj_gt_rel
             map_origin[seq_index] = rotated_curr_map_origin
-            phy_info[seq_index,:,:,:] = rotated_curr_relevant_centerlines
+            if PHYSICAL_CONTEXT != "social":
+                phy_info[seq_index,:,:,:] = rotated_curr_relevant_centerlines
 
             if DEBUG_DATA_AUGMENTATION:
                 if "train" in curr_split_hm:

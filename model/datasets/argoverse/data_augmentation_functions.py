@@ -153,6 +153,7 @@ def rotate_traj(traj,R):
     angle: torch.tensor in radians
     """
 
-    traj = np.matmul(traj,R).float() # (N x 2) x (2 x 2)
-   
-    return traj
+    if traj.size()[0] > 0:
+        return np.matmul(traj,R).float()
+    else: # Empty tensor
+        return traj

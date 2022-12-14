@@ -129,11 +129,13 @@ def viz_predictions_all(
     if np.any(output_predictions_abs):
         output_predictions = output_predictions_abs + map_origin
     gt = gt_abs + map_origin
-
-    _, num_centerlines, points_per_centerline, data_dim = relevant_centerlines_abs.shape
-    rows,cols,_ = np.where(relevant_centerlines_abs[:,:,:,0] == 0.0) # only sum the origin to non-padded centerlines
-    relevant_centerlines = relevant_centerlines_abs + map_origin
-    relevant_centerlines[rows,cols,:,:] = np.zeros((points_per_centerline,data_dim))
+    
+    num_centerlines = 0
+    if relevant_centerlines_abs:
+        _, num_centerlines, points_per_centerline, data_dim = relevant_centerlines_abs.shape
+        rows,cols,_ = np.where(relevant_centerlines_abs[:,:,:,0] == 0.0) # only sum the origin to non-padded centerlines
+        relevant_centerlines = relevant_centerlines_abs + map_origin
+        relevant_centerlines[rows,cols,:,:] = np.zeros((points_per_centerline,data_dim))
 
     fig = plt.figure(0, figsize=(8,8))
 
@@ -274,7 +276,7 @@ def viz_predictions_all(
     rep_centerlines = []
 
     # TODO: Prepare this code to deal with batch size != 1
-    if len(relevant_centerlines) > 0:
+    if num_centerlines > 0:
         for id_centerline in range(num_centerlines):
             centerline = relevant_centerlines[0,id_centerline,:,:] # TODO: We assume batch_size = 1 here
 

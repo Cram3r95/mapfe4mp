@@ -45,16 +45,19 @@ device = torch.device(current_cuda if torch.cuda.is_available() else "cpu")
 # Get model parameters and FLOPs (Floating Point Operation per second)
 
 print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
-agents = 20
 
-# SoPhie MM
+m_non_train = TrajectoryGenerator(PHYSICAL_CONTEXT="social",CURRENT_DEVICE="cuda:0")
+
+# print("Only trainable parameters: ", utils.count_parameters(m_train))
+print("Mapfe4mp social. All parameters: ", utils.count_parameters(m_non_train))
 
 # m_train = TrajectoryGenerator(PHYSICAL_CONTEXT="plausible_centerlines",CURRENT_DEVICE="cuda:0").train()
 m_non_train = TrajectoryGenerator(PHYSICAL_CONTEXT="plausible_centerlines",CURRENT_DEVICE="cuda:0")
 
 # print("Only trainable parameters: ", utils.count_parameters(m_train))
-print("All parameters: ", utils.count_parameters(m_non_train))
+print("Mapfe4mp plausible_centerlines. All parameters: ", utils.count_parameters(m_non_train))
 
+# agents = 20
 # We assume bs = 1
 # obs = torch.randn(20,agents,2).to(device)
 # rel = torch.randn(20,agents,2).to(device)

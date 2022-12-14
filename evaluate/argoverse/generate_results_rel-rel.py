@@ -74,7 +74,7 @@ ARGOVERSE_NUM_MODES = 6
 dist_around = 40
 dist_rasterized_map = [-dist_around, dist_around, -dist_around, dist_around]
 
-GENERATE_QUALITATIVE_RESULTS = False
+GENERATE_QUALITATIVE_RESULTS = True
 PLOT_WORST_SCENES = False
 LIMIT_QUALITATIVE_RESULTS = 150
 
@@ -333,6 +333,9 @@ def evaluate(loader, generator, config, split, current_cuda, pred_len, results_p
                 pred_traj_gt = data_augmentation_functions.rotate_traj(pred_traj_gt,R)
                 pred_traj_fake = data_augmentation_functions.rotate_traj(pred_traj_fake,R)
                 map_origin = data_augmentation_functions.rotate_traj(map_origin,R)
+                
+                if config.hyperparameters.physical_context == "social":
+                    relevant_centerlines = torch.tensor([])
                 relevant_centerlines = data_augmentation_functions.rotate_traj(relevant_centerlines,R)
 
                 pred_traj_fake_global = pred_traj_fake + map_origin
@@ -554,12 +557,12 @@ if __name__ == '__main__':
 # Best model at this moment (in terms of validation)
 """
 python evaluate/argoverse/generate_results_rel-rel.py \
---model_path "save/argoverse/mapfe4mp/100.0_percent/test_5/argoverse_motion_forecasting_dataset_0_with_model.pt" \
+--model_path "save/argoverse/mapfe4mp/100.0_percent/test_9/argoverse_motion_forecasting_dataset_0_with_model.pt" \
 --device_gpu 0 --split "val"
 """
 
 """
 python evaluate/argoverse/generate_results_rel-rel.py \
---model_path "save/argoverse/mapfe4mp/100.0_percent/test_9/argoverse_motion_forecasting_dataset_0_with_model.pt" \
+--model_path "save/argoverse/mapfe4mp/100.0_percent/test_23/argoverse_motion_forecasting_dataset_0_with_model.pt" \
 --device_gpu 0 --split "val"
 """
