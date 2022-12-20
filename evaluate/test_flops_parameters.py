@@ -46,16 +46,14 @@ device = torch.device(current_cuda if torch.cuda.is_available() else "cpu")
 
 print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
 
-m_non_train = TrajectoryGenerator(PHYSICAL_CONTEXT="social",CURRENT_DEVICE="cuda:0")
+whole_model = TrajectoryGenerator(PHYSICAL_CONTEXT="social",CURRENT_DEVICE="cuda:0")
+print("Mapfe4mp social. All parameters: ", utils.count_parameters(whole_model))
 
-# print("Only trainable parameters: ", utils.count_parameters(m_train))
-print("Mapfe4mp social. All parameters: ", utils.count_parameters(m_non_train))
+whole_model = TrajectoryGenerator(PHYSICAL_CONTEXT="oracle",CURRENT_DEVICE="cuda:0")
+print("Mapfe4mp oracle. All parameters: ", utils.count_parameters(whole_model))
 
-# m_train = TrajectoryGenerator(PHYSICAL_CONTEXT="plausible_centerlines",CURRENT_DEVICE="cuda:0").train()
-m_non_train = TrajectoryGenerator(PHYSICAL_CONTEXT="plausible_centerlines",CURRENT_DEVICE="cuda:0")
-
-# print("Only trainable parameters: ", utils.count_parameters(m_train))
-print("Mapfe4mp plausible_centerlines. All parameters: ", utils.count_parameters(m_non_train))
+whole_model = TrajectoryGenerator(PHYSICAL_CONTEXT="plausible_centerlines",CURRENT_DEVICE="cuda:0")
+print("Mapfe4mp plausible_centerlines. All parameters: ", utils.count_parameters(whole_model))
 
 # agents = 20
 # We assume bs = 1

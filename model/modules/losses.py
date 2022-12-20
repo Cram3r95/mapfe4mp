@@ -26,7 +26,7 @@ from torch import Tensor
 
 #######################################
 
-smooth_l1_loss = nn.SmoothL1Loss(reduction="none")
+smooth_l1_loss = nn.SmoothL1Loss(reduction="none") # mean, sum, none
 
 # Adversarial losses
 
@@ -149,7 +149,7 @@ def l1_ewta_loss(prediction, target, k=6):
     loss = loss / k
     return loss
 
-def l1_wta_loss(prediction, target, conf):
+def l1_wta_loss(prediction, target, conf=None):
     """_summary_
 
     Args:
@@ -165,16 +165,36 @@ def l1_wta_loss(prediction, target, conf):
     target_ = target.unsqueeze(1)
     target_ = torch.repeat_interleave(target_, num_modes, dim=1)
     
+    ## Reduction = Mean
+    
+    # loss_single = smooth_l1_loss(prediction, target_)
+    # loss_out = loss_single
+    
+    # Reduction = None
+    
+    
+    # bs x pred_len x num_modes x 2
+    
+    
     loss_single = smooth_l1_loss(prediction, target_) # bs x num_modes x pred_len x data_dim
-    loss_single_ = torch.sum(torch.sum(loss_single, dim=3), dim=2) 
-
-    min_loss_index = torch.argmin(loss_single_, dim=1)
-
-    min_loss_combined = [x[min_loss_index[i]] for i, x in enumerate(loss_single_)]
-
-    loss_out = torch.sum(torch.stack(min_loss_combined))
+    loss_single = torch.sum(torch.sum(loss_single, dim=3), dim=2) 
+    # pdb.set_trace()
+    if torch.is_tensor(conf):
+        loss_single = torch.mul(loss_single,conf) # Element-wise multiplication
+        loss_single = torch.sum(loss_single,axis=1) # Sum along num_modes
+        loss_out = torch.mean(loss_single)
+    else:
+        min_loss_index = torch.argmin(loss_single, dim=1)
+        min_loss_combined = [x[min_loss_index[i]] for i, x in enumerate(loss_single)]
+        loss_out = torch.sum(torch.stack(min_loss_combined))
 
     return loss_out
+
+def hinge_loss(conf):
+    """_summary_
+    """
+    
+    return loss
 
 def pytorch_neg_multi_log_likelihood_batch(
     gt: Tensor,

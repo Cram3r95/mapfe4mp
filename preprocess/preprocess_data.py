@@ -64,9 +64,9 @@ config.dataset.start_from_percentage = 0.0
 
 # Preprocess data
                          # Split, Process, Split percentage
-splits_to_process = dict({"train":[True,0.01], # 0.01 (1 %), 0.1 (10 %), 1.0 (100 %)
+splits_to_process = dict({"train":[False,1.0], # 0.01 (1 %), 0.1 (10 %), 1.0 (100 %)
                           "val":  [False,1.0],
-                          "test": [False,1.0]})
+                          "test": [True,1.0]})
 modes_centerlines = ["test"] # "train","test" 
 # if train -> compute the best candidate (oracle), only using the "competition" algorithm
 # if test, return N plausible candidates. Choose between "competition", "map_api" and "get_around" algorithms
@@ -81,9 +81,9 @@ freq = 10 # Hz ("steps/s")
 obs_origin = 20 
 max_centerlines = 3
 min_dist_around = 25
-first_centerline_waypoint = "first_obs" # first_obs, last_obs
+first_centerline_waypoint = "last_obs" # first_obs, last_obs
 data_dim = 2 # x,y
-max_points = 40 # 30 if start from last_obs, 40 if start from first obs
+max_points = 30 # 30 if start from last_obs, 40 if start from first obs
 min_points = 4 # to perform a cubic interpolation you need at least 3 points
 algorithm = "map_api" # competition, map_api, get_around
                       # TODO: At this moment, only the "map_api" algorithm is prepared
@@ -178,7 +178,6 @@ for split_name,features in splits_to_process.items():
             target_agent_orientation_list = []
 
             output_dir = os.path.join(BASE_DIR,f"data/datasets/argoverse/motion-forecasting/{split_name}/map_features")
-            # output_dir = os.path.join(BASE_DIR,f"data/datasets/argoverse/motion-forecasting/{split_name}/map_features_gray")
 
             if not os.path.exists(output_dir):
                 print("Create trajs folder: ", output_dir)
@@ -710,11 +709,11 @@ for split_name,features in splits_to_process.items():
                     oracle_centerlines_array = np.array(oracle_centerlines_list)
                     with open(filename, 'wb') as my_file: np.save(my_file, oracle_centerlines_array)
 
-            filename = os.path.join(BASE_DIR,config.dataset.path,split_name,
-                                f"data_processed_{str(int(features[1]*100))}_percent",
-                                f"target_agent_orientation.npy")
-            target_agent_orientation_array = np.array(target_agent_orientation_list)
-            with open(filename, 'wb') as my_file: np.save(my_file, target_agent_orientation_array)
+            # filename = os.path.join(BASE_DIR,config.dataset.path,split_name,
+            #                     f"data_processed_{str(int(features[1]*100))}_percent",
+            #                     f"target_agent_orientation.npy")
+            # target_agent_orientation_array = np.array(target_agent_orientation_list)
+            # with open(filename, 'wb') as my_file: np.save(my_file, target_agent_orientation_array)
 
             
             

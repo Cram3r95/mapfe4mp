@@ -225,6 +225,167 @@ def calculate_mse_centerlines_loss_interpolating(relevant_centerlines, pred, los
 
     return loss_ade/num_modes, loss_fde/num_modes
 
+def dtwtorch(exp_data, num_data):
+    r"""
+    Compute the Dynamic Time Warping distance.
+    
+    exp_data : torch tensor N x P
+    num_data : torch tensor M x P
+    """
+    c = torch.cdist(exp_data, num_data, p=2)
+    d = torch.empty_like(c)
+    d[0, 0] = c[0, 0]
+    n, m = c.shape
+    for i in range(1, n):
+        d[i, 0] = d[i-1, 0] + c[i, 0]
+    for j in range(1, m):
+        d[0, j] = d[0, j-1] + c[0, j]
+    for i in range(1, n):
+        for j in range(1, m):
+            d[i, j] = c[i, j] + min((d[i-1, j], d[i, j-1], d[i-1, j-1]))
+    return d[-1, -1]
+
+def dftorch(exp_data, num_data):
+    r"""
+    Compute the discrete frechet distance.
+    
+    exp_data : torch tensor N x P
+    num_data : torch tensor M x P
+    """
+    n = len(exp_data)
+    m = len(num_data)
+    ca = torch.ones((n, m), dtype=exp_data.dtype, device=exp_data.device)
+    ca = torch.multiply(ca, -1)
+    ca[0, 0] = torch.linalg.vector_norm(exp_data[0] - num_data[0])
+    for i in range(1, n):
+        ca[i, 0] = max(ca[i-1, 0], torch.linalg.vector_norm(exp_data[i] - num_data[0]))
+    for j in range(1, m):
+        ca[0, j] = max(ca[0, j-1], torch.linalg.vector_norm(exp_data[0] - num_data[j]))
+    for i in range(1, n):
+        for j in range(1, m):
+            ca[i, j] = max(min(ca[i-1, j], ca[i, j-1], ca[i-1, j-1]),
+                           torch.linalg.vector_norm(exp_data[i] - num_data[j]))
+    return ca[n-1, m-1]
+
+def calculate_hinge_wta_gt_centerlines_loss(gt, pred, relevant_centerlines, conf):
+    """_summary_
+
+    Args:
+        pred (_type_): _description_
+        relevant_centerlines (_type_): _description_
+        conf (_type_): _description_
+
+    Returns:
+        _type_: _description_
+    """
+
+    DEBUG = False
+    
+    batch_size, num_modes, pred_len, data_dim = pred.shape
+    centerline_length = relevant_centerlines.shape[2]
+    
+    # Compute WTA with groundtruth loss
+
+    start = time.time()
+    gt = gt.unsqueeze(0).permute(2,0,1,3)
+    gt = torch.repeat_interleave(gt, num_modes, dim=1)
+    
+    l1_loss_gt = nn.functional.l1_loss(pred, gt, reduction='none').sum(dim=[2, 3])
+    
+    ## Get closest predictions to the GT
+    
+    min_loss_index = torch.argmin(l1_loss_gt,dim=1)
+    min_loss_combined = [x[min_loss_index[i]] for i, x in enumerate(l1_loss_gt)]
+    loss_wta_gt = torch.mean(torch.stack(min_loss_combined))
+    end = time.time()
+    if DEBUG: print("Time consumed by WTA GT loss: ", end-start)
+    
+    # Compute Hinge (max-margin) loss
+
+    start = time.time()
+    margin = 0.0001 # To help when two scores are similar (A - B, if A==B, would be 0, but with this margin, it is slightly higher)
+    max_scores = conf[torch.arange(conf.shape[0]),min_loss_index] # Take the confidence of the prediction closest to the GT
+    max_scores = torch.repeat_interleave(max_scores.unsqueeze(1),num_modes,dim=1)
+    hinge_conf = torch.add(conf, -max_scores) # Substract the max score!
+    hinge_conf = torch.add(hinge_conf, margin) # Add the margin
+
+    ## Create a mask given those confidences that are not higher than margin
+    ## Hinge loss: https://towardsdatascience.com/a-definitive-explanation-to-hinge-loss-for-support-vector-machines-ab6d8d3178f1
+    ## It returns the maximum between 0 and (conf + margin - best_mode_conf), iterating over the different modes, and excluding the confidence
+    ## of the best mode. To not consider 0, at least (conf + margin - best_mode_conf) must be margin, if conf and best_mode_conf have the same
+    ## value
+    
+    mask = (hinge_conf > margin)
+    ones = torch.ones(hinge_conf.shape).to(hinge_conf)
+    ones[~mask] = 0
+    hinge_conf = torch.mul(hinge_conf,ones) # Element wise
+    loss_hinge_conf = torch.mean(torch.sum(hinge_conf,axis=1))
+    end = time.time()
+    if DEBUG: print("Time consumed by max-margin loss: ", end-start)
+    
+    # Compute WTA with lanes loss
+    
+    # start = time.time()
+    # centerlines_l2_origin = torch.norm(relevant_centerlines,dim=3) # Compute distance from each waypoint to the origin (last agent observation)
+    # index_min = torch.argmin(centerlines_l2_origin,dim=2)
+    
+    # error_centerlines = []
+    
+    # for i in range(batch_size):
+    #     excluded_indeces = []
+    #     excluded_indeces.append(min_loss_index[i].item()) # Exclude mode index associated to GT
+    #     error_best_modes_centerlines = []
+        
+    #     for lane_index in range(relevant_centerlines.shape[1]):
+    #         curr_centerline = relevant_centerlines[i,lane_index,:,:] # centerline_length x 2
+            
+    #         if torch.any(curr_centerline): # Avoid computing error with padded zeros
+    #             # filtered_centerline = curr_centerline[index_min[i,lane_index]:,:] # From closest to the origin -> End
+                
+    #             curr_index_min = index_min[i,lane_index]
+                
+    #             if curr_index_min <= (centerline_length-pred_len):
+    #                 # Take pred_len points ahead from this waypoint
+    #                 filtered_centerline = curr_centerline[curr_index_min:curr_index_min+pred_len,:]
+    #             elif curr_index_min > (centerline_length-pred_len):
+    #                 filtered_centerline = curr_centerline[curr_index_min:,:].cpu().numpy()
+    #                 filtered_centerline = map_features_utils_instance.interpolate_centerline(filtered_centerline,
+    #                                                                                          max_points=pred_len,
+    #                                                                                          original_centerline=curr_centerline)    
+    #                 if filtered_centerline is None:
+    #                     continue
+    #                 else:
+    #                     filtered_centerline = torch.tensor(filtered_centerline).to(pred)
+                    
+    #             curr_error_list = []
+    #             for mode in range(pred.shape[1]):
+    #                 if mode not in excluded_indeces:
+    #                     # error = dftorch(filtered_centerline,pred[i,mode,:,:])
+    #                     # error = dtwtorch(filtered_centerline,pred[i,mode,:,:])
+
+    #                     error = nn.functional.l1_loss(pred[i,mode,:,:], filtered_centerline, reduction='none').sum(dim=[0, 1])
+                        
+    #                     curr_error_list.append(error)
+
+    #             curr_error_tensor = torch.stack(curr_error_list)
+    #             closest_pred = torch.argmin(curr_error_tensor)  
+    #             error_best_modes_centerlines.append(curr_error_tensor[closest_pred])
+                
+    #             excluded_indeces.append(closest_pred.item())
+    #     try:
+    #         error_best_modes_centerlines = torch.stack(error_best_modes_centerlines)
+    #     except:
+    #         continue
+    #     curr_error_centerlines = torch.mean(error_best_modes_centerlines)
+    #     error_centerlines.append(curr_error_centerlines)
+    
+    # error_centerlines = torch.stack(error_centerlines)
+    # loss_wta_centerlines = torch.mean(error_centerlines)
+    # end = time.time()
+    # if DEBUG: print("Time consumed by WTA centerlines loss: ", end-start)
+    
+    return loss_hinge_conf, loss_wta_gt#, loss_wta_centerlines
+
 def calculate_nll_loss(gt, pred, loss_f, confidences):
     """
     NLL = Negative Log-Likelihood
@@ -241,7 +402,7 @@ def calculate_nll_loss(gt, pred, loss_f, confidences):
     )
     return loss
 
-def calculate_wta_loss(gt, pred, loss_f):
+def calculate_wta_loss(gt, pred, loss_f, confidences=None):
     """
     gt: pred_len x bs x 2
     pred: bs x num_modes x pred_len x 2
@@ -250,7 +411,7 @@ def calculate_wta_loss(gt, pred, loss_f):
     gt = gt.permute(1,0,2)
 
     loss = loss_f(
-        pred, gt
+        pred, gt, confidences
     )
     return loss
 
@@ -445,6 +606,7 @@ def model_trainer(config, logger):
                                             verbose=True, factor=hyperparameters.lr_decay_factor, 
                                             patience=lr_scheduler_patience)
 
+    loss_f = dict()
     if hyperparameters.loss_type_g == "mse" or hyperparameters.loss_type_g == "mse_w":
         loss_f = mse
     elif hyperparameters.loss_type_g == "mse+L1":
@@ -480,7 +642,8 @@ def model_trainer(config, logger):
             "nll": pytorch_neg_multi_log_likelihood_batch
         }
     else:
-        assert 1 == 0, "loss_type_g is not correct"
+        # assert 1 == 0, "loss_type_g is not correct"
+        print("Loss not specified")
 
     min_weight = 1
     max_weight = 4
@@ -904,7 +1067,7 @@ def generator_step(hyperparameters, batch, generator, optimizer_g,
         losses["G_ewta_loss"] = loss.item()
 
     elif hyperparameters.loss_type_g == "wta":
-        loss = calculate_wta_loss(pred_traj_gt, pred_traj_fake, loss_f)
+        loss = calculate_wta_loss(pred_traj_gt, pred_traj_fake, loss_f, conf)
         losses["G_wta_loss"] = loss.item()
         
     elif hyperparameters.loss_type_g == "mse+fa" or hyperparameters.loss_type_g == "mse_w+fa":
@@ -956,24 +1119,36 @@ def generator_step(hyperparameters, batch, generator, optimizer_g,
         losses["G_smoothL1_fde_loss"] = loss_smoothL1_fde.item()
         losses["G_nll_loss"] = loss_nll.item()
         
-    elif hyperparameters.loss_type_g == "centerlines+gt":
+    # elif hyperparameters.loss_type_g == "centerlines+gt":
 
-        loss_ade_centerlines, loss_fde_centerlines = calculate_mse_centerlines_loss(relevant_centerlines, pred_traj_fake, loss_f["mse"])
+    #     loss_ade_centerlines, loss_fde_centerlines = calculate_mse_centerlines_loss(relevant_centerlines, pred_traj_fake, loss_f["mse"])
         
-        best_pred_traj_fake_indeces = conf.argmax(1)
-        best_pred_traj_fake = get_best_predictions(pred_traj_fake,best_pred_traj_fake_indeces)
+    #     best_pred_traj_fake_indeces = conf.argmax(1)
+    #     best_pred_traj_fake = get_best_predictions(pred_traj_fake,best_pred_traj_fake_indeces)
 
-        loss_ade_gt, loss_fde_gt = calculate_mse_gt_loss_unimodal(pred_traj_gt, best_pred_traj_fake, loss_f["mse"])
+    #     loss_ade_gt, loss_fde_gt = calculate_mse_gt_loss_unimodal(pred_traj_gt, best_pred_traj_fake, loss_f["mse"])
         
-        loss = loss_ade_centerlines + \
-                loss_fde_centerlines + \
-                2*loss_ade_gt + \
-                2*loss_fde_gt
+    #     loss = loss_ade_centerlines + \
+    #             loss_fde_centerlines + \
+    #             2*loss_ade_gt + \
+    #             2*loss_fde_gt
 
-        losses["G_mse_ade_centerlines_loss"] = loss_ade_centerlines.item()
-        losses["G_mse_fde_centerlines_loss"] = loss_fde_centerlines.item()
-        losses["G_mse_ade_gt_loss"] = loss_ade_gt.item()
-        losses["G_mse_fde_gt_loss"] = loss_fde_gt.item()
+    #     losses["G_mse_ade_centerlines_loss"] = loss_ade_centerlines.item()
+    #     losses["G_mse_fde_centerlines_loss"] = loss_fde_centerlines.item()
+    #     losses["G_mse_ade_gt_loss"] = loss_ade_gt.item()
+    #     losses["G_mse_fde_gt_loss"] = loss_fde_gt.item()
+    # elif hyperparameters.loss_type_g == "hinge+centerlines+gt":
+    elif hyperparameters.loss_type_g == "hinge+gt":
+        # loss_hinge, loss_wta_gt, loss_wta_centerlines = calculate_hinge_wta_gt_centerlines_loss(pred_traj_gt, pred_traj_fake, relevant_centerlines, conf)
+        loss_hinge, loss_wta_gt = calculate_hinge_wta_gt_centerlines_loss(pred_traj_gt, pred_traj_fake, relevant_centerlines, conf)
+        
+        loss = 1.0*loss_hinge + \
+               1.0*loss_wta_gt #+ \
+            #    0.1*loss_wta_centerlines
+
+        losses["G_hinge_loss"] = loss_hinge.item()
+        losses["G_wta_ade_gt_loss"] = loss_wta_gt.item()
+        # losses["G_wta_centerlines_loss"] = loss_wta_centerlines.item()
 
     losses[f"G_total_loss"] = loss.item()
 

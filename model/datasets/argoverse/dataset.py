@@ -56,7 +56,7 @@ gaussian_noise_prob = [0.2,0.8]
 rotation_prob = [0.3,0.7]
 
 points_dropout_percentage = 0.3
-mu_noise,std_noise = 0,0.3
+mu_noise,std_noise = 0,0.25
 rotation_angles = [90,180,270]
 rotation_angles_prob = [0.33,0.33,0.34]
 
@@ -142,25 +142,25 @@ def seq_collate(data):
             phy_info = torch.from_numpy(phy_info).type(torch.float)
             if PHYSICAL_CONTEXT == "visual": phy_info = phy_info.permute(0, 3, 1, 2)
             
-    elif PHYSICAL_CONTEXT == "plausible_centerlines":
+    elif PHYSICAL_CONTEXT == "plausible_centerlines" or PHYSICAL_CONTEXT == "plausible_centerlines+feasible_area":
         # Relevant centerlines from global (map) coordinates to absolute (around origin) coordinates
 
         relevant_centerlines = torch.stack(relevant_centerlines, dim=0)
         _, max_centerlines, points_per_centerline, data_dim = relevant_centerlines.shape
         rows,cols,_ = torch.where(relevant_centerlines[:,:,:,0] == 0.0) # identify padded centerlines
  
-        if APPLY_DATA_AUGMENTATION and CURRENT_SPLIT == "train":
-            relevant_centerlines = relevant_centerlines.view(-1,points_per_centerline,data_dim)
-            relevant_centerlines = relevant_centerlines.permute(1,0,2)
-            num_total_centerlines = relevant_centerlines.shape[1]
-            apply_gaussian_noise = torch.tensor(np.ones(num_total_centerlines))
-            relevant_centerlines = data_augmentation_functions.add_gaussian_noise(relevant_centerlines,
-                                                                                  apply_gaussian_noise,
-                                                                                  num_total_centerlines,
-                                                                                  num_obs=points_per_centerline,
-                                                                                  mu=mu_noise,sigma=std_noise)
-            relevant_centerlines = relevant_centerlines.permute(1,0,2)
-            relevant_centerlines = relevant_centerlines.view(batch_size,max_centerlines,points_per_centerline, data_dim)
+        # if APPLY_DATA_AUGMENTATION and CURRENT_SPLIT == "train":
+        #     relevant_centerlines = relevant_centerlines.view(-1,points_per_centerline,data_dim)
+        #     relevant_centerlines = relevant_centerlines.permute(1,0,2)
+        #     num_total_centerlines = relevant_centerlines.shape[1]
+        #     apply_gaussian_noise = torch.tensor(np.ones(num_total_centerlines))
+        #     relevant_centerlines = data_augmentation_functions.add_gaussian_noise(relevant_centerlines,
+        #                                                                           apply_gaussian_noise,
+        #                                                                           num_total_centerlines,
+        #                                                                           num_obs=points_per_centerline,
+        #                                                                           mu=mu_noise,sigma=std_noise)
+        #     relevant_centerlines = relevant_centerlines.permute(1,0,2)
+        #     relevant_centerlines = relevant_centerlines.view(batch_size,max_centerlines,points_per_centerline, data_dim)
 
         phy_info = relevant_centerlines - map_origin.unsqueeze(1).unsqueeze(1)   
         phy_info[rows,cols,:,:] = torch.zeros((points_per_centerline,data_dim))
@@ -169,7 +169,20 @@ def seq_collate(data):
         # Oracle centerlines from global (map) coordinates to absolute (around origin) coordinates
 
         oracle_centerlines = torch.stack(oracle_centerlines, dim=0)
-        phy_info = oracle_centerlines - map_origin
+        _, points_per_centerline, data_dim = oracle_centerlines.shape
+
+        # if APPLY_DATA_AUGMENTATION and CURRENT_SPLIT == "train":
+        #     oracle_centerlines = oracle_centerlines.permute(1,0,2)
+        #     num_total_centerlines = oracle_centerlines.shape[1]
+        #     apply_gaussian_noise = torch.tensor(np.ones(num_total_centerlines))
+        #     oracle_centerlines =   data_augmentation_functions.add_gaussian_noise(oracle_centerlines,
+        #                                                                           apply_gaussian_noise,
+        #                                                                           num_total_centerlines,
+        #                                                                           num_obs=points_per_centerline,
+        #                                                                           mu=mu_noise,sigma=std_noise)
+        #     oracle_centerlines = oracle_centerlines.permute(1,0,2)
+            
+        phy_info = oracle_centerlines - map_origin.unsqueeze(1)
 
     elif PHYSICAL_CONTEXT == "social": # dummy phy_info
         phy_info = np.random.randn(1,1,1,1)
@@ -285,9 +298,15 @@ def seq_collate(data):
             pred_traj_gt[:,start:end,:] = rotated_curr_pred_traj_gt
             pred_traj_gt_rel[:,start:end,:] = aug_curr_pred_traj_gt_rel
             map_origin[seq_index] = rotated_curr_map_origin
-            if PHYSICAL_CONTEXT != "social":
+            
+            if PHYSICAL_CONTEXT == "plausible_centerlines":
                 phy_info[seq_index,:,:,:] = rotated_curr_relevant_centerlines
+            elif PHYSICAL_CONTEXT == "oracle":
+                phy_info[seq_index,:,:] = rotated_curr_relevant_centerlines
 
+                curr_relevant_centerlines = curr_relevant_centerlines.unsqueeze(0)
+                rotated_curr_relevant_centerlines = rotated_curr_relevant_centerlines.unsqueeze(0)
+                
             if DEBUG_DATA_AUGMENTATION:
                 if "train" in curr_split_hm:
                     results_path = f"data/datasets/argoverse/motion-forecasting/train"
@@ -700,50 +719,51 @@ class ArgoverseMotionForecastingDataset(Dataset):
                 ex_seq_start_end = [(start, end) for start, end in zip(ex_cum_start_idx, ex_cum_start_idx[1:])]
 
             if self.hard_mining != -1.0 and split_percentage == 1.0: 
-                # In this file, we can see the most difficult sequences of the validation split
-                file_csv = "results/mapfe4mp/100.0_percent/test_oracle_check_rel2absmm/val/metrics_sorted_ade.csv"
+                # In this file, we can see the most difficult sequences of the train split
+                file_csv = "results/mapfe4mp/100.0_percent/previous_validation/test_9/train/metrics_sorted_ade.csv"
                 
                 df = pd.read_csv(file_csv,sep=" ")
                 seq_index = df["Index"][:-2].astype(int) # from 0 to N-1, not num_seq.csv
-                self.hardest_sequences = seq_index[-2000:].values
-                # self.hardest_sequences = seq_index[-self.batch_size:].values # If we have batch_size = N, at most we can
-                # introduce N hardest val sequences (if hard_mining = 1.0) in the batch
-
-                ## Create torch data
-
-                self.hm_obs_traj = torch.from_numpy(ex_seq_list[:, :, :self.obs_len]).type(torch.float)
-                self.hm_pred_traj_gt = torch.from_numpy(ex_seq_list[:, :, self.obs_len:]).type(torch.float)
-                self.hm_obs_traj_rel = torch.from_numpy(ex_seq_list_rel[:, :, :self.obs_len]).type(torch.float)
-                self.hm_pred_traj_gt_rel = torch.from_numpy(ex_seq_list_rel[:, :, self.obs_len:]).type(torch.float)
-
-                self.hm_loss_mask = torch.from_numpy(ex_loss_mask_list).type(torch.float)
-                self.hm_non_linear_obj = torch.from_numpy(ex_non_linear_obj).type(torch.float)
-                self.hm_cum_start_idx = ex_cum_start_idx
-                self.hm_seq_start_end = ex_seq_start_end
-
-                self.hm_seq_id_list = torch.from_numpy(ex_seq_id_list).type(torch.float)
-                self.hm_object_class_id_list = torch.from_numpy(ex_object_class_id_list).type(torch.float)
-                self.hm_object_id_list = torch.from_numpy(ex_object_id_list).type(torch.float)
                 
-                self.hm_ego_vehicle_origin = torch.from_numpy(ex_ego_vehicle_origin).type(torch.float)
+                percentage_hardest = 0.05
+                lower_limit = int(percentage_hardest*len(seq_index))
+                self.hardest_sequences = seq_index[-lower_limit:].values
+
+                # ## Create torch data
+
+                # self.hm_obs_traj = torch.from_numpy(ex_seq_list[:, :, :self.obs_len]).type(torch.float)
+                # self.hm_pred_traj_gt = torch.from_numpy(ex_seq_list[:, :, self.obs_len:]).type(torch.float)
+                # self.hm_obs_traj_rel = torch.from_numpy(ex_seq_list_rel[:, :, :self.obs_len]).type(torch.float)
+                # self.hm_pred_traj_gt_rel = torch.from_numpy(ex_seq_list_rel[:, :, self.obs_len:]).type(torch.float)
+
+                # self.hm_loss_mask = torch.from_numpy(ex_loss_mask_list).type(torch.float)
+                # self.hm_non_linear_obj = torch.from_numpy(ex_non_linear_obj).type(torch.float)
+                # self.hm_cum_start_idx = ex_cum_start_idx
+                # self.hm_seq_start_end = ex_seq_start_end
+
+                # self.hm_seq_id_list = torch.from_numpy(ex_seq_id_list).type(torch.float)
+                # self.hm_object_class_id_list = torch.from_numpy(ex_object_class_id_list).type(torch.float)
+                # self.hm_object_id_list = torch.from_numpy(ex_object_id_list).type(torch.float)
+                
+                # self.hm_ego_vehicle_origin = torch.from_numpy(ex_ego_vehicle_origin).type(torch.float)
    
-                self.hm_city_ids = torch.from_numpy(ex_city_ids).type(torch.float)
-                self.hm_straight_trajectories_list = torch.from_numpy(ex_straight_trajectories_list).type(torch.int)
-                self.hm_curved_trajectories_list = torch.from_numpy(ex_curved_trajectories_list).type(torch.int)
-                self.hm_norm = torch.from_numpy(np.array(ex_norm))
+                # self.hm_city_ids = torch.from_numpy(ex_city_ids).type(torch.float)
+                # self.hm_straight_trajectories_list = torch.from_numpy(ex_straight_trajectories_list).type(torch.int)
+                # self.hm_curved_trajectories_list = torch.from_numpy(ex_curved_trajectories_list).type(torch.int)
+                # self.hm_norm = torch.from_numpy(np.array(ex_norm))
 
-                # Shuffle the straight and curved trajectories
+                # # Shuffle the straight and curved trajectories
                 
-                self.hm_num_straight_trajs = len(self.hm_straight_trajectories_list)
-                self.hm_num_curve_trajs = len(self.hm_curved_trajectories_list)
-                self.hm_straight_aux_list_random = self.hm_straight_trajectories_list[torch.randperm(self.hm_num_straight_trajs)]
-                self.hm_curved_aux_list_random = self.hm_curved_trajectories_list[torch.randperm(self.hm_num_curve_trajs)]
+                # self.hm_num_straight_trajs = len(self.hm_straight_trajectories_list)
+                # self.hm_num_curve_trajs = len(self.hm_curved_trajectories_list)
+                # self.hm_straight_aux_list_random = self.hm_straight_trajectories_list[torch.randperm(self.hm_num_straight_trajs)]
+                # self.hm_curved_aux_list_random = self.hm_curved_trajectories_list[torch.randperm(self.hm_num_curve_trajs)]
                 
-                self.hm_num_seq_list = torch.from_numpy(ex_num_seq_list).type(torch.int)
+                # self.hm_num_seq_list = torch.from_numpy(ex_num_seq_list).type(torch.int)
 
-                self.hm_target_agent_orientation = torch.from_numpy(ex_target_agent_orientation).type(torch.float)
-                self.hm_oracle_centerlines = torch.from_numpy(ex_oracle_centerlines).type(torch.float)
-                self.hm_relevant_centerlines = torch.from_numpy(ex_relevant_centerlines).type(torch.float)
+                # self.hm_target_agent_orientation = torch.from_numpy(ex_target_agent_orientation).type(torch.float)
+                # self.hm_oracle_centerlines = torch.from_numpy(ex_oracle_centerlines).type(torch.float)
+                # self.hm_relevant_centerlines = torch.from_numpy(ex_relevant_centerlines).type(torch.float)
 
             if self.extra_data_train != -1 and self.hard_mining == -1.0: # Do not apply extra data train and 
                                                                          # hard mining at the same time
@@ -959,20 +979,36 @@ class ArgoverseMotionForecastingDataset(Dataset):
                     self.oracle_centerlines[index,:,:], self.relevant_centerlines[index,:,:,:], msg
                     # self.relevant_centerlines[str(self.file_id_list[index])]
                 ]
+        # else:        
+        #     msg = "val:hard_mining" 
+            
+        #     hm_index = np.random.choice(self.hardest_sequences)
+        #     hm_start, hm_end = self.hm_seq_start_end[hm_index]
+            
+        #     out = [
+        #         self.hm_obs_traj[hm_start:hm_end, :, :], self.hm_pred_traj_gt[hm_start:hm_end, :, :],
+        #         self.hm_obs_traj_rel[hm_start:hm_end, :, :], self.hm_pred_traj_gt_rel[hm_start:hm_end, :, :],
+        #         self.hm_non_linear_obj[hm_start:hm_end], self.hm_loss_mask[hm_start:hm_end, :],
+        #         self.hm_seq_id_list[hm_start:hm_end, :, :], self.hm_object_class_id_list[hm_start:hm_end], 
+        #         self.hm_object_id_list[hm_start:hm_end], self.hm_city_ids[hm_index], self.hm_ego_vehicle_origin[hm_index,:], 
+        #         self.hm_num_seq_list[hm_index], self.hm_norm, self.hm_target_agent_orientation[hm_index],
+        #         self.hm_oracle_centerlines[hm_index,:,:], self.hm_relevant_centerlines[hm_index,:,:,:], msg
+        #         # self.relevant_centerlines[str(self.file_id_list[hm_index])]
+        #           ]
         else:        
-            msg = "val:hard_mining" 
+            msg = "train:hard_mining" 
             
             hm_index = np.random.choice(self.hardest_sequences)
-            hm_start, hm_end = self.hm_seq_start_end[hm_index]
+            hm_start, hm_end = self.seq_start_end[hm_index]
             
             out = [
-                self.hm_obs_traj[hm_start:hm_end, :, :], self.hm_pred_traj_gt[hm_start:hm_end, :, :],
-                self.hm_obs_traj_rel[hm_start:hm_end, :, :], self.hm_pred_traj_gt_rel[hm_start:hm_end, :, :],
-                self.hm_non_linear_obj[hm_start:hm_end], self.hm_loss_mask[hm_start:hm_end, :],
-                self.hm_seq_id_list[hm_start:hm_end, :, :], self.hm_object_class_id_list[hm_start:hm_end], 
-                self.hm_object_id_list[hm_start:hm_end], self.hm_city_ids[hm_index], self.hm_ego_vehicle_origin[hm_index,:], 
-                self.hm_num_seq_list[hm_index], self.hm_norm, self.hm_target_agent_orientation[hm_index],
-                self.hm_oracle_centerlines[hm_index,:,:], self.hm_relevant_centerlines[hm_index,:,:,:], msg
+                self.obs_traj[hm_start:hm_end, :, :], self.pred_traj_gt[hm_start:hm_end, :, :],
+                self.obs_traj_rel[hm_start:hm_end, :, :], self.pred_traj_gt_rel[hm_start:hm_end, :, :],
+                self.non_linear_obj[hm_start:hm_end], self.loss_mask[hm_start:hm_end, :],
+                self.seq_id_list[hm_start:hm_end, :, :], self.object_class_id_list[hm_start:hm_end], 
+                self.object_id_list[hm_start:hm_end], self.city_ids[hm_index], self.ego_vehicle_origin[hm_index,:], 
+                self.num_seq_list[hm_index], self.norm, self.target_agent_orientation[hm_index],
+                self.oracle_centerlines[hm_index,:,:], self.relevant_centerlines[hm_index,:,:,:], msg
                 # self.relevant_centerlines[str(self.file_id_list[hm_index])]
                   ]
 

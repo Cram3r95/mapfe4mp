@@ -172,7 +172,7 @@ def evaluate(loader, generator, config, split, current_cuda, pred_len, results_p
                 print(f"Evaluating batch {batch_index+1}/{len(loader)}")
 
             if worst_scenes: # Analyze some specific sequences
-                if batch_index > max(worst_scenes) or plot_scene >= LIMIT_QUALITATIVE_RESULTS:
+                if batch_index > max(worst_scenes):
                     break
                 elif batch_index not in worst_scenes:
                     continue
@@ -327,7 +327,7 @@ def evaluate(loader, generator, config, split, current_cuda, pred_len, results_p
                 yaw_aux = (math.pi/2 - target_agent_orientation) 
                 c, s = torch.cos(yaw_aux), torch.sin(yaw_aux)
                 R = torch.tensor([[c,-s],  # Rot around the map z-axis
-                                  [s, c]])
+                                [s, c]])
 
                 obs_traj = data_augmentation_functions.rotate_traj(obs_traj,R)
                 pred_traj_gt = data_augmentation_functions.rotate_traj(pred_traj_gt,R)
@@ -507,10 +507,8 @@ def main(args):
 
     ## Get experiment name
 
-    aux_list = args.model_path.split('/')
-    model_index = aux_list.index(config.model.name)
-    exp_name = os.path.join(*args.model_path.split('/')[model_index:-1]) # model_type/split_percentage/exp_name 
-                                                                         # (e.g. social_lstm_mhsa/100.0_percent/exp1)
+    exp_name = os.path.join(*args.model_path.split('/')[-4:-1]) # model_type/split_percentage/exp_name 
+                                                                # (e.g. social_lstm_mhsa/100.0_percent/exp1)
 
     ## Create results folder if does not exist
 
@@ -525,7 +523,7 @@ def main(args):
     worst_scenes = None
     if int(config.dataset.split_percentage * 100) == 100:
         metrics_sorted_csv = os.path.join(results_path,"metrics_sorted_ade.csv")
-
+        
         if os.path.isfile(metrics_sorted_csv) and PLOT_WORST_SCENES:
             worst_scenes = get_worst_scenes(metrics_sorted_csv)
 
@@ -556,16 +554,15 @@ if __name__ == '__main__':
     args = parser.parse_args()
     main(args)
 
-# Best model at this moment (in terms of validation). OBS: It has hard-mining from val, it may have a leak
+# Best model at this moment (in terms of validation)
 """
 python evaluate/argoverse/generate_results_rel-rel.py \
---model_path "save/argoverse/mapfe4mp/100.0_percent/previous_validation/test_9/argoverse_motion_forecasting_dataset_0_with_model.pt" \
---device_gpu 1 --split "train"
+--model_path "save/argoverse/mapfe4mp/100.0_percent/test_9/argoverse_motion_forecasting_dataset_0_with_model.pt" \
+--device_gpu 0 --split "train"
 """
 
-# Best model at this moment (in terms of test) -> 0.99, 1.67
 """
 python evaluate/argoverse/generate_results_rel-rel.py \
---model_path "save/argoverse/mapfe4mp/100.0_percent/test_8/argoverse_motion_forecasting_dataset_0_with_model.pt" \
---device_gpu 0 --split "test"
+--model_path "save/argoverse/mapfe4mp/100.0_percent/test_27/argoverse_motion_forecasting_dataset_0_with_model.pt" \
+--device_gpu 0 --split "train"
 """

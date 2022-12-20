@@ -109,7 +109,6 @@ def viz_predictions_all(
         check_data_aug: bool = False
 ) -> None:
 
-    
     splits_name = ["train","val","test"]
     split_name = results_path.split('/')[-1]
     assert split_name in splits_name, "Wrong results_path!"
@@ -131,7 +130,8 @@ def viz_predictions_all(
     gt = gt_abs + map_origin
     
     num_centerlines = 0
-    if relevant_centerlines_abs:
+
+    if np.any(relevant_centerlines_abs):
         _, num_centerlines, points_per_centerline, data_dim = relevant_centerlines_abs.shape
         rows,cols,_ = np.where(relevant_centerlines_abs[:,:,:,0] == 0.0) # only sum the origin to non-padded centerlines
         relevant_centerlines = relevant_centerlines_abs + map_origin

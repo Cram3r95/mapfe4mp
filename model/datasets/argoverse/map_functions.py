@@ -546,7 +546,9 @@ class MapFeaturesUtils:
 
         return vel_f_averaged, acc_f_averaged, xy_f, extended_xy_f
 
-    def interpolate_centerline(self,centerline,max_points=40,agent_xy=None,obs_len=None,seq_len=None,split=None,seq_id=None,viz=False):
+    def interpolate_centerline(self,centerline,max_points=40,original_centerline=None,
+                               agent_xy=None,obs_len=None,seq_len=None,split=None,seq_id=None,
+                               viz=False,debug=False):
         """
         """
 
@@ -559,7 +561,7 @@ class MapFeaturesUtils:
             new_cx = sp.interpolate.interp1d(points,cx,kind='cubic')(new_points)
             new_cy = sp.interpolate.interp1d(points,cy,kind='cubic')(new_points)
         except:
-            pdb.set_trace()
+            if debug: pdb.set_trace()
             return
 
         interp_centerline = np.hstack([new_cx.reshape(-1,1),new_cy.reshape(-1,1)])
@@ -658,7 +660,7 @@ class MapFeaturesUtils:
 
         lane_dir_vector = agent_xy[obs_len-1,:] - agent_xy[obs_len-2,:]
         yaw = math.atan2(lane_dir_vector[1],lane_dir_vector[0])
-        pdb.set_trace()
+
         return lane_dir_vector, yaw
 
     def apply_tf(source_location, transform):  
@@ -911,8 +913,8 @@ class MapFeaturesUtils:
                 if distance_travelled > max_dist and index_max_dist == -1:
                     index_max_dist = i
 
-        reference_point = extended_xy_filtered[index_max_dist,:]
-        # reference_point = extended_xy_filtered[obs_len-1,:]
+        reference_point = extended_xy_filtered[index_max_dist,:] # Reference point assuming naive prediction
+        # reference_point = extended_xy_filtered[obs_len-1,:] # Reference point assuming last observation
 
         # Compute agent's orientation
 
@@ -1070,22 +1072,26 @@ class MapFeaturesUtils:
             for centerline in candidate_centerlines:
                 distances.append(min(np.linalg.norm((centerline - reference_point),axis=1)))
             
-            unique_distances = list(set(distances))
-            unique_distances.sort()
-            unique_distances = unique_distances[:max_candidates]
+            AVOID_SAME_MIN_DISTANCES = False
+            
+            if AVOID_SAME_MIN_DISTANCES:
+                # Avoid repeating centerlines with the same min distance
+                
+                unique_distances = list(set(distances))
+                unique_distances.sort()
+                unique_distances = unique_distances[:max_candidates]
 
-            # print("unique distances: ", unique_distances)
-            final_indeces = [np.where(distances == unique_distance)[0][0] for unique_distance in unique_distances]
+                final_indeces = [np.where(distances == unique_distance)[0][0] for unique_distance in unique_distances]
 
-            final_candidates = []
-            for index in final_indeces:
-                final_candidates.append(candidate_centerlines[index])
-
-            # sorted_indeces = np.argsort(distances)
-            # sorted_indeces = sorted_indeces[:max_candidates]
-            # final_candidates = []
-            # for index in sorted_indeces:
-            #     final_candidates.append(candidate_centerlines[index])
+                final_candidates = []
+                for index in final_indeces:
+                    final_candidates.append(candidate_centerlines[index])
+            else:
+                sorted_indeces = np.argsort(distances)
+                sorted_indeces = sorted_indeces[:max_candidates]
+                final_candidates = []
+                for index in sorted_indeces:
+                    final_candidates.append(candidate_centerlines[index])
 
             candidate_centerlines = final_candidates
 
@@ -1394,7 +1400,8 @@ class MapFeaturesUtils:
             candidate_nt_distances = [np.full((seq_len, 2), None)]
 
             # Get NT distance for oracle centerline
-            oracle_nt_dist = get_nt_distance(agent_xy,
+
+            oracle_nt_dist = get_nt_distance(agent_xy,# agent_xy, agent_xy_obs
                                              oracle_centerline,
                                              viz=viz)
 
