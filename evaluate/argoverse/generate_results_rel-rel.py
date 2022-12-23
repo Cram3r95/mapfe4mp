@@ -71,12 +71,12 @@ OBS_ORIGIN = 20
 PRED_LEN = 30
 ARGOVERSE_NUM_MODES = 6
 
-dist_around = 40
+dist_around = 15 # 40
 dist_rasterized_map = [-dist_around, dist_around, -dist_around, dist_around]
 
 GENERATE_QUALITATIVE_RESULTS = True
 PLOT_WORST_SCENES = False
-LIMIT_QUALITATIVE_RESULTS = 150
+LIMIT_QUALITATIVE_RESULTS = 2000
 
 COMPUTE_METRICS = True
 
@@ -401,7 +401,7 @@ def evaluate(loader, generator, config, split, current_cuda, pred_len, results_p
                                                    city_name,
                                                    curr_map_origin.numpy(),
                                                    avm,
-                                                   dist_rasterized_map=50,
+                                                   dist_rasterized_map=35,
                                                    relevant_centerlines_abs=relevant_centerlines_abs,
                                                    save=True,
                                                    ade_metric=ade_min,
@@ -568,4 +568,10 @@ python evaluate/argoverse/generate_results_rel-rel.py \
 python evaluate/argoverse/generate_results_rel-rel.py \
 --model_path "save/argoverse/mapfe4mp/100.0_percent/test_8/argoverse_motion_forecasting_dataset_0_with_model.pt" \
 --device_gpu 0 --split "test"
+"""
+
+"""
+python evaluate/argoverse/generate_results_rel-rel.py \
+--model_path "save/argoverse/mapfe4mp/100.0_percent/test_12/argoverse_motion_forecasting_dataset_0_with_model.pt" \
+--device_gpu 0 --split "val"
 """

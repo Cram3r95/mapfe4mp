@@ -55,6 +55,9 @@ print("Mapfe4mp oracle. All parameters: ", utils.count_parameters(whole_model))
 whole_model = TrajectoryGenerator(PHYSICAL_CONTEXT="plausible_centerlines",CURRENT_DEVICE="cuda:0")
 print("Mapfe4mp plausible_centerlines. All parameters: ", utils.count_parameters(whole_model))
 
+whole_model = TrajectoryGenerator(PHYSICAL_CONTEXT="plausible_centerlines+feasible_area",CURRENT_DEVICE="cuda:0")
+print("Mapfe4mp plausible_centerlines+feasible_area. All parameters: ", utils.count_parameters(whole_model))
+
 # agents = 20
 # We assume bs = 1
 # obs = torch.randn(20,agents,2).to(device)

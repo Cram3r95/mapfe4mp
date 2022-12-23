@@ -112,6 +112,10 @@ def viz_predictions_all(
     splits_name = ["train","val","test"]
     split_name = results_path.split('/')[-1]
     assert split_name in splits_name, "Wrong results_path!"
+    
+    PLOT_SOCIAL = True
+    PLOT_PREDICTIONS = True
+    PLOT_MAP = True
 
     # https://www.computerhope.com/htmcolor.htm#color-codes
     color_dict_obs = {"AGENT": "#ECA154", "OTHER": "#413839", "AV": "#0000A5"}
@@ -119,8 +123,6 @@ def viz_predictions_all(
 
     num_agents = input_abs.shape[0]
     num_modes = output_predictions_abs.shape[0]
-    obs_len = input_abs.shape[1]
-    pred_len = gt_abs.shape[1]
 
     # Transform to global coordinates
 
@@ -153,202 +155,203 @@ def viz_predictions_all(
                }
         plt.title(f"minADE: {round(ade_metric,3)} ; minFDE: {round(fde_metric,3)}", \
                   fontdict=font, backgroundcolor='silver')
-    # else:
-    #     plt.axis("off")
+    else:
+        plt.axis("off")
 
     # Social information
     
-    for i in range(num_agents): # Sequences (.csv)
-        object_type = translate_object_type(int(object_class_list[i]))
+    if PLOT_SOCIAL:
+        for i in range(num_agents): # Sequences (.csv)
+            object_type = translate_object_type(int(object_class_list[i]))
 
-        # Observation
+            # Observation
 
-        plt.plot(
-            input[i, :, 0],
-            input[i, :, 1],
-            color=color_dict_obs[object_type],
-            label="Input",
-            alpha=1,
-            linewidth=3,
-            zorder=15,
-        )
-
-        # Last observation
-
-        plt.plot(
-            input[i, -1, 0],
-            input[i, -1, 1],
-            "o",
-            color=color_dict_obs[object_type],
-            label="Input",
-            alpha=1,
-            linewidth=3,
-            zorder=15,
-            markersize=9,
-        )
-        if plot_agent_yaw:
-            ori = str(np.around(output_agent_orientation,2))
-            if object_type == "AGENT":
-                plt.text(
-                    input[i, -1, 0] + 1,
-                    input[i, -1, 1] + 1,
-                    f"yaw = {ori}",
-                    fontsize=12,
-                    zorder=20
-                    )
-
-        # Groundtruth prediction
-
-        if split_name != "test":
             plt.plot(
-                gt[i, :, 0],
-                gt[i, :, 1],
-                color=color_dict_pred_gt[object_type],
-                label="GT",
+                input[i, :, 0],
+                input[i, :, 1],
+                color=color_dict_obs[object_type],
+                label="Input",
                 alpha=1,
                 linewidth=3,
-                zorder=20,
+                zorder=15,
             )
 
-            # Groundtruth end-point
+            # Last observation
 
             plt.plot(
-                gt[i, -1, 0],
-                gt[i, -1, 1],
-                "D",
-                color=color_dict_pred_gt[object_type],
-                label="GT",
+                input[i, -1, 0],
+                input[i, -1, 1],
+                "o",
+                color=color_dict_obs[object_type],
+                label="Input",
                 alpha=1,
                 linewidth=3,
-                zorder=20,
+                zorder=15,
                 markersize=9,
             )
+            if plot_agent_yaw:
+                ori = str(np.around(output_agent_orientation,2))
+                if object_type == "AGENT":
+                    plt.text(
+                        input[i, -1, 0] + 1,
+                        input[i, -1, 1] + 1,
+                        f"yaw = {ori}",
+                        fontsize=12,
+                        zorder=20
+                        )
 
-        # Model predictions
+            # Groundtruth prediction
 
-        if object_type == "AGENT" and num_modes > 0:
-            # Multimodal prediction (only AGENT of interest)
-            
-            sorted_confidences = np.sort(output_confidences)
-            slope = (1 - 1/num_modes) / (num_modes - 1)
-            
-            for num_mode in range(num_modes):
-                
-                _, conf_index = np.where(output_confidences[0,num_mode] == sorted_confidences)
-                transparency = round(slope * (conf_index.item()+1),2)
-                
-                # Prediction
+            if split_name != "test":
                 plt.plot(
-                    output_predictions[num_mode, :, 0],
-                    output_predictions[num_mode, :, 1],
-                    color="#007672",
-                    label="Output",
-                    alpha=transparency,
+                    gt[i, :, 0],
+                    gt[i, :, 1],
+                    color=color_dict_pred_gt[object_type],
+                    label="GT",
+                    alpha=1,
                     linewidth=3,
-                    zorder=15,
+                    zorder=20,
                 )
-                # Prediction endpoint
+
+                # Groundtruth end-point
+
                 plt.plot(
-                    output_predictions[num_mode, -1, 0],
-                    output_predictions[num_mode, -1, 1],
-                    "*",
-                    color="#007672",
-                    label="Output",
-                    alpha=transparency,
+                    gt[i, -1, 0],
+                    gt[i, -1, 1],
+                    "D",
+                    color=color_dict_pred_gt[object_type],
+                    label="GT",
+                    alpha=1,
                     linewidth=3,
-                    zorder=15,
+                    zorder=20,
                     markersize=9,
                 )
+
+            # Model predictions
+
+            if object_type == "AGENT" and num_modes > 0 and PLOT_PREDICTIONS:
+                # Multimodal prediction (only AGENT of interest)
                 
-                if plot_output_confidences:
-                    # Confidence
-                    plt.text(
-                            output_predictions[num_mode, -1, 0] + 1,
-                            output_predictions[num_mode, -1, 1] + 1,
-                            str(round(output_confidences[0,num_mode],2)),
-                            zorder=21,
-                            fontsize=9
-                            )
+                sorted_confidences = np.sort(output_confidences)
+                slope = (1 - 1/num_modes) / (num_modes - 1)
+                
+                for num_mode in range(num_modes):
+                    
+                    _, conf_index = np.where(output_confidences[0,num_mode] == sorted_confidences)
+                    transparency = round(slope * (conf_index.item()+1),2)
+                    
+                    # Prediction
+                    plt.plot(
+                        output_predictions[num_mode, :, 0],
+                        output_predictions[num_mode, :, 1],
+                        color="#007672",
+                        label="Output",
+                        alpha=transparency,
+                        linewidth=3,
+                        zorder=15,
+                    )
+                    # Prediction endpoint
+                    plt.plot(
+                        output_predictions[num_mode, -1, 0],
+                        output_predictions[num_mode, -1, 1],
+                        "*",
+                        color="#007672",
+                        label="Output",
+                        alpha=transparency,
+                        linewidth=3,
+                        zorder=15,
+                        markersize=9,
+                    )
+                    
+                    if plot_output_confidences:
+                        # Confidence
+                        plt.text(
+                                output_predictions[num_mode, -1, 0] + 1,
+                                output_predictions[num_mode, -1, 1] + 1,
+                                str(round(output_confidences[0,num_mode],2)),
+                                zorder=21,
+                                fontsize=9
+                                )
 
     # Relevant centerlines
     
-    count_rep_centerlines = np.zeros((num_centerlines))
-    rep_centerlines = []
+    if PLOT_MAP:
+        count_rep_centerlines = np.zeros((num_centerlines))
+        rep_centerlines = []
 
-    # TODO: Prepare this code to deal with batch size != 1
-    if num_centerlines > 0:
-        for id_centerline in range(num_centerlines):
-            centerline = relevant_centerlines[0,id_centerline,:,:] # TODO: We assume batch_size = 1 here
+        # TODO: Prepare this code to deal with batch size != 1
+        if num_centerlines > 0:
+            for id_centerline in range(num_centerlines):
+                centerline = relevant_centerlines[0,id_centerline,:,:] # TODO: We assume batch_size = 1 here
 
-            if not np.any(centerline): # Avoid plotting padded centerlines
-                continue
-            
-            # Check repeated centerlines
+                if not np.any(centerline): # Avoid plotting padded centerlines
+                    continue
+                
+                # Check repeated centerlines
 
-            flag_repeated = False
-            for index_centerline, aux_centerline in enumerate(rep_centerlines):
-                if np.allclose(centerline,aux_centerline):
-                    flag_repeated = True
-                    count_rep_centerlines[index_centerline] += 1
-            if not flag_repeated:
-                count_rep_centerlines[id_centerline] += 1
-                rep_centerlines.append(centerline)
+                flag_repeated = False
+                for index_centerline, aux_centerline in enumerate(rep_centerlines):
+                    if np.allclose(centerline,aux_centerline):
+                        flag_repeated = True
+                        count_rep_centerlines[index_centerline] += 1
+                if not flag_repeated:
+                    count_rep_centerlines[id_centerline] += 1
+                    rep_centerlines.append(centerline)
 
-            # Centerline
+                # Centerline
 
-            plt.plot(
-                centerline[:, 0],
-                centerline[:, 1],
-                "--",
-                color="black",
-                alpha=1,
-                linewidth=1,
-                zorder=16,
-            )
+                plt.plot(
+                    centerline[:, 0],
+                    centerline[:, 1],
+                    "--",
+                    color="black",
+                    alpha=1,
+                    linewidth=1,
+                    zorder=16,
+                )
 
-            # Goal point (end point of plausible centerline)
+                # Goal point (end point of plausible centerline)
 
-            plt.plot(
-                centerline[-1, 0],
-                centerline[-1, 1],
-                "*",
-                color="black",
-                alpha=1,
-                linewidth=1,
-                zorder=16,
-            )
+                plt.plot(
+                    centerline[-1, 0],
+                    centerline[-1, 1],
+                    "*",
+                    color="black",
+                    alpha=1,
+                    linewidth=1,
+                    zorder=16,
+                )
 
-        # Plot the number of repetitions for each centerline
+            # Plot the number of repetitions for each centerline
 
-        for index_repeated in range(len(count_rep_centerlines)):
-            if count_rep_centerlines[index_repeated] > 0:
-                centerline = relevant_centerlines[0,index_repeated,:,:] # TODO: We assume batch_size = 1 here
+            for index_repeated in range(len(count_rep_centerlines)):
+                if count_rep_centerlines[index_repeated] > 0:
+                    centerline = relevant_centerlines[0,index_repeated,:,:] # TODO: We assume batch_size = 1 here
 
-                plt.text(
-                        centerline[-1, 0] + 1,
-                        centerline[-1, 1] + 1,
-                        str(int(count_rep_centerlines[index_repeated])),
-                        fontsize=12
-                        )
-                    
-    seq_lane_props = avm.city_lane_centerlines_dict[city_name]
+                    plt.text(
+                            centerline[-1, 0] + 1,
+                            centerline[-1, 1] + 1,
+                            str(int(count_rep_centerlines[index_repeated])),
+                            fontsize=12
+                            )
+                        
+        seq_lane_props = avm.city_lane_centerlines_dict[city_name]
 
-    ### Get lane centerlines which lie within the range of trajectories
+        ### Get lane centerlines which lie within the range of trajectories
 
-    for lane_id, lane_props in seq_lane_props.items():
+        for lane_id, lane_props in seq_lane_props.items():
 
-        lane_cl = lane_props.centerline
+            lane_cl = lane_props.centerline
 
-        if (np.min(lane_cl[:, 0]) < x_max
-            and np.min(lane_cl[:, 1]) < y_max
-            and np.max(lane_cl[:, 0]) > x_min
-            and np.max(lane_cl[:, 1]) > y_min):
+            if (np.min(lane_cl[:, 0]) < x_max
+                and np.min(lane_cl[:, 1]) < y_max
+                and np.max(lane_cl[:, 0]) > x_min
+                and np.max(lane_cl[:, 1]) > y_min):
 
-            avm.draw_lane(lane_id, city_name)
+                avm.draw_lane(lane_id, city_name, color="lightgray")
 
     plt.xlim(x_min, x_max)
     plt.ylim(y_min, y_max)
-    # plt.axis("equal")
 
     handles, labels = plt.gca().get_legend_handles_labels()
     by_label = OrderedDict(zip(labels, handles))

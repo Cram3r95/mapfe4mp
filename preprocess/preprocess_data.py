@@ -65,15 +65,16 @@ config.dataset.start_from_percentage = 0.0
 # Preprocess data
                          # Split, Process, Split percentage
 splits_to_process = dict({"train":[False,1.0], # 0.01 (1 %), 0.1 (10 %), 1.0 (100 %)
-                          "val":  [False,1.0],
-                          "test": [True,1.0]})
+                          "val":  [True,0.01],
+                          "test": [False,1.0]})
 modes_centerlines = ["test"] # "train","test" 
 # if train -> compute the best candidate (oracle), only using the "competition" algorithm
 # if test, return N plausible candidates. Choose between "competition", "map_api" and "get_around" algorithms
 
 PREPROCESS_SOCIAL_DATA = False
 PREPROCESS_RELEVANT_CENTERLINES = True
-SAVE_BEV_PLAUSIBLE_AREA = False
+SAVE_BEV_PLAUSIBLE_AREA = True
+HIGHLIGHT_ORACLE = False
 
 obs_len = 20 # steps
 pred_len = 30 # steps
@@ -524,10 +525,10 @@ for split_name,features in splits_to_process.items():
                                 )
 
                             filename = os.path.join(output_dir,f"{file_id}_binary_plausible_area_filtered_color.png")
-                            # plt.savefig(filename, bbox_inches='tight', facecolor=fig.get_facecolor(), edgecolor='none', pad_inches=0)
 
-                            lane_polygon = centerline_to_polygon(relevant_centerlines_filtered[0])
-                            ax.fill(lane_polygon[:, 0], lane_polygon[:, 1], "green", edgecolor='green', fill=True)
+                            if HIGHLIGHT_ORACLE:
+                                lane_polygon = centerline_to_polygon(relevant_centerlines_filtered[0])
+                                ax.fill(lane_polygon[:, 0], lane_polygon[:, 1], "green", edgecolor='green', fill=True)
                             
                             if SAVE_BEV_PLAUSIBLE_AREA: 
                                 fig.tight_layout(pad=0)
@@ -689,10 +690,11 @@ for split_name,features in splits_to_process.items():
 
             # Save N centerlines per sequence. Note that the number of variables per sequence may vary
             elif mode == "test":
-                # filename = os.path.join(BASE_DIR,config.dataset.path,split_name,
-                #                         f"data_processed_{str(int(features[1]*100))}_percent",
-                #                         f"relevant_centerlines_{algorithm}_{first_centerline_waypoint}_{str(max_points)}_points.npz")
-                # with open(filename, 'wb') as my_file: np.savez(my_file, map_info)
+                filename = os.path.join(BASE_DIR,config.dataset.path,split_name,
+                                        f"data_processed_{str(int(features[1]*100))}_percent",
+                                        f"relevant_centerlines_{algorithm}_{first_centerline_waypoint}_{str(max_points)}_points.npz")
+                with open(filename, 'wb') as my_file: np.savez(my_file, map_info)
+                
                 filename = os.path.join(BASE_DIR,config.dataset.path,split_name,
                                         f"data_processed_{str(int(features[1]*100))}_percent",
                                         f"relevant_centerlines_{algorithm}_{first_centerline_waypoint}_{str(max_points)}_points.npy")

@@ -251,7 +251,7 @@ def seq_collate(data):
                 
             # Get current centerlines
 
-            if PHYSICAL_CONTEXT == "plausible_centerlines": # N centerlines
+            if PHYSICAL_CONTEXT == "plausible_centerlines" or PHYSICAL_CONTEXT == "plausible_centerlines+feasible_area": # N centerlines
                 curr_relevant_centerlines = cloned_phy_info[seq_index,:,:,:].unsqueeze(0) # 1 (sequence) x N centerlines x centerline_length x 2
             elif PHYSICAL_CONTEXT == "oracle": # Only the most plausible
                 curr_relevant_centerlines = cloned_phy_info[seq_index,:,:].unsqueeze(0) # 1 (sequence) x 1 centerline x centerline_length x 2
@@ -299,7 +299,7 @@ def seq_collate(data):
             pred_traj_gt_rel[:,start:end,:] = aug_curr_pred_traj_gt_rel
             map_origin[seq_index] = rotated_curr_map_origin
             
-            if PHYSICAL_CONTEXT == "plausible_centerlines":
+            if PHYSICAL_CONTEXT == "plausible_centerlines" or PHYSICAL_CONTEXT == "plausible_centerlines+feasible_area":
                 phy_info[seq_index,:,:,:] = rotated_curr_relevant_centerlines
             elif PHYSICAL_CONTEXT == "oracle":
                 phy_info[seq_index,:,:] = rotated_curr_relevant_centerlines

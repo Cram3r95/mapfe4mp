@@ -32,7 +32,7 @@ from torch.utils.tensorboard import SummaryWriter
 from model.datasets.argoverse.dataset import ArgoverseMotionForecastingDataset, seq_collate
 from model.models.mapfe4mp import TrajectoryGenerator
 from model.modules.losses import l2_loss_multimodal, mse, pytorch_neg_multi_log_likelihood_batch, \
-                                 evaluate_feasible_area_prediction, smoothL1, l1_ewta_loss, l1_wta_loss
+                                 evaluate_feasible_area_prediction, smoothL1, l1_ewta_loss, l1_wta_loss, SoftDTW
 from model.modules.evaluation_metrics import displacement_error, final_displacement_error
 from model.datasets.argoverse.dataset_utils import relative_to_abs_multimodal
 from model.datasets.argoverse.map_functions import MapFeaturesUtils
@@ -323,6 +323,19 @@ def calculate_hinge_wta_gt_centerlines_loss(gt, pred, relevant_centerlines, conf
     end = time.time()
     if DEBUG: print("Time consumed by max-margin loss: ", end-start)
     
+    # # Compute SoftDTW loss
+    
+    # start = time.time()
+    # sdtw = SoftDTW(use_cuda=True, gamma=0.1)
+    
+    # for index_centerline in range(relevant_centerlines.shape[1]):
+    #     for num_mode in range(pred.shape[1]):
+    #         error = sdtw(relevant_centerlines[:,index_centerline,:,:],pred[:,num_mode,:,:])
+            
+    # end = time.time()
+    
+    # if DEBUG: print("Time consumed by softDTW loss: ", end-start)
+    # pdb.set_trace()
     # Compute WTA with lanes loss
     
     # start = time.time()
