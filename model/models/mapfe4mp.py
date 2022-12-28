@@ -42,6 +42,7 @@ NUM_PLAUSIBLE_AREA_POINTS = 512
 CENTERLINE_LENGTH = 30
 NUM_CENTERLINES = 3
 CENTERLINE_ENCODER = "MLP" # Conv+Pooling, MLP
+CENTERLINE_AF = "ReLU"
 
 NUM_ATTENTION_HEADS = 4
 H_DIM_PHYSICAL = 128
@@ -54,7 +55,7 @@ APPLY_DROPOUT = True
 DROPOUT = 0.25
 
 HEAD = "MultiLinear" # SingleLinear, MultiLinear, Non-Autoregressive
-DECODER_MM_KIND = "Latent" # Latent (if you want to get a multimodal prediction from the same latent space)
+DECODER_MM_KIND = "Loop" # Latent (if you want to get a multimodal prediction from the same latent space)
                          # Loop (iterate over different latent spaces)
 TEMPORAL_DECODER = True
 DIST2GOAL = False
@@ -283,7 +284,7 @@ class Centerline_Encoder(nn.Module):
             mid_dim = math.ceil((self.num_centerlines*self.lane_length*self.data_dim + self.h_dim)/2)
             dims = [self.num_centerlines*self.lane_length*self.data_dim, mid_dim, self.h_dim]
             self.mlp_centerlines = make_mlp(dims,
-                                            activation_function="Tanh", # ReLU
+                                            activation_function=CENTERLINE_AF,
                                             batch_norm=True,
                                             dropout=DROPOUT)
 
@@ -500,7 +501,7 @@ class Temporal_Multimodal_Decoder(nn.Module):
             for num_mode in range(self.num_modes):
                 traj_rel_ = torch.clone(traj_rel)
                 decoder_input = F.leaky_relu(self.spatial_embedding(traj_rel_.permute(1,0,2).contiguous().view(batch_size,-1))) # bs x window_size·2
-                
+           
                 decoder_input = decoder_input.unsqueeze(0)
                 if APPLY_DROPOUT: decoder_input = F.dropout(decoder_input, p=DROPOUT, training=self.training)
             
@@ -568,14 +569,14 @@ class Temporal_Multimodal_Decoder(nn.Module):
 
                 pred_traj_fake_rel.append(rel_pos)
 
+                
                 decoder_input = F.leaky_relu(self.spatial_embedding(traj_rel_.permute(1,0,2).contiguous().view(batch_size,-1))) # bs x window_size·2
                 
                 t += 1
                 if DIST2GOAL:
-                    # TODO: Code here the distance to the final goal, not a vector substraction
                     time_tensor = -1 + 2 * torch.ones(batch_size, 1) * t / self.pred_len
                     time_tensor = time_tensor.to(decoder_input)
-                
+                    
                     last_pos_abs = last_pos_abs + rel_pos
                     diff_centerline_pos = current_centerlines - last_pos_abs.unsqueeze(1)
                     distance_embedding = self.spatial_embedding_goal(diff_centerline_pos.contiguous().view(batch_size,-1))
@@ -714,7 +715,7 @@ class TrajectoryGenerator(nn.Module):
         elif PHYSICAL_CONTEXT == "plausible_centerlines":
             self.concat_h_dim = self.h_dim_social + self.h_dim_physical
         elif PHYSICAL_CONTEXT == "plausible_centerlines+feasible_area":
-            self.concat_h_dim = self.h_dim_social + self.h_dim_physical + self.h_dim_physical
+            self.concat_h_dim = self.h_dim_social + self.h_dim_physical #+ self.h_dim_physical
 
         if TEMPORAL_DECODER:
             self.decoder = Temporal_Multimodal_Decoder(decoder_h_dim=self.concat_h_dim)
@@ -851,14 +852,14 @@ class TrajectoryGenerator(nn.Module):
 
                 # Concatenate social info, static map info and current centerline info
 
-                mlp_decoder_context_input = torch.cat([encoded_social_info, 
-                                                       encoded_static_map_info,
-                                                       encoded_centerlines_info], 
-                                                       dim=1)
-                
                 # mlp_decoder_context_input = torch.cat([encoded_social_info, 
+                #                                        encoded_static_map_info,
                 #                                        encoded_centerlines_info], 
                 #                                        dim=1)
+                
+                mlp_decoder_context_input = torch.cat([encoded_social_info, 
+                                                       encoded_centerlines_info], 
+                                                       dim=1)
 
                 decoder_h = mlp_decoder_context_input.unsqueeze(0)
                 if INIT_ZEROS: decoder_c = torch.zeros(tuple(decoder_h.shape)).cuda(obs_traj.device)
@@ -881,7 +882,7 @@ class TrajectoryGenerator(nn.Module):
             conf = torch.softmax(conf.view(batch_size,-1), dim=1) # batch_size, num_modes
             if not torch.allclose(torch.sum(conf, dim=1), conf.new_ones((batch_size,))):
                 pdb.set_trace()
-
+  
         if self.physical_context != "plausible_centerlines+feasible_area":     
             if TEMPORAL_DECODER:
                 pred_traj_fake_rel, conf = self.decoder(traj_agent_abs, traj_agent_abs_rel, state_tuple) # LSTM

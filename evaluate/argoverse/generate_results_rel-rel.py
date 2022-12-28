@@ -61,6 +61,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument('--model_path', required=True, type=str)
 parser.add_argument("--device_gpu", required=True, default=0, type=int)
 parser.add_argument("--split", required=True, default="val", type=str)
+parser.add_argument("--batch_size", required=True, default=1, type=int)
 
 avm = ArgoverseMap()
 
@@ -70,59 +71,61 @@ LIMIT_FILES = -1 # From 1 to num_files.
 OBS_ORIGIN = 20
 PRED_LEN = 30
 ARGOVERSE_NUM_MODES = 6
-
-dist_around = 15 # 40
-dist_rasterized_map = [-dist_around, dist_around, -dist_around, dist_around]
+DATA_DIM = 2
 
 GENERATE_QUALITATIVE_RESULTS = True
 PLOT_WORST_SCENES = False
-LIMIT_QUALITATIVE_RESULTS = 2000
-
+LIMIT_QUALITATIVE_RESULTS = 300
+DEBUG = False
 COMPUTE_METRICS = True
+PLOT_METRICS = False
 
-def generate_csv(results_path,ade_list,fde_list,num_seq_list,traj_kind_list,sort=False):
+def generate_csv(results_path, ade_um_list, fde_um_list, ade_mm_list, fde_mm_list, 
+                 num_seq_list, traj_kind_list, sort=False):
     """
     If sort = True, sort by ADE
     """
 
     now = datetime.now()
-    exp_name = now.strftime("exp-%Y-%m-%d_%Hh")
 
     if sort:
-        # aux = now.strftime("metrics_sorted_ade-%Y-%m-%d_%Hh.csv")
         results_path = os.path.join(results_path,"metrics_sorted_ade.csv")  
     else:
-        # aux = now.strftime("metrics-%Y-%m-%d_%Hh.csv")
         results_path = os.path.join(results_path,"metrics.csv")  
 
-    mean_ade = round(sum(ade_list) / (len(ade_list)),3)
-    mean_fde = round(sum(fde_list) / (len(fde_list)),3)
+    mean_ade_um = round(sum(ade_um_list) / (len(ade_um_list)),3)
+    mean_fde_um = round(sum(fde_um_list) / (len(fde_um_list)),3)
+    
+    mean_ade_mm = round(sum(ade_mm_list) / (len(ade_mm_list)),3)
+    mean_fde_mm = round(sum(fde_mm_list) / (len(fde_mm_list)),3)
 
     with open(results_path, 'w', newline='') as csvfile:
         csv_writer = csv.writer(csvfile, delimiter=' ', quotechar='|', quoting=csv.QUOTE_MINIMAL)
 
-        header = ['Index','Sequence.csv','Agent_Traj_Kind','ADE','FDE']
+        header = ['index','seq_csv','curve_straight','ade_k_1','fde_k_1','ade_k_6','fde_k_6']
         csv_writer.writerow(header)
 
         if sort:
-            indeces = np.argsort(ade_list)
+            indeces = np.argsort(ade_mm_list)
         else:
-            indeces = np.arange(len(ade_list))
+            indeces = np.arange(len(ade_mm_list))
 
         for _,index in enumerate(indeces):
             traj_kind = traj_kind_list[index]
             seq_id = num_seq_list[index] 
-            curr_ade = round(ade_list[index],3)
-            curr_fde = round(fde_list[index],3)
+            curr_ade_um = round(ade_um_list[index],3)
+            curr_fde_um = round(fde_um_list[index],3)
+            curr_ade_mm = round(ade_mm_list[index],3)
+            curr_fde_mm = round(fde_mm_list[index],3)
 
-            data = [str(index),str(seq_id),traj_kind,curr_ade,curr_fde]
+            data = [str(index),str(seq_id),traj_kind,curr_ade_um,curr_fde_um,curr_ade_mm,curr_fde_mm]
 
             csv_writer.writerow(data)
 
         # Write mean ADE and FDE 
 
-        csv_writer.writerow(['-','-','-','-','-'])
-        csv_writer.writerow(['-','-','Mean',mean_ade,mean_fde])
+        csv_writer.writerow(['-','-','-','-','-','-','-'])
+        csv_writer.writerow(['-','-','-',mean_ade_um,mean_fde_um,mean_ade_mm,mean_fde_mm])
 
 def get_worst_scenes(csv_file_sorted):
     """
@@ -138,12 +141,16 @@ def get_worst_scenes(csv_file_sorted):
 def evaluate(loader, generator, config, split, current_cuda, pred_len, results_path, worst_scenes=None):
     """
     """
-    assert loader.batch_size == 1
+    # assert loader.batch_size == 1
 
     output_predictions = {}
     output_probabilities = {}
-    ade_list = []
-    fde_list = []
+    
+    ade_mm_list = [] # Multimodal, store min ADE out of k modes
+    fde_mm_list = [] # Multimodal, store min FDE out of k modes
+    ade_um_list = [] # Unimodal, store ADE of the mode with the highest confidence
+    fde_um_list = [] # Unimodal, store FDE of the mode with the highest confidence
+    
     traj_kind_list = []
     num_seq_list = []
     plot_scene = 0
@@ -159,18 +166,21 @@ def evaluate(loader, generator, config, split, current_cuda, pred_len, results_p
     time_per_iteration = float(0)
     aux_time = float(0)
 
+    batch_size = config.dataset.batch_size
+    
     with torch.no_grad(): # During inference (regardless the split), gradient calculation is not required
         for batch_index, batch in enumerate(loader):
             if LIMIT_FILES != -1: 
-                if batch_index+1 > LIMIT_FILES:
+                if (batch_index+1)*batch_size > LIMIT_FILES:
                     break
 
-                files_remaining = LIMIT_FILES - (batch_index+1)
-                print(f"Evaluating batch {batch_index+1}/{LIMIT_FILES}")
+                files_remaining = LIMIT_FILES - (batch_index+1)*batch_size
+                print(f"Evaluating file {(batch_index+1)*batch_size}/{LIMIT_FILES}")
             else: 
-                files_remaining = num_files - (batch_index+1)
-                print(f"Evaluating batch {batch_index+1}/{len(loader)}")
-
+                files_remaining = num_files - (batch_index+1)*batch_size
+                print(f"Evaluating file {(batch_index+1)*batch_size}/{len(loader)*batch_size}")
+            batch_remaining = files_remaining / batch_size
+            
             if worst_scenes: # Analyze some specific sequences
                 if batch_index > max(worst_scenes) or plot_scene >= LIMIT_QUALITATIVE_RESULTS:
                     break
@@ -202,15 +212,6 @@ def evaluate(loader, generator, config, split, current_cuda, pred_len, results_p
                  loss_mask, seq_start_end, object_cls, obj_id, map_origin, num_seq, norm, 
                  target_agent_orientation) = batch
 
-            seq_id = num_seq.cpu().item()
-            print(f"{seq_id}.csv")
-
-            # Get city for this sequence
-
-            path = os.path.join(data_folder,str(seq_id)+".csv")
-            data = dataset_utils.read_file(path) 
-            _, city_name = dataset_utils.get_origin_and_city(data,OBS_ORIGIN)
-
             ## Get AGENT (most interesting obstacle) id
 
             agent_idx = torch.where(object_cls==1)[0].cpu().numpy()
@@ -234,8 +235,8 @@ def evaluate(loader, generator, config, split, current_cuda, pred_len, results_p
                     pred_traj_fake = dataset_utils.relative_to_abs(pred_traj_fake_rel, obs_traj[-1, agent_idx, :])
                     pred_traj_fake_list.append(pred_traj_fake)
 
-                pred_traj_fake_rel = torch.stack(pred_traj_fake_rel_list, axis=0).view(-1, ARGOVERSE_NUM_MODES, 2) # pred_len x num_modes x data_dim
-                pred_traj_fake_global = torch.stack(pred_traj_fake_list + map_origin, axis=0).view(ARGOVERSE_NUM_MODES,-1,2) # num_modes x pred_len x data_dim
+                pred_traj_fake_rel = torch.stack(pred_traj_fake_rel_list, axis=0).view(-1, ARGOVERSE_NUM_MODES, DATA_DIM) # pred_len x num_modes x data_dim
+                pred_traj_fake_global = torch.stack(pred_traj_fake_list + map_origin, axis=0).view(ARGOVERSE_NUM_MODES,-1,DATA_DIM) # num_modes x pred_len x data_dim
             
                 conf_array = np.ones([ARGOVERSE_NUM_MODES])/ARGOVERSE_NUM_MODES
 
@@ -282,7 +283,8 @@ def evaluate(loader, generator, config, split, current_cuda, pred_len, results_p
 
                         current_centerlines_indeces = centerlines_indeces[:,mode]
                         current_centerlines_list = []
-                        for i in range(loader.batch_size):
+                        
+                        for i in range(batch_size):
                             current_centerline = phy_info[i]["relevant_centerlines_abs"][current_centerlines_indeces[i]]
                             current_centerlines_list.append(current_centerline)
 
@@ -297,21 +299,18 @@ def evaluate(loader, generator, config, split, current_cuda, pred_len, results_p
                 else:
                     pred_traj_fake_rel, conf = generator(obs_traj, obs_traj_rel, seq_start_end, agent_idx, relevant_centerlines=relevant_centerlines)
                     
-                ## Get predictions in absolute -> map coordinates
+                ## Get predictions: relative -> absolute -> map coordinates
 
                 pred_traj_fake = dataset_utils.relative_to_abs_multimodal(pred_traj_fake_rel, obs_traj[-1,agent_idx,:])
-
-                pred_traj_fake_global = pred_traj_fake + map_origin
-
-                conf_array = conf.cpu().numpy().reshape(-1)
+                pred_traj_fake_global = pred_traj_fake + map_origin.unsqueeze(1).unsqueeze(1)
                 
-            # Hereafter, we have multimodality (either by iterating the same model K modes or returning K modes in the
-            # same forward)
-
-            ade_min, fde_min = None, None
+            # Hereafter, we have multimodality (either by iterating the same model K modes or 
+            # returning K modes in the same forward)
+            
+            # Iterate over the whole batch to compute the metrics and plot qualitative results
             
             # Transform to CPU (to acelerate the rotation and plot qualitative results)
-            
+
             obs_traj = obs_traj.cpu()
             pred_traj_gt = pred_traj_gt.cpu()
             pred_traj_fake = pred_traj_fake.cpu()
@@ -323,104 +322,134 @@ def evaluate(loader, generator, config, split, current_cuda, pred_len, results_p
             non_linear_obj = non_linear_obj.cpu()
             object_cls = object_cls.cpu()
             
-            if config.dataset.apply_rotation: # We have to counter-rotate in order to have again the original sequence
-                yaw_aux = (math.pi/2 - target_agent_orientation) 
-                c, s = torch.cos(yaw_aux), torch.sin(yaw_aux)
-                R = torch.tensor([[c,-s],  # Rot around the map z-axis
-                                  [s, c]])
+            for i in range(len(num_seq)):
+            # OBS: We cannot iterate always over batch_size length, since at the
+            # end our batch will usually have less elements than batch_size (e.g. 560 vs 1024)
+            # So, we must make sure how many elements our current batch has 
+             
+                # Get seq_id and city for this sequence
 
-                obs_traj = data_augmentation_functions.rotate_traj(obs_traj,R)
-                pred_traj_gt = data_augmentation_functions.rotate_traj(pred_traj_gt,R)
-                pred_traj_fake = data_augmentation_functions.rotate_traj(pred_traj_fake,R)
-                map_origin = data_augmentation_functions.rotate_traj(map_origin,R)
+                seq_id = num_seq[i].cpu().item()
+                if DEBUG: print(f"{seq_id}.csv")
                 
-                if config.hyperparameters.physical_context == "social":
-                    relevant_centerlines = torch.tensor([])
-                relevant_centerlines = data_augmentation_functions.rotate_traj(relevant_centerlines,R)
+                path = os.path.join(data_folder,str(seq_id)+".csv")
+                data = dataset_utils.read_file(path) 
+                _, city_name = dataset_utils.get_origin_and_city(data,OBS_ORIGIN)  
 
-                pred_traj_fake_global = pred_traj_fake + map_origin
+                start_seq, end_seq = seq_start_end[i]
                 
-            if COMPUTE_METRICS and split != "test":
-                agent_pred_gt = pred_traj_gt[:,agent_idx,:] # pred_len (30) x 1 (agent) x data_dim (2) -> "Abs" coordinates (around 0,0)
-                agent_pred_fake = pred_traj_fake
+                ade_min, fde_min = None, None
+            
+                if config.dataset.apply_rotation: # We have to counter-rotate in order to have again the original sequence
+                    yaw_aux = (math.pi/2 - target_agent_orientation[i]) 
+                    c, s = torch.cos(yaw_aux), torch.sin(yaw_aux)
+                    R = torch.tensor([[c,-s],  # Rot around the map z-axis
+                                      [s, c]])
 
-                agent_non_linear_obj = non_linear_obj[agent_idx]
-                agent_linear_obj = 1 - agent_non_linear_obj
+                    obs_traj[:,start_seq:end_seq,:] = data_augmentation_functions.rotate_traj(obs_traj[:,start_seq:end_seq,:],R)
+                    pred_traj_gt[:,start_seq:end_seq,:] = data_augmentation_functions.rotate_traj(pred_traj_gt[:,start_seq:end_seq,:],R)
+                    pred_traj_fake[i] = data_augmentation_functions.rotate_traj(pred_traj_fake[i],R)
+                    map_origin[i] = data_augmentation_functions.rotate_traj(map_origin[i],R)
+                    
+                    if config.hyperparameters.physical_context == "social":
+                        relevant_centerlines = torch.tensor([])
+                    relevant_centerlines[i] = data_augmentation_functions.rotate_traj(relevant_centerlines[i],R)
 
-                agent_obj_id = obj_id[agent_idx]
-                agent_mask = np.where(agent_obj_id.cpu() == -1, 0, 1)
-                # agent_mask = torch.tensor(agent_mask, device=agent_obj_id.device).reshape(-1)
-
-                ade, ade_min = cal_ade_multimodal(agent_pred_gt, agent_pred_fake, agent_linear_obj, agent_non_linear_obj, agent_mask)
-                fde, fde_min = cal_fde_multimodal(agent_pred_gt, agent_pred_fake, agent_linear_obj, agent_non_linear_obj, agent_mask)
-
-                ade_min = ade_min.item() / pred_len
-                fde_min = fde_min.item()
-
-                ade_list.append(ade_min)
-                fde_list.append(fde_min)
-                num_seq_list.append(seq_id)
-                print(f"k = {ARGOVERSE_NUM_MODES} -> ADE min, FDE min: ", ade_min, fde_min)
-
-                # If the agent conducts a curve (these trajectories are suppossed to be harder -> Higher ADE and FDE)
-
-                if agent_non_linear_obj.item(): traj_kind_list.append(1) # Curved trajectory
-                else: traj_kind_list.append(0) # The agent conducts a curve
-
-            ## (Optional) Plot results
-
-            if GENERATE_QUALITATIVE_RESULTS and plot_scene < LIMIT_QUALITATIVE_RESULTS:
-                plot_scene += 1
-                # Custom plot
-
-                curr_map_origin = map_origin[0]
+                    pred_traj_fake_global[i] = pred_traj_fake[i] + map_origin[i]
                 
-                if split == "test":
-                    curr_traj = obs_traj
-                else:
-                    curr_traj = torch.cat((obs_traj,
-                                           pred_traj_gt),dim=0)
+                if COMPUTE_METRICS and split != "test":
+                    agent_pred_gt = pred_traj_gt[:,agent_idx[i],:] # pred_len (30) x 1 (agent) x data_dim (2) -> "Abs" coordinates (around 0,0)
+                    agent_pred_gt = agent_pred_gt.unsqueeze(0).permute(1,0,2) # pred_len x batch_size x data_dim
+                    agent_pred_fake = pred_traj_fake[i]
+                    agent_pred_fake = agent_pred_fake.unsqueeze(0) # batch_size x num_modes x pred_len x data_dim
 
-                curr_object_class_id_list = object_cls
+                    agent_non_linear_obj = non_linear_obj[agent_idx[i]]
+                    agent_linear_obj = 1 - agent_non_linear_obj
 
-                # Argoverse standard plot
+                    agent_obj_id = obj_id[agent_idx[i]]
+                    agent_mask = np.where(agent_obj_id.cpu() == -1, 0, 1)
+                    
+                    ade, ade_min = cal_ade_multimodal(agent_pred_gt, agent_pred_fake, agent_linear_obj, agent_non_linear_obj, agent_mask)
+                    fde, fde_min = cal_fde_multimodal(agent_pred_gt, agent_pred_fake, agent_linear_obj, agent_non_linear_obj, agent_mask)
+                    
+                    # Assuming the mode with the best confidence (k = 1)
+                    
+                    curr_conf = conf[i]
+                    mode_max_conf = torch.argmax(curr_conf)
+                    ade_unimodal = ade[0,mode_max_conf] / pred_len
+                    fde_unimodal = fde[0,mode_max_conf]
+                    
+                    if DEBUG: print(f"k = 1 -> ADE, FDE: ", ade_unimodal, fde_unimodal)
+                    
+                    # Considering k modes
+                    
+                    ade_min = ade_min.item() / pred_len
+                    fde_min = fde_min.item()
+                    if DEBUG: print(f"k = {ARGOVERSE_NUM_MODES} -> ADE min, FDE min: ", ade_min, fde_min)
 
-                if config.hyperparameters.physical_context == "dummy" or config.hyperparameters.physical_context == "social":
-                    relevant_centerlines_abs = []
-                else:
-                    relevant_centerlines_abs = relevant_centerlines.cpu().numpy()
+                    # Store for csv
+                    
+                    ade_um_list.append(ade_unimodal)
+                    fde_um_list.append(fde_unimodal)
+                    ade_mm_list.append(ade_min)
+                    fde_mm_list.append(fde_min)
+                    num_seq_list.append(seq_id)
+                    
+                    # If the agent conducts a curve (these trajectories are suppossed to be harder -> Higher ADE and FDE)
 
-                plot_functions.viz_predictions_all(seq_id,
-                                                   results_path,
-                                                   obs_traj.permute(1,0,2).numpy(), # All obstacles
-                                                   pred_traj_fake.squeeze(0).numpy(), # Only AGENT (MM prediction)
-                                                   conf.numpy(), # Only AGENT (MM confidence)
-                                                   target_agent_orientation.numpy(),
-                                                   pred_traj_gt.permute(1,0,2).numpy(), # All obstacles                                                  
-                                                   curr_object_class_id_list.numpy(),
-                                                   city_name,
-                                                   curr_map_origin.numpy(),
-                                                   avm,
-                                                   dist_rasterized_map=35,
-                                                   relevant_centerlines_abs=relevant_centerlines_abs,
-                                                   save=True,
-                                                   ade_metric=ade_min,
-                                                   fde_metric=fde_min,
-                                                   plot_output_confidences=True,
-                                                   worst_scenes=worst_scenes)
+                    if agent_non_linear_obj.item(): traj_kind_list.append(1) # Curved trajectory
+                    else: traj_kind_list.append(0) # The agent conducts a curve
 
-            pred_traj_fake_global_aux = pred_traj_fake_global.squeeze(0).view(ARGOVERSE_NUM_MODES, PRED_LEN, 2)
-            output_predictions[seq_id] = pred_traj_fake_global_aux.cpu().numpy()
-            output_probabilities[seq_id] = conf_array
+                ## (Optional) Plot results
 
-            file_list.remove(seq_id)
+                if GENERATE_QUALITATIVE_RESULTS and plot_scene < LIMIT_QUALITATIVE_RESULTS:
+                    plot_scene += 1
+
+                    curr_map_origin = map_origin[i]
+                    curr_object_class_id_list = object_cls[start_seq:end_seq]
+
+                    # Argoverse standard plot
+
+                    if config.hyperparameters.physical_context == "dummy" or config.hyperparameters.physical_context == "social":
+                        relevant_centerlines_abs = []
+                    else:
+                        # relevant_centerlines_abs = relevant_centerlines[i].cpu().numpy()
+                        relevant_centerlines_abs = relevant_centerlines[i].unsqueeze(0).cpu().numpy() # TODO: Check this
+
+                    if not PLOT_METRICS:
+                        ade_min, fde_min = None, None
+                        
+                    plot_functions.viz_predictions_all(seq_id,
+                                                       results_path,
+                                                       obs_traj[:,start_seq:end_seq,:].permute(1,0,2).numpy(), # All obstacles
+                                                       pred_traj_fake[i].squeeze(0).numpy(), # Only AGENT (MM prediction)
+                                                       conf[i].unsqueeze(0).numpy(), # Only AGENT (MM confidence) # TODO: Check this
+                                                       target_agent_orientation[i].numpy(),
+                                                       pred_traj_gt[:,start_seq:end_seq,:].permute(1,0,2).numpy(), # All obstacles                                                  
+                                                       curr_object_class_id_list.numpy(),
+                                                       city_name,
+                                                       curr_map_origin.numpy(),
+                                                       avm,
+                                                       dist_rasterized_map=50,
+                                                       relevant_centerlines_abs=relevant_centerlines_abs,
+                                                       save=True,
+                                                       ade_metric=ade_min,
+                                                       fde_metric=fde_min,
+                                                       plot_output_confidences=True,
+                                                       worst_scenes=worst_scenes)
+
+                pred_traj_fake_global_aux = pred_traj_fake_global[i].view(ARGOVERSE_NUM_MODES, PRED_LEN, DATA_DIM)
+                output_predictions[seq_id] = pred_traj_fake_global_aux.cpu().numpy()
+                output_probabilities[seq_id] = conf[i].numpy().reshape(-1)
+
+                file_list.remove(seq_id)
 
             end = time.time()
             aux_time += (end-start)
             time_per_iteration = aux_time/(batch_index+1)
 
             print(f"Time per iteration: {time_per_iteration} s. \n \
-                    Estimated time to finish ({files_remaining} files): {round(time_per_iteration*files_remaining/60)} min")
+                    Estimated time to finish ({files_remaining} files): {round((time_per_iteration*batch_remaining)/60)} min")
 
         # Add sequences not loaded in dataset
 
@@ -429,7 +458,7 @@ def evaluate(loader, generator, config, split, current_cuda, pred_len, results_p
         except:
             print("All files have been processed")
 
-    return output_predictions, output_probabilities, ade_list, fde_list, traj_kind_list, num_seq_list   
+    return output_predictions, output_probabilities, ade_um_list, fde_um_list, ade_mm_list, fde_mm_list, traj_kind_list, num_seq_list   
 
 def main(args):
     """
@@ -455,9 +484,10 @@ def main(args):
     # dataset (100 %)
 
     # TODO: FIX THIS AND ALLOW BATCH_SIZE > 1 TO REDUCE THE TIME TO GENERATE THE RESULTS
-    config.dataset.batch_size = 1 # Better to build the h5 results file
-
-    assert config.dataset.batch_size == 1, "At this moment the result generator is designed for batch size 1"
+    # config.dataset.batch_size = 1 # Better to build the h5 results file
+    config.dataset.batch_size = args.batch_size
+    
+    # assert config.dataset.batch_size == 1, "At this moment the result generator is designed for batch size 1"
 
     config.dataset.num_workers = 0
     config.dataset.class_balance = -1.0 # Do not consider class balance in the split test
@@ -530,7 +560,7 @@ def main(args):
             worst_scenes = get_worst_scenes(metrics_sorted_csv)
 
     print(f"Evaluate model in {config.dataset.split} split")
-    output_predictions, output_probabilities, ade_list, fde_list, traj_kind_list, num_seq_list = \
+    output_predictions, output_probabilities, ade_um_list, fde_um_list, ade_mm_list, fde_mm_list, traj_kind_list, num_seq_list = \
         evaluate(split_loader, generator, config, 
                  config.dataset.split, current_cuda, 
                  config.hyperparameters.pred_len, results_path,
@@ -549,8 +579,8 @@ def main(args):
 
         # Write results (ade and fde with the corresponding trajectory type) in CSV
 
-        generate_csv(results_path,ade_list,fde_list,num_seq_list,traj_kind_list)
-        generate_csv(results_path,ade_list,fde_list,num_seq_list,traj_kind_list,sort=True)
+        generate_csv(results_path, ade_um_list, fde_um_list, ade_mm_list, fde_mm_list, num_seq_list, traj_kind_list)
+        generate_csv(results_path, ade_um_list, fde_um_list, ade_mm_list, fde_mm_list, num_seq_list, traj_kind_list, sort=True)
 
 if __name__ == '__main__':
     args = parser.parse_args()
@@ -567,11 +597,11 @@ python evaluate/argoverse/generate_results_rel-rel.py \
 """
 python evaluate/argoverse/generate_results_rel-rel.py \
 --model_path "save/argoverse/mapfe4mp/100.0_percent/test_8/argoverse_motion_forecasting_dataset_0_with_model.pt" \
---device_gpu 0 --split "test"
+--device_gpu 0 --split "val"
 """
 
 """
 python evaluate/argoverse/generate_results_rel-rel.py \
 --model_path "save/argoverse/mapfe4mp/100.0_percent/test_12/argoverse_motion_forecasting_dataset_0_with_model.pt" \
---device_gpu 0 --split "val"
+--device_gpu 0 --split "val" --batch_size 1024
 """
