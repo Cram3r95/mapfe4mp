@@ -839,14 +839,14 @@ def model_trainer(config, logger):
                 logger.info("Min ADE: {}".format(min_ade_))
                 logger.info("Min FDE: {}".format(min_fde))
 
-                # Compare with previous validation metrics
+                # Compare with previous validation metrics (val_min_ade < min_ade_)
 
                 if metrics_val[f'{split}_ade'] <= min_ade_:
                     logger.info('New low for avg_disp_error')
                     checkpoint.config_cp["best_t"] = t
                     checkpoint.config_cp["g_best_state"] = generator.state_dict()
 
-                    # If val_min_ade < min_ade_, save another checkpoint with model weights and
+                    # Save another checkpoint with model weights and
                     # optimizer state
 
                     checkpoint.config_cp["g_state"] = generator.state_dict()
@@ -860,6 +860,7 @@ def model_trainer(config, logger):
 
                     # Save a checkpoint with no model weights by making a shallow
                     # copy of the checkpoint excluding some items
+                    
                     checkpoint_path = os.path.join(
                         config.base_dir, hyperparameters.output_dir, "{}_{}_no_model.pt".format(config.dataset_name, hyperparameters.checkpoint_name)
                     )
@@ -875,6 +876,10 @@ def model_trainer(config, logger):
                             small_checkpoint[k] = v
                     torch.save(small_checkpoint, checkpoint_path)
                     logger.info('Done.')
+                    
+                    # Save the Python script (assuming the code is in a single file)
+                    
+                    pdb.set_trace()
 
                 if metrics_val[f'{split}_ade_nl'] <= min_ade_nl:
                     logger.info('New low for avg_disp_error_nl')

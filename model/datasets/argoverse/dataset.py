@@ -502,6 +502,7 @@ class ArgoverseMotionForecastingDataset(Dataset):
         self.seq_len = self.obs_len + self.pred_len
         self.distance_threshold = distance_threshold # Monitorize distance_threshold around the AGENT
         self.split = split
+        self.split_percentage = split_percentage
         self.batch_size = batch_size
         self.class_balance = class_balance
         self.obs_origin = obs_origin
@@ -959,8 +960,11 @@ class ArgoverseMotionForecastingDataset(Dataset):
             self.cont_hm_traj = []
             self.cont_seqs = 0
  
-        if self.hard_mining == -1.0 or \
-           (self.hard_mining != -1.0 and remainder == 0 
+        pdb.set_trace()
+        
+        if (self.hard_mining == -1.0 or \
+           (self.hard_mining != -1.0 
+            and remainder == 0 
             and len(self.cont_standard_traj) < int((1-self.hard_mining)*self.batch_size)):
               
             msg = f"{self.split}" 
@@ -979,22 +983,7 @@ class ArgoverseMotionForecastingDataset(Dataset):
                     self.oracle_centerlines[index,:,:], self.relevant_centerlines[index,:,:,:], msg
                     # self.relevant_centerlines[str(self.file_id_list[index])]
                 ]
-        # else:        
-        #     msg = "val:hard_mining" 
-            
-        #     hm_index = np.random.choice(self.hardest_sequences)
-        #     hm_start, hm_end = self.hm_seq_start_end[hm_index]
-            
-        #     out = [
-        #         self.hm_obs_traj[hm_start:hm_end, :, :], self.hm_pred_traj_gt[hm_start:hm_end, :, :],
-        #         self.hm_obs_traj_rel[hm_start:hm_end, :, :], self.hm_pred_traj_gt_rel[hm_start:hm_end, :, :],
-        #         self.hm_non_linear_obj[hm_start:hm_end], self.hm_loss_mask[hm_start:hm_end, :],
-        #         self.hm_seq_id_list[hm_start:hm_end, :, :], self.hm_object_class_id_list[hm_start:hm_end], 
-        #         self.hm_object_id_list[hm_start:hm_end], self.hm_city_ids[hm_index], self.hm_ego_vehicle_origin[hm_index,:], 
-        #         self.hm_num_seq_list[hm_index], self.hm_norm, self.hm_target_agent_orientation[hm_index],
-        #         self.hm_oracle_centerlines[hm_index,:,:], self.hm_relevant_centerlines[hm_index,:,:,:], msg
-        #         # self.relevant_centerlines[str(self.file_id_list[hm_index])]
-        #           ]
+
         else:        
             msg = "train:hard_mining" 
             

@@ -14,6 +14,7 @@
 
 **News 🚀🚀**
 
+- [01/2023] Work on Transactions on Intelligent Transportation Systems (T-ITS, Q1-JCR)
 - [10/2022] GNN attention-based method will be released. We will extend the baselines :)
 - [09/2022] Ongoing repo update. The most recent work was presented at IEEE ITSC 2022
 
@@ -28,7 +29,19 @@ Our papers:
 - [Exploring Map-based Features for Efficient Attention-based Vehicle Motion Prediction](https://arxiv.org/abs/2205.13071) at CVPRW ICRA 2022 Workshops
 - [Exploring Attention GAN for Vehicle Motion Prediction](https://arxiv.org/abs/2209.12674) at IEEE International Conference on Intelligent Transportation Systems 2022
 
-<img src="media/icra22-overview.png"/>
+<img src="media/t-its-pipeline.jpg"/>
+
+>Motion Prediction (MP) of multiple surroundings agents is a crucial task in arbitrarily complex environments, from simple social robots to self-driving vehicles. Current techniques tackle this problem using end-to-end pipelines, where the input data is usually a rendered top-view of the physical information and the past trajectories of the most relevant agents; leveraging this information is a must to obtain optimal performance. In that sense, a reliable Autonomous Driving (AD) system must produce reasonable predictions on time, however, despite many approaches use simple ConvNets and LSTMs, models might be too complex for real-time applications when using both sources of information (map and past trajectories). Moreover, the performance of such models highly depends on the amount of training data, which can be expensive (particularly the annotated High-Definition (HD) maps).
+
+>In this work, we propose several baselines for the well-known Argoverse Motion Forecasting Benchmark. We aim to develop compact models using state-of-the-art techniques for MP, including attention mechanisms and GNNs.
+Our lightweight models use standard social information and interpretable map information such as points from the driveable area and plausible centerlines, in opposition to black-box CNN-based methods for map processing, to generate plausible multimodal trajectories, achieving state-of-the-art accuracy.
+
+<details>
+<summary>Transformer-based Architecture Diagram (click me)</summary>
+<p align="center">
+  <img src="media/social_set_transformer_mm.svg" style="width:60%"/>
+</p>
+</details>
 
 <details>
 <summary>GAN-based Architecture Diagram (click me)</summary>
@@ -36,8 +49,6 @@ Our papers:
   <img src="media/gan-lstm-mhsa.JPG"/>
 </p>
 </details>
-
->Motion prediction (MP) of multiple agents is a crucial task in arbitrarily complex environments, from social robots to self-driving cars. Current approaches tackle this problem using end-to-end networks, where the input data is usually a rendered top-view of the scene and the past trajectories of all the agents; leveraging this information is a must to obtain optimal performance. In that sense, a reliable Autonomous Driving (AD) system must produce reasonable predictions on time, however, despite many of these approaches use simple ConvNets and LSTMs, models might not be efficient enough for real-time applications when using both sources of information (map and trajectory history). Moreover, the performance of these models highly depends on the amount of training data, which can be expensive (particularly the annotated HD maps). In this work, we explore how to achieve competitive performance on the Argoverse 1.0 Benchmark using efficient attention-based models, which take as input the past trajectories and map-based features from minimal map information to ensure efficient and reliable MP. These features represent interpretable information as the driveable area and plausible goal points, in opposition to black-box CNN-based methods for map processing.
 
 <br>
 
@@ -139,6 +150,9 @@ If you cannot open a Jupyter Notebook correctly, just reinstall the Jupyter exte
 Please, be aware that after installing a new extension, you should reload your VSCode window.
 
 ## Quantitative results
+
+<img src="media/quantitative-test.PNG"/>
+<img src="media/quantitative-runtime.PNG"/>
 
 Please check [our papers](https://arxiv.org/abs/2205.13071) for further details.
 

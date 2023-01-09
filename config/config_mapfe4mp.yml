@@ -7,11 +7,11 @@ dataset:
     path: "data/datasets/argoverse/motion-forecasting/"
     imgs_folder: "map_features"
     split: "train"
-    batch_size: 1024
+    batch_size: 32
     num_workers: 0
     start_from_percentage: 0.0 # By default, 0. If you want to analize a particular bunch of files (e.g. from 25 % to 50 %)
                                # then write here 0.25 and in split_percentage 0.25
-    split_percentage: 1.0 # % of the dataset (0-1)
+    split_percentage: 0.01 # % of the dataset (0-1)
     extra_data_train: -1.0 # % (0-1) of the val split is used for training too. Remaining files are used for validation
                            # -1.0 if not used
     hard_mining: 0.1 # % (0-1). A fraction of the batch is filled with the hardest validation sequences. 
