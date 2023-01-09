@@ -21,6 +21,7 @@ from prodict import Prodict
 # DL & Math
 
 import torch
+import numpy as np
 
 from torchsummary import summary
 from thop import profile, clever_format
@@ -46,50 +47,60 @@ device = torch.device(current_cuda if torch.cuda.is_available() else "cpu")
 
 print(">>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>>")
 
-whole_model = TrajectoryGenerator(PHYSICAL_CONTEXT="social",CURRENT_DEVICE="cuda:0")
+whole_model = TrajectoryGenerator(PHYSICAL_CONTEXT="social",CURRENT_DEVICE=device)
+whole_model.to(device)
 print("Mapfe4mp social. All parameters: ", utils.count_parameters(whole_model))
 
-whole_model = TrajectoryGenerator(PHYSICAL_CONTEXT="oracle",CURRENT_DEVICE="cuda:0")
-print("Mapfe4mp oracle. All parameters: ", utils.count_parameters(whole_model))
+# whole_model = TrajectoryGenerator(PHYSICAL_CONTEXT="oracle",CURRENT_DEVICE=device)
+# print("Mapfe4mp oracle. All parameters: ", utils.count_parameters(whole_model))
 
-whole_model = TrajectoryGenerator(PHYSICAL_CONTEXT="plausible_centerlines",CURRENT_DEVICE="cuda:0")
-print("Mapfe4mp plausible_centerlines. All parameters: ", utils.count_parameters(whole_model))
+# whole_model = TrajectoryGenerator(PHYSICAL_CONTEXT="plausible_centerlines",CURRENT_DEVICE=device)
+# print("Mapfe4mp plausible_centerlines. All parameters: ", utils.count_parameters(whole_model))
 
-whole_model = TrajectoryGenerator(PHYSICAL_CONTEXT="plausible_centerlines+feasible_area",CURRENT_DEVICE="cuda:0")
-print("Mapfe4mp plausible_centerlines+feasible_area. All parameters: ", utils.count_parameters(whole_model))
+# whole_model = TrajectoryGenerator(PHYSICAL_CONTEXT="plausible_centerlines+feasible_area",CURRENT_DEVICE=device)
+# whole_model.to(device)
+# print("Mapfe4mp plausible_centerlines+feasible_area. All parameters: ", utils.count_parameters(whole_model))
 
-# agents = 20
+agents = 10
+
 # We assume bs = 1
-# obs = torch.randn(20,agents,2).to(device)
-# rel = torch.randn(20,agents,2).to(device)
-# se = torch.tensor([[0,agents]]).to(device)
-# idx = torch.tensor([1]).to(device)
-# phy_info = torch.tensor([]).to(device)
-# relevant_centerlines = torch.randn(3,40,2).to(device)
 
-# net = m_non_train
-# modules = [module for module in net.modules()]
-# params = [param.shape for param in net.parameters()]
+obs = torch.randn(20,agents,2).to(device)
+rel = torch.randn(20,agents,2).to(device)
+se = torch.tensor([[0,agents]]).to(device)
+agent_idx = np.array([1])
+phy_info = torch.tensor([]).to(device)
+relevant_centerlines = torch.randn(1,3,30,2).to(device)
 
-# # Print Model Summary
-# print(modules[0])
-# total_params=0
-# pdb.set_trace()
-# for i in range(1,len(modules)):
-#     print("module: ", modules[i])
-#    j = 2*i
-#    param = (params[j-2][1]*params[j-2][0])+params[j-1][0]
-#    total_params += param
-#    print("Layer",i,"->\t",end="")
-#    print("Weights:", params[j-2][0],"x",params[j-2][1],
-#          "\tBias: ",params[j-1][0], "\tParameters: ", param)
-# print("\nTotal Params: ", total_params)
-# pdb.set_trace()
-# macs, params = profile(m_non_train, inputs=(obs,rel,se,idx,phy_info,relevant_centerlines, ), custom_ops={})
+# macs, params = profile(whole_model, inputs=(obs,rel,se,agent_idx,phy_info,relevant_centerlines), custom_ops={})
 # macs, params = clever_format([macs, params], "%.3f")
 
 # print('{:<30}  {:<8}'.format('Computational complexity (MACs): ', macs))
 # print('{:<30}  {:<8}'.format('Number of parameters: ', params))
+
+agents_list = [1,10,100,500,1000,10000] # Test the FLOPs for this number of agents
+flops_list = []
+
+for num_agents in agents_list:
+    obs = torch.randn(20,agents,2).to(device)
+    rel = torch.randn(20,agents,2).to(device)
+    se = torch.tensor([[0,agents]]).to(device)
+    # macs = FlopCountAnalysis(whole_model,(obs,rel,se,agent_idx,phy_info,relevant_centerlines))
+    macs, params = profile(whole_model, inputs=(obs,rel,se,agent_idx,phy_info,relevant_centerlines), custom_ops={})
+    flops = 0.5 * macs
+    flops = clever_format([flops], "%.3f") 
+    
+    flops_list.append(flops)
+
+print("Model FLOPs study: \n")
+for num_agents, flops in zip(agents_list, flops_list):
+    print(f"Agents: {num_agents}, FLOPs: {flops}")
+
+# print("MACs total: ", macs.total())
+# print("MACs my module: ", macs.by_module())
+# print("MACs by module and operator: ", macs.by_module_and_operator())
+# macs = FlopCountAnalysis(whole_model,(obs,rel,se,agent_idx,phy_info,relevant_centerlines))
+# print(flop_count_table(macs))
 
 # ## Social LSTM MHSA
 
@@ -201,12 +212,5 @@ print("Mapfe4mp plausible_centerlines+feasible_area. All parameters: ", utils.co
 # print("MACs by module and operator: ", macs.by_module_and_operator())
 
 # print(flop_count_table(macs))
-
-################################################################
-
-# LSTM 10 agents: 46616 (totally wrong)
-# Set transformer 10 agents: 378528 (makes sense)
-
-# It is not possible to compute LSTM for just one agent
 
 

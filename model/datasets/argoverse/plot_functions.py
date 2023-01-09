@@ -106,7 +106,8 @@ def viz_predictions_all(
         plot_agent_yaw: bool = False,
         plot_output_confidences: bool = False,
         worst_scenes: list = [],
-        check_data_aug: bool = False
+        purpose: str = "multimodal",
+        only_target: bool = False,
 ) -> None:
 
     splits_name = ["train","val","test"]
@@ -122,23 +123,31 @@ def viz_predictions_all(
     color_dict_pred_gt = {"AGENT": "#d33e4c", "OTHER": "#686A6C", "AV": "#157DEC"}
 
     num_agents = input_abs.shape[0]
-    num_modes = output_predictions_abs.shape[0]
 
     # Transform to global coordinates
 
-    input = input_abs + map_origin
+    input = input_abs + map_origin # obs
+    gt = gt_abs + map_origin # gt
+    
+    num_modes = 0
     if np.any(output_predictions_abs):
         output_predictions = output_predictions_abs + map_origin
-    gt = gt_abs + map_origin
+        num_modes = output_predictions_abs.shape[0]
     
     num_centerlines = 0
-
-    if np.any(relevant_centerlines_abs):
+    filtered_centerlines = False
+    
+    if type(relevant_centerlines_abs) is np.ndarray:
         _, num_centerlines, points_per_centerline, data_dim = relevant_centerlines_abs.shape
         rows,cols,_ = np.where(relevant_centerlines_abs[:,:,:,0] == 0.0) # only sum the origin to non-padded centerlines
         relevant_centerlines = relevant_centerlines_abs + map_origin
         relevant_centerlines[rows,cols,:,:] = np.zeros((points_per_centerline,data_dim))
-
+        filtered_centerlines = True
+    elif type(relevant_centerlines_abs) is list and len(relevant_centerlines_abs) > 0:
+        num_centerlines = len(relevant_centerlines_abs)
+        relevant_centerlines = relevant_centerlines_abs
+        filtered_centerlines = False
+        
     fig = plt.figure(0, figsize=(8,8))
 
     x_min = map_origin[0] - dist_rasterized_map
@@ -164,6 +173,11 @@ def viz_predictions_all(
         for i in range(num_agents): # Sequences (.csv)
             object_type = translate_object_type(int(object_class_list[i]))
 
+            if not only_target or (only_target and object_type == "AGENT"):
+                pass
+            else:
+                continue
+            
             # Observation
 
             plt.plot(
@@ -232,13 +246,17 @@ def viz_predictions_all(
             if object_type == "AGENT" and num_modes > 0 and PLOT_PREDICTIONS:
                 # Multimodal prediction (only AGENT of interest)
                 
-                sorted_confidences = np.sort(output_confidences)
-                slope = (1 - 1/num_modes) / (num_modes - 1)
+                if purpose == "multimodal":
+                    sorted_confidences = np.sort(output_confidences)
+                    slope = (1 - 1/num_modes) / (num_modes - 1)
                 
                 for num_mode in range(num_modes):
                     
-                    _, conf_index = np.where(output_confidences[0,num_mode] == sorted_confidences)
-                    transparency = round(slope * (conf_index.item()+1),2)
+                    if purpose == "multimodal":
+                        conf_index = np.where(output_confidences[num_mode] == sorted_confidences)[0].item()
+                        transparency = round(slope * (conf_index + 1),2)
+                    else:
+                        transparency = 1.0
                     
                     # Prediction
                     plt.plot(
@@ -263,15 +281,16 @@ def viz_predictions_all(
                         markersize=9,
                     )
                     
-                    if plot_output_confidences:
-                        # Confidence
-                        plt.text(
-                                output_predictions[num_mode, -1, 0] + 1,
-                                output_predictions[num_mode, -1, 1] + 1,
-                                str(round(output_confidences[0,num_mode],2)),
-                                zorder=21,
-                                fontsize=9
-                                )
+                    if purpose == "multimodal":
+                        if plot_output_confidences:
+                            # Confidences
+                            plt.text(
+                                    output_predictions[num_mode, -1, 0] + 1,
+                                    output_predictions[num_mode, -1, 1] + 1,
+                                    str(round(output_confidences[num_mode],2)),
+                                    zorder=21,
+                                    fontsize=9
+                                    )
 
     # Relevant centerlines
     
@@ -282,21 +301,25 @@ def viz_predictions_all(
         # TODO: Prepare this code to deal with batch size != 1
         if num_centerlines > 0:
             for id_centerline in range(num_centerlines):
-                centerline = relevant_centerlines[0,id_centerline,:,:] # TODO: We assume batch_size = 1 here
+                if filtered_centerlines:
+                    centerline = relevant_centerlines[0,id_centerline,:,:]
+                else:
+                    centerline = relevant_centerlines[id_centerline]
 
                 if not np.any(centerline): # Avoid plotting padded centerlines
                     continue
                 
-                # Check repeated centerlines
+                # # Check repeated centerlines (only with filtered centerlines)
 
-                flag_repeated = False
-                for index_centerline, aux_centerline in enumerate(rep_centerlines):
-                    if np.allclose(centerline,aux_centerline):
-                        flag_repeated = True
-                        count_rep_centerlines[index_centerline] += 1
-                if not flag_repeated:
-                    count_rep_centerlines[id_centerline] += 1
-                    rep_centerlines.append(centerline)
+                # if filtered_centerlines:
+                #     flag_repeated = False
+                #     for index_centerline, aux_centerline in enumerate(rep_centerlines):
+                #         if np.allclose(centerline,aux_centerline):
+                #             flag_repeated = True
+                #             count_rep_centerlines[index_centerline] += 1
+                #     if not flag_repeated:
+                #         count_rep_centerlines[id_centerline] += 1
+                #         rep_centerlines.append(centerline)
 
                 # Centerline
 
@@ -370,10 +393,7 @@ def viz_predictions_all(
             print("Create trajs folder: ", output_dir)
             os.makedirs(output_dir) # makedirs creates intermediate folders
 
-        if check_data_aug:
-            filename = os.path.join(results_path,subfolder,str(seq_id)+"_data_aug.png")
-        else:
-            filename = os.path.join(results_path,subfolder,str(seq_id)+".png")
+        filename = os.path.join(results_path,subfolder,str(seq_id)+f"_{purpose}.png")
             
         plt.savefig(filename, bbox_inches='tight', facecolor=fig.get_facecolor(), edgecolor='none', pad_inches=0)
 

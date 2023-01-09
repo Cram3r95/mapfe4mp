@@ -55,7 +55,7 @@ APPLY_DROPOUT = True
 DROPOUT = 0.25
 
 HEAD = "MultiLinear" # SingleLinear, MultiLinear, Non-Autoregressive
-DECODER_MM_KIND = "Loop" # Latent (if you want to get a multimodal prediction from the same latent space)
+DECODER_MM_KIND = "Latent" # Latent (if you want to get a multimodal prediction from the same latent space)
                          # Loop (iterate over different latent spaces)
 TEMPORAL_DECODER = True
 DIST2GOAL = False
@@ -335,7 +335,7 @@ class Centerline_Encoder(nn.Module):
         """
         
         batch_size = phy_info.shape[0]
-        
+
         if CENTERLINE_ENCODER == "MLP":
             phy_info_ = self.mlp_centerlines(phy_info)
         elif CENTERLINE_ENCODER == "Conv+Pooling":
@@ -715,7 +715,7 @@ class TrajectoryGenerator(nn.Module):
         elif PHYSICAL_CONTEXT == "plausible_centerlines":
             self.concat_h_dim = self.h_dim_social + self.h_dim_physical
         elif PHYSICAL_CONTEXT == "plausible_centerlines+feasible_area":
-            self.concat_h_dim = self.h_dim_social + self.h_dim_physical #+ self.h_dim_physical
+            self.concat_h_dim = self.h_dim_social + self.h_dim_physical + self.h_dim_physical
 
         if TEMPORAL_DECODER:
             self.decoder = Temporal_Multimodal_Decoder(decoder_h_dim=self.concat_h_dim)
@@ -852,14 +852,14 @@ class TrajectoryGenerator(nn.Module):
 
                 # Concatenate social info, static map info and current centerline info
 
-                # mlp_decoder_context_input = torch.cat([encoded_social_info, 
-                #                                        encoded_static_map_info,
-                #                                        encoded_centerlines_info], 
-                #                                        dim=1)
-                
                 mlp_decoder_context_input = torch.cat([encoded_social_info, 
+                                                       encoded_static_map_info,
                                                        encoded_centerlines_info], 
                                                        dim=1)
+                
+                # mlp_decoder_context_input = torch.cat([encoded_social_info, 
+                #                                        encoded_centerlines_info], 
+                #                                        dim=1)
 
                 decoder_h = mlp_decoder_context_input.unsqueeze(0)
                 if INIT_ZEROS: decoder_c = torch.zeros(tuple(decoder_h.shape)).cuda(obs_traj.device)

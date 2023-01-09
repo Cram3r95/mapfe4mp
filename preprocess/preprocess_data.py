@@ -65,7 +65,7 @@ config.dataset.start_from_percentage = 0.0
 # Preprocess data
                          # Split, Process, Split percentage
 splits_to_process = dict({"train":[False,1.0], # 0.01 (1 %), 0.1 (10 %), 1.0 (100 %)
-                          "val":  [True,0.01],
+                          "val":  [True,1.0],
                           "test": [False,1.0]})
 modes_centerlines = ["test"] # "train","test" 
 # if train -> compute the best candidate (oracle), only using the "competition" algorithm
@@ -91,7 +91,7 @@ algorithm = "map_api" # competition, map_api, get_around
                       # to retrieve the centerlines (both relevant and oracle) correctly
 filter = "least_squares"
 
-viz = False
+viz = True
 limit_qualitative_results = 150
 check_every = 0.1 # % of total files
 
@@ -241,7 +241,7 @@ for split_name,features in splits_to_process.items():
                                 max_candidates=max_centerlines,
                                 algorithm=algorithm
                             )
-
+                        pdb.set_trace()
                         if mode == "test": # preprocess N plausible centerlines
 
                             start_ = time.time()

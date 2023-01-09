@@ -1,4 +1,4 @@
-# A baseline for Map Features processing and Goal-based Efficient Vehicle Motion Prediction
+# Efficient Baselines for Motion Prediction in Autonomous Driving
 
 [![arXiv](https://img.shields.io/badge/arXiv-Paper-<COLOR>.svg)](https://arxiv.org/abs/2205.13071)
 ![visitors](https://visitor-badge.glitch.me/badge?page_id=Cram3r95/mapfe4mp)
@@ -80,7 +80,8 @@ pip install \
     fvcore \
     torchstat \
     torchsummary \
-    ipykernel
+    ipykernel \
+    sns
 ```
 In order to install torch-geometric and associated modules for the GNN computations, please check the following documentation:
 

@@ -352,7 +352,7 @@ def seq_collate(data):
                                                    dist_rasterized_map=50,
                                                    relevant_centerlines_abs=rotated_curr_relevant_centerlines.cpu().numpy(),
                                                    save=True,
-                                                   check_data_aug=True)
+                                                   purpose="data_aug")
 
             seq_index += 1
 

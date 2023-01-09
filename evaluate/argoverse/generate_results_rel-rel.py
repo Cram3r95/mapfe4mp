@@ -46,6 +46,7 @@ import model.datasets.argoverse.plot_functions as plot_functions
 import model.datasets.argoverse.dataset_utils as dataset_utils
 import model.datasets.argoverse.data_augmentation_functions as data_augmentation_functions
 
+from model.datasets.argoverse.map_functions import MapFeaturesUtils
 from model.datasets.argoverse.dataset import ArgoverseMotionForecastingDataset, seq_collate
 from model.utils.checkpoint_data import get_generator
 from model.trainers.trainer_mapfe4mp import cal_ade_multimodal, cal_fde_multimodal
@@ -63,6 +64,7 @@ parser.add_argument("--device_gpu", required=True, default=0, type=int)
 parser.add_argument("--split", required=True, default="val", type=str)
 parser.add_argument("--batch_size", required=True, default=1, type=int)
 
+map_features_utils_instance = MapFeaturesUtils()
 avm = ArgoverseMap()
 
 LIMIT_FILES = -1 # From 1 to num_files.
@@ -76,9 +78,18 @@ DATA_DIM = 2
 GENERATE_QUALITATIVE_RESULTS = True
 PLOT_WORST_SCENES = False
 LIMIT_QUALITATIVE_RESULTS = 300
-DEBUG = False
+DEBUG = True
 COMPUTE_METRICS = True
 PLOT_METRICS = False
+
+RAW_DATA_FORMAT = {
+    "TIMESTAMP": 0,
+    "TRACK_ID": 1,
+    "OBJECT_TYPE": 2,
+    "X": 3,
+    "Y": 4,
+    "CITY_NAME": 5,
+}
 
 def generate_csv(results_path, ade_um_list, fde_um_list, ade_mm_list, fde_mm_list, 
                  num_seq_list, traj_kind_list, sort=False):
@@ -332,8 +343,8 @@ def evaluate(loader, generator, config, split, current_cuda, pred_len, results_p
                 seq_id = num_seq[i].cpu().item()
                 if DEBUG: print(f"{seq_id}.csv")
                 
-                path = os.path.join(data_folder,str(seq_id)+".csv")
-                data = dataset_utils.read_file(path) 
+                seq_path = os.path.join(data_folder,str(seq_id)+".csv")
+                data = dataset_utils.read_file(seq_path) 
                 _, city_name = dataset_utils.get_origin_and_city(data,OBS_ORIGIN)  
 
                 start_seq, end_seq = seq_start_end[i]
@@ -413,31 +424,93 @@ def evaluate(loader, generator, config, split, current_cuda, pred_len, results_p
                     if config.hyperparameters.physical_context == "dummy" or config.hyperparameters.physical_context == "social":
                         relevant_centerlines_abs = []
                     else:
-                        # relevant_centerlines_abs = relevant_centerlines[i].cpu().numpy()
                         relevant_centerlines_abs = relevant_centerlines[i].unsqueeze(0).cpu().numpy() # TODO: Check this
 
                     if not PLOT_METRICS:
                         ade_min, fde_min = None, None
-                        
-                    plot_functions.viz_predictions_all(seq_id,
-                                                       results_path,
-                                                       obs_traj[:,start_seq:end_seq,:].permute(1,0,2).numpy(), # All obstacles
-                                                       pred_traj_fake[i].squeeze(0).numpy(), # Only AGENT (MM prediction)
-                                                       conf[i].unsqueeze(0).numpy(), # Only AGENT (MM confidence) # TODO: Check this
-                                                       target_agent_orientation[i].numpy(),
-                                                       pred_traj_gt[:,start_seq:end_seq,:].permute(1,0,2).numpy(), # All obstacles                                                  
-                                                       curr_object_class_id_list.numpy(),
-                                                       city_name,
-                                                       curr_map_origin.numpy(),
-                                                       avm,
-                                                       dist_rasterized_map=50,
-                                                       relevant_centerlines_abs=relevant_centerlines_abs,
-                                                       save=True,
-                                                       ade_metric=ade_min,
-                                                       fde_metric=fde_min,
-                                                       plot_output_confidences=True,
-                                                       worst_scenes=worst_scenes)
+                    
+                    # plots = ["general_view", "unimodal", "multimodal"]
+                    plots = ["general_view_only_target_without_centerlines",
+                             "general_view_only_target_raw_centerlines",
+                             "general_view_only_target_filtered_centerlines"]
+                    
+                    for plot_type in plots:
+                        only_target = False
+                        if "only_target" in plot_type:
+                            only_target = True
+                            
+                        if "general_view" in plot_type:
+                            predictions = None
+                            confidences = None
+                            
+                            if "without_centerlines" in plot_type:
+                                relevant_centerlines_aux = []
+                            
+                            elif "raw_centerlines" in plot_type:
+                                df = pd.read_csv(seq_path, dtype={"TIMESTAMP": str})
 
+                                # Get social and map features for the agent
+
+                                agent_track = df[df["OBJECT_TYPE"] == "AGENT"].values
+                                city_name = agent_track[0,RAW_DATA_FORMAT["CITY_NAME"]]
+                                agent_xy = agent_track[:,[RAW_DATA_FORMAT["X"],RAW_DATA_FORMAT["Y"]]].astype("float")
+
+                                mode = "test"
+                                viz = False
+                                max_candidates = 3
+                                algorithm = "map_api"
+
+                                map_features, map_feature_helpers = map_features_utils_instance.compute_map_features(
+                                    agent_track,
+                                    seq_id,
+                                    config.dataset.split,
+                                    config.hyperparameters.obs_len,
+                                    config.hyperparameters.obs_len + config.hyperparameters.pred_len,
+                                    RAW_DATA_FORMAT,
+                                    mode,
+                                    avm,
+                                    viz,
+                                    max_candidates=max_candidates,
+                                    algorithm=algorithm
+                                )                            
+                                relevant_centerlines_aux = map_feature_helpers["CANDIDATE_CENTERLINES"] 
+
+                            elif "filtered_centerlines" in plot_type:
+                                relevant_centerlines_aux = relevant_centerlines_abs
+                            
+                        elif plot_type == "unimodal":
+                            best_mode = torch.argmax(conf[i])
+                            predictions = pred_traj_fake[i,best_mode,:,:].unsqueeze(0).numpy()
+                            confidences = None
+                            relevant_centerlines_aux = relevant_centerlines_abs
+                        elif plot_type == "multimodal":
+                            predictions = pred_traj_fake[i].numpy()
+                            confidences = conf[i].numpy()
+                            relevant_centerlines_aux = relevant_centerlines_abs
+                            
+                        if DEBUG: print("Purpose: ", plot_type) 
+                         
+                        plot_functions.viz_predictions_all(seq_id,
+                                                        results_path,
+                                                        obs_traj[:,start_seq:end_seq,:].permute(1,0,2).numpy(), # All obstacles
+                                                        predictions, # Only target agent
+                                                        confidences, # Only target agent
+                                                        target_agent_orientation[i].numpy(),
+                                                        pred_traj_gt[:,start_seq:end_seq,:].permute(1,0,2).numpy(), # All obstacles                                                  
+                                                        curr_object_class_id_list.numpy(),
+                                                        city_name,
+                                                        curr_map_origin.numpy(),
+                                                        avm,
+                                                        dist_rasterized_map=40,
+                                                        relevant_centerlines_abs=relevant_centerlines_aux,
+                                                        save=True,
+                                                        ade_metric=ade_min,
+                                                        fde_metric=fde_min,
+                                                        plot_output_confidences=True,
+                                                        worst_scenes=worst_scenes,
+                                                        purpose=plot_type,
+                                                        only_target=only_target)
+                    # pdb.set_trace()
                 pred_traj_fake_global_aux = pred_traj_fake_global[i].view(ARGOVERSE_NUM_MODES, PRED_LEN, DATA_DIM)
                 output_predictions[seq_id] = pred_traj_fake_global_aux.cpu().numpy()
                 output_probabilities[seq_id] = conf[i].numpy().reshape(-1)
@@ -590,18 +663,19 @@ if __name__ == '__main__':
 """
 python evaluate/argoverse/generate_results_rel-rel.py \
 --model_path "save/argoverse/mapfe4mp/100.0_percent/previous_validation/test_9/argoverse_motion_forecasting_dataset_0_with_model.pt" \
---device_gpu 1 --split "train"
+--device_gpu 1 --split "train" --batch_size 1024
+"""
+
+# Best model at this moment (in terms of validation). OBS: No val hard-mining
+"""
+python evaluate/argoverse/generate_results_rel-rel.py \
+--model_path "save/argoverse/mapfe4mp/100.0_percent/test_12/argoverse_motion_forecasting_dataset_0_with_model.pt" \
+--device_gpu 0 --split "val" --batch_size 1024
 """
 
 # Best model at this moment (in terms of test) -> 0.99, 1.67
 """
 python evaluate/argoverse/generate_results_rel-rel.py \
 --model_path "save/argoverse/mapfe4mp/100.0_percent/test_8/argoverse_motion_forecasting_dataset_0_with_model.pt" \
---device_gpu 0 --split "val"
-"""
-
-"""
-python evaluate/argoverse/generate_results_rel-rel.py \
---model_path "save/argoverse/mapfe4mp/100.0_percent/test_12/argoverse_motion_forecasting_dataset_0_with_model.pt" \
 --device_gpu 0 --split "val" --batch_size 1024
 """
