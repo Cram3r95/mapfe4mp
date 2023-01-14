@@ -429,10 +429,10 @@ def evaluate(loader, generator, config, split, current_cuda, pred_len, results_p
                     if not PLOT_METRICS:
                         ade_min, fde_min = None, None
                     
-                    # plots = ["general_view", "unimodal", "multimodal"]
-                    plots = ["general_view_only_target_without_centerlines",
-                             "general_view_only_target_raw_centerlines",
-                             "general_view_only_target_filtered_centerlines"]
+                    plots = ["general_view_without_centerlines", "unimodal", "multimodal"]
+                    # plots = ["general_view_only_target_without_centerlines",
+                    #          "general_view_only_target_raw_centerlines",
+                    #          "general_view_only_target_filtered_centerlines"]
                     
                     for plot_type in plots:
                         only_target = False

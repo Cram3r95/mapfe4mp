@@ -959,13 +959,12 @@ class ArgoverseMotionForecastingDataset(Dataset):
             self.cont_standard_traj = []
             self.cont_hm_traj = []
             self.cont_seqs = 0
- 
-        pdb.set_trace()
         
-        if (self.hard_mining == -1.0 or \
-           (self.hard_mining != -1.0 
-            and remainder == 0 
-            and len(self.cont_standard_traj) < int((1-self.hard_mining)*self.batch_size)):
+        if (self.hard_mining == -1.0 or 
+            self.split_percentage != 1.0 or \
+            (self.hard_mining != -1.0 
+             and remainder == 0 
+             and len(self.cont_standard_traj) < int((1-self.hard_mining)*self.batch_size))):
               
             msg = f"{self.split}" 
             
@@ -984,7 +983,7 @@ class ArgoverseMotionForecastingDataset(Dataset):
                     # self.relevant_centerlines[str(self.file_id_list[index])]
                 ]
 
-        else:        
+        else: # Apply only hard-mining if self.hard_mining != -1.0 and self.split_percentage == 1.0 (whole dataset)         
             msg = "train:hard_mining" 
             
             hm_index = np.random.choice(self.hardest_sequences)

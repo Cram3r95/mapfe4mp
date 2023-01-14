@@ -1,3 +1,14 @@
+#!/usr/bin/env python3.8
+# -*- coding: utf-8 -*-
+
+## Preprocess the raw data. Get .npy files in order to avoid processing
+## the trajectories and map information each time
+
+"""
+Created on Sun Mar 06 23:47:19 2022
+@author: Carlos Gómez-Huélamo
+"""
+
 import cv2
 import numpy as np
 import os
@@ -22,7 +33,7 @@ import model.datasets.argoverse.goal_points_functions as goal_points_functions
 # Load files
 
 dataset_path = "data/datasets/argoverse/motion-forecasting/"
-split = "train"
+split = "val"
 split_folder = BASE_DIR + "/" + dataset_path + split
 data_folder = BASE_DIR + "/" + dataset_path + split + "/data/"
 data_images_folder = BASE_DIR + "/" + dataset_path + split + "/data_images"

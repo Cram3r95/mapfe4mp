@@ -56,7 +56,7 @@ DROPOUT = 0.25
 
 HEAD = "MultiLinear" # SingleLinear, MultiLinear, Non-Autoregressive
 DECODER_MM_KIND = "Latent" # Latent (if you want to get a multimodal prediction from the same latent space)
-                         # Loop (iterate over different latent spaces)
+                           # Loop (iterate over different latent spaces)
 TEMPORAL_DECODER = True
 DIST2GOAL = False
 WINDOW_SIZE = 20

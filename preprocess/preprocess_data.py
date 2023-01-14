@@ -65,7 +65,7 @@ config.dataset.start_from_percentage = 0.0
 # Preprocess data
                          # Split, Process, Split percentage
 splits_to_process = dict({"train":[False,1.0], # 0.01 (1 %), 0.1 (10 %), 1.0 (100 %)
-                          "val":  [True,1.0],
+                          "val":  [True,0.1],
                           "test": [False,1.0]})
 modes_centerlines = ["test"] # "train","test" 
 # if train -> compute the best candidate (oracle), only using the "competition" algorithm
@@ -89,9 +89,10 @@ min_points = 4 # to perform a cubic interpolation you need at least 3 points
 algorithm = "map_api" # competition, map_api, get_around
                       # TODO: At this moment, only the "map_api" algorithm is prepared
                       # to retrieve the centerlines (both relevant and oracle) correctly
-filter = "least_squares"
+filter = "least_squares" # savgol, cubic_spline, savgol+cubic_spline, least_squares, none
+distance_method = "CTRA" # CTRV, CTRA
 
-viz = True
+viz = False
 limit_qualitative_results = 150
 check_every = 0.1 # % of total files
 
@@ -215,7 +216,10 @@ for split_name,features in splits_to_process.items():
                                                                                                                                   filter=filter,
                                                                                                                                   debug=False)
                                                                                                         
-                    dist_around = vel * (pred_len/freq) + 1/2 * acc * (pred_len/freq)**2
+                    if distance_method == "CTRV":
+                        dist_around = vel * (pred_len/freq)
+                    elif distance_method == "CTRA":
+                        dist_around = vel * (pred_len/freq) + 1/2 * acc * (pred_len/freq)**2
 
                     if dist_around < min_dist_around:
                         dist_around = min_dist_around
@@ -241,7 +245,7 @@ for split_name,features in splits_to_process.items():
                                 max_candidates=max_centerlines,
                                 algorithm=algorithm
                             )
-                        pdb.set_trace()
+                      
                         if mode == "test": # preprocess N plausible centerlines
 
                             start_ = time.time()
@@ -678,9 +682,8 @@ for split_name,features in splits_to_process.items():
                                 Estimated time to finish ({files_remaining} files): {round(time_per_iteration*files_remaining/60)} min")
                         print("Wrong centerlines: ", wrong_centerlines) 
 
-            # TODO: At this moment, both train and test use the same algorithm
-
             # Save only the oracle (best possible centerline) as a np.array -> num_sequences x max_points x 2 
+            
             if mode == "train":
                 filename = os.path.join(BASE_DIR,config.dataset.path,split_name,
                                         f"data_processed_{str(int(features[1]*100))}_percent",
@@ -689,15 +692,16 @@ for split_name,features in splits_to_process.items():
                 with open(filename, 'wb') as my_file: np.save(my_file, oracle_centerlines_array)
 
             # Save N centerlines per sequence. Note that the number of variables per sequence may vary
+            
             elif mode == "test":
+                # filename = os.path.join(BASE_DIR,config.dataset.path,split_name,
+                #                         f"data_processed_{str(int(features[1]*100))}_percent",
+                #                         f"relevant_centerlines_{algorithm}_{first_centerline_waypoint}_{str(max_points)}_{distance_method}_{filter}_points.npz")
+                # with open(filename, 'wb') as my_file: np.savez(my_file, map_info)
+           
                 filename = os.path.join(BASE_DIR,config.dataset.path,split_name,
                                         f"data_processed_{str(int(features[1]*100))}_percent",
-                                        f"relevant_centerlines_{algorithm}_{first_centerline_waypoint}_{str(max_points)}_points.npz")
-                with open(filename, 'wb') as my_file: np.savez(my_file, map_info)
-                
-                filename = os.path.join(BASE_DIR,config.dataset.path,split_name,
-                                        f"data_processed_{str(int(features[1]*100))}_percent",
-                                        f"relevant_centerlines_{algorithm}_{first_centerline_waypoint}_{str(max_points)}_points.npy")
+                                        f"relevant_centerlines_{algorithm}_{first_centerline_waypoint}_{str(max_points)}_{distance_method}_{filter}_points.npy")
                 relevant_centerlines_array = np.array(relevant_centerlines_list)
                 with open(filename, 'wb') as my_file: np.save(my_file, relevant_centerlines_array)
                 
@@ -707,10 +711,12 @@ for split_name,features in splits_to_process.items():
                 if algorithm == "map_api":
                     filename = os.path.join(BASE_DIR,config.dataset.path,split_name,
                                         f"data_processed_{str(int(features[1]*100))}_percent",
-                                        f"oracle_centerlines_{algorithm}_{first_centerline_waypoint}_{str(max_points)}_points.npy")
+                                        f"oracle_centerlines_{algorithm}_{first_centerline_waypoint}_{str(max_points)}_{distance_method}_{filter}_points.npy")
                     oracle_centerlines_array = np.array(oracle_centerlines_list)
                     with open(filename, 'wb') as my_file: np.save(my_file, oracle_centerlines_array)
 
+            # Save the orientation of the vehicle in the last observation frame
+            
             # filename = os.path.join(BASE_DIR,config.dataset.path,split_name,
             #                     f"data_processed_{str(int(features[1]*100))}_percent",
             #                     f"target_agent_orientation.npy")

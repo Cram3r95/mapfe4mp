@@ -117,6 +117,7 @@ def viz_predictions_all(
     PLOT_SOCIAL = True
     PLOT_PREDICTIONS = True
     PLOT_MAP = True
+    PLOT_CENTERLINE_NUMBER = False
 
     # https://www.computerhope.com/htmcolor.htm#color-codes
     color_dict_obs = {"AGENT": "#ECA154", "OTHER": "#413839", "AV": "#0000A5"}
@@ -309,17 +310,17 @@ def viz_predictions_all(
                 if not np.any(centerline): # Avoid plotting padded centerlines
                     continue
                 
-                # # Check repeated centerlines (only with filtered centerlines)
+                # Check repeated centerlines (only with filtered centerlines)
 
-                # if filtered_centerlines:
-                #     flag_repeated = False
-                #     for index_centerline, aux_centerline in enumerate(rep_centerlines):
-                #         if np.allclose(centerline,aux_centerline):
-                #             flag_repeated = True
-                #             count_rep_centerlines[index_centerline] += 1
-                #     if not flag_repeated:
-                #         count_rep_centerlines[id_centerline] += 1
-                #         rep_centerlines.append(centerline)
+                if filtered_centerlines:
+                    flag_repeated = False
+                    for index_centerline, aux_centerline in enumerate(rep_centerlines):
+                        if np.allclose(centerline,aux_centerline):
+                            flag_repeated = True
+                            count_rep_centerlines[index_centerline] += 1
+                    if not flag_repeated:
+                        count_rep_centerlines[id_centerline] += 1
+                        rep_centerlines.append(centerline)
 
                 # Centerline
 
@@ -347,16 +348,17 @@ def viz_predictions_all(
 
             # Plot the number of repetitions for each centerline
 
-            for index_repeated in range(len(count_rep_centerlines)):
-                if count_rep_centerlines[index_repeated] > 0:
-                    centerline = relevant_centerlines[0,index_repeated,:,:] # TODO: We assume batch_size = 1 here
+            if PLOT_CENTERLINE_NUMBER:
+                for index_repeated in range(len(count_rep_centerlines)):
+                    if count_rep_centerlines[index_repeated] > 0:
+                        centerline = relevant_centerlines[0,index_repeated,:,:] # TODO: We assume batch_size = 1 here
 
-                    plt.text(
-                            centerline[-1, 0] + 1,
-                            centerline[-1, 1] + 1,
-                            str(int(count_rep_centerlines[index_repeated])),
-                            fontsize=12
-                            )
+                        plt.text(
+                                centerline[-1, 0] + 1,
+                                centerline[-1, 1] + 1,
+                                str(int(count_rep_centerlines[index_repeated])),
+                                fontsize=12
+                                )
                         
         seq_lane_props = avm.city_lane_centerlines_dict[city_name]
 

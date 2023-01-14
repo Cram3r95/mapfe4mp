@@ -688,8 +688,13 @@ def model_trainer(config, logger):
     time_per_seq_collate = float(0)
     current_iteration = 0 # Current iteration, regardless the model had previous training
     flag_check_every = False
-
-    # while t < hyperparameters.num_iterations + previous_t:
+    model_script_saved = False
+    
+    # Save the Python script (assuming the code is in a single file in model/models/)
+                    
+    if not model_script_saved:
+        pdb.set_trace()
+                        
     global g_lr
     while g_lr > hyperparameters.lr_min:
         gc.collect()
@@ -876,11 +881,7 @@ def model_trainer(config, logger):
                             small_checkpoint[k] = v
                     torch.save(small_checkpoint, checkpoint_path)
                     logger.info('Done.')
-                    
-                    # Save the Python script (assuming the code is in a single file)
-                    
-                    pdb.set_trace()
-
+                        
                 if metrics_val[f'{split}_ade_nl'] <= min_ade_nl:
                     logger.info('New low for avg_disp_error_nl')
                     checkpoint.config_cp["best_t_nl"] = t
