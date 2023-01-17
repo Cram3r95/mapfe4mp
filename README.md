@@ -151,8 +151,13 @@ Please, be aware that after installing a new extension, you should reload your V
 
 ## Quantitative results
 
-<img src="media/quantitative-test.PNG"/>
-<img src="media/quantitative-runtime.PNG"/>
+<img src="media/quantitative-test.PNG" style="width:90%; display: block; margin: 0 auto"/>
+
+<br>
+
+<img src="media/quantitative-runtime.PNG" style="width:70%; display: block; margin: 0 auto"/>
+
+<br>
 
 Please check [our papers](https://arxiv.org/abs/2205.13071) for further details.
 

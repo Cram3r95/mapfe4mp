@@ -1,8 +1,7 @@
 #!/usr/bin/env python3.8
 # -*- coding: utf-8 -*-
 
-## Preprocess the raw data. Get .npy files in order to avoid processing
-## the trajectories and map information each time
+## Compute the error between the goals and ground-truth end-points
 
 """
 Created on Sun Mar 06 23:47:19 2022
@@ -34,11 +33,12 @@ import model.datasets.argoverse.goal_points_functions as goal_points_functions
 
 dataset_path = "data/datasets/argoverse/motion-forecasting/"
 split = "val"
-split_folder = BASE_DIR + "/" + dataset_path + split
-data_folder = BASE_DIR + "/" + dataset_path + split + "/data/"
-data_images_folder = BASE_DIR + "/" + dataset_path + split + "/data_images"
-# data_images_folder = BASE_DIR + "/" + dataset_path + split + "/data_images_150mx150m"
-goal_points_folder = split_folder + "/goal_points_test"
+split_folder = os.path.join(BASE_DIR, dataset_path + split)
+data_folder = os.path.join(BASE_DIR, dataset_path + split, "data")
+data_images_folder = os.path.join(BASE_DIR, dataset_path + split, "data_images")
+goal_points_folder = os.path.join(split_folder, "goal_points_test")
+
+# Load split files
 
 files, num_files = dataset_utils.load_list_from_folder(data_folder)
 
@@ -51,9 +51,20 @@ for file_name in files:
     file_id_list.append(file_id)
 file_id_list.sort()
 
-limit = 1000
-if limit != -1:
-    file_id_list = file_id_list[:limit]
+# limit = 1000
+# if limit != -1:
+#     file_id_list = file_id_list[:limit]
+
+# Load centerlines
+
+split_percentage = 0.1
+distance_method = "CTRA"
+filter_method = "least_squares"
+centerlines_filename = f"relevant_centerlines_map_api_last_obs_30_{distance_method}_{filter_method}_points.npy"
+centerlines_filename = os.path.join(split_folder,
+                                    f"data_processed_{str(int(split_percentage*100))}_percent",
+                                    centerlines_filename)
+centerlines = np.load(centerlines_filename)
 
 print("Num files: ", len(file_id_list))
 
@@ -82,25 +93,27 @@ aux_list = []
 closest_gp_dist_list = []
 
 for t,file_id in enumerate(file_id_list):
-    print(f"\nFile {file_id} -> {t+1}/{len(file_id_list)}")
+    print(f"File {file_id} -> {t+1}/{len(file_id_list)}")
 
     path = os.path.join(root_file_name,str(file_id)+".csv")
     data = dataset_utils.read_file(path) 
     origin_pos, city_name = dataset_utils.get_origin_and_city(data,obs_origin)
 
-    # 0. Load image (physical information)
+    ## Get goals from binary image
+    
+    # # 0. Load image (physical information)
 
-    filename = data_images_folder + "/" + str(file_id) + ".png"
+    # filename = data_images_folder + "/" + str(file_id) + ".png"
 
-    img = cv2.imread(filename)
-    img = cv2.resize(img, dsize=(600,600))
-    height, width = img.shape[:2]
-    img_size = height
-    scale_x = scale_y = float(height/(2*real_world_offset))
+    # img = cv2.imread(filename)
+    # img = cv2.resize(img, dsize=(600,600))
+    # height, width = img.shape[:2]
+    # img_size = height
+    # scale_x = scale_y = float(height/(2*real_world_offset))
 
-    cx = int(width/2)
-    cy = int(height/2)
-    car_px = (cy,cx)
+    # cx = int(width/2)
+    # cy = int(height/2)
+    # car_px = (cy,cx)
 
     # 1. Get past observations
 
@@ -125,123 +138,134 @@ for t,file_id in enumerate(file_id_list):
     agent_seq_global = torch.from_numpy(agent_seq_global)
     agent_obs_seq_global = agent_seq_global[:obs_origin,:]
 
-    # px = pixels
-    agent_px_points = goal_points_functions.transform_real_world2px(agent_seq_global, origin_pos, real_world_offset, img_size)
-    agent_px_x, agent_px_y = agent_px_points[:,0], agent_px_points[:,1] # TODO: Refactorize
+    # # px = pixels
+    # agent_px_points = goal_points_functions.transform_real_world2px(agent_seq_global, origin_pos, real_world_offset, img_size)
+    # agent_px_x, agent_px_y = agent_px_points[:,0], agent_px_points[:,1] # TODO: Refactorize
 
-    # 3. Get feasible area points (N samples)
+    # # 3. Get feasible area points (N samples)
 
-    # 3.0. (Optional) Observe random sampling in the whole feasible area
+    # # 3.0. (Optional) Observe random sampling in the whole feasible area
 
-    rad = 1000 # meters. Cause we want to observe all points around the AGENT
+    # rad = 1000 # meters. Cause we want to observe all points around the AGENT
 
-    fe_y, fe_x = goal_points_functions.get_points(img, car_px, scale_x, rad=10000, color=255, N=num_initial_samples, 
-                            sample_car=True, max_samples=None) # return rows, columns
+    # fe_y, fe_x = goal_points_functions.get_points(img, car_px, scale_x, rad=10000, color=255, N=num_initial_samples, 
+    #                         sample_car=True, max_samples=None) # return rows, columns
 
-    # 3.1. Determine AGENT's acceleration
+    # # 3.1. Determine AGENT's acceleration
 
-    # goal_points_functions.get_agent_acceleration(torch.transpose(agent_obs_seq_global,0,1))
+    # # goal_points_functions.get_agent_acceleration(torch.transpose(agent_obs_seq_global,0,1))
 
-    # 3.1. Filter using AGENT estimated velocity in the last observation frame
+    # # 3.1. Filter using AGENT estimated velocity in the last observation frame
 
-    mean_vel = goal_points_functions.get_agent_velocity(torch.transpose(agent_obs_seq_global,0,1))
-    radius = mean_vel * pred_seconds
-    radius_px = radius * scale_x	
+    # mean_vel = goal_points_functions.get_agent_velocity(torch.transpose(agent_obs_seq_global,0,1))
+    # radius = mean_vel * pred_seconds
+    # radius_px = radius * scale_x	
 
-    fe_y, fe_x = goal_points_functions.get_points(img, car_px, scale_x, rad=radius_px, color=255, N=1024, 
-                                sample_car=True, max_samples=None) # return rows, columns
+    # fe_y, fe_x = goal_points_functions.get_points(img, car_px, scale_x, rad=radius_px, color=255, N=1024, 
+    #                             sample_car=True, max_samples=None) # return rows, columns
 
-    # 3.2. Filter using AGENT estimated orientation (yaw) in the last observation frame
+    # # 3.2. Filter using AGENT estimated orientation (yaw) in the last observation frame
 
-    mean_yaw = goal_points_functions.get_agent_yaw(torch.transpose(agent_obs_seq_global,0,1)) # radians
+    # mean_yaw = goal_points_functions.get_agent_yaw(torch.transpose(agent_obs_seq_global,0,1)) # radians
 
-    if mean_yaw >= 0.0:
-        angle = math.pi/2 - mean_yaw
-    elif mean_yaw < 0.0:
-        angle = -(math.pi / 2 + (math.pi - abs(mean_yaw)))
+    # if mean_yaw >= 0.0:
+    #     angle = math.pi/2 - mean_yaw
+    # elif mean_yaw < 0.0:
+    #     angle = -(math.pi / 2 + (math.pi - abs(mean_yaw)))
 
-    c, s = np.cos(angle), np.sin(angle)
-    R = np.array([[c,-s], [s, c]])
+    # c, s = np.cos(angle), np.sin(angle)
+    # R = np.array([[c,-s], [s, c]])
 
-    fe_x_trans = fe_x - cx # get px w.r.t. the center of the image to be rotated
-    fe_y_trans = fe_y - cy
+    # fe_x_trans = fe_x - cx # get px w.r.t. the center of the image to be rotated
+    # fe_y_trans = fe_y - cy
 
-    close_pts = np.hstack((fe_x_trans.reshape(-1,1),fe_y_trans.reshape(-1,1)))
-    close_pts_rotated = np.matmul(close_pts,R).astype(np.int32)
+    # close_pts = np.hstack((fe_x_trans.reshape(-1,1),fe_y_trans.reshape(-1,1)))
+    # close_pts_rotated = np.matmul(close_pts,R).astype(np.int32)
 
-    fe_x_rot = close_pts_rotated[:,0] + cx
-    fe_y_rot = close_pts_rotated[:,1] + cy
+    # fe_x_rot = close_pts_rotated[:,0] + cx
+    # fe_y_rot = close_pts_rotated[:,1] + cy
 
-    filtered_fe_x = fe_x[np.where(fe_y_rot < cy)[0]]
-    filtered_fe_y = fe_y[np.where(fe_y_rot < cy)[0]]
+    # filtered_fe_x = fe_x[np.where(fe_y_rot < cy)[0]]
+    # filtered_fe_y = fe_y[np.where(fe_y_rot < cy)[0]]
 
-    # 4. Get furthest N samples (closest the the hypothetical radius)
+    # # 4. Get furthest N samples (closest the the hypothetical radius)
 
-    dist = []
-    for i in range(len(filtered_fe_x)):
-        d = math.sqrt(pow(filtered_fe_x[i] - car_px[0],2) + pow(filtered_fe_y[i] - car_px[1],2))
-        dist.append(d)
+    # dist = []
+    # for i in range(len(filtered_fe_x)):
+    #     d = math.sqrt(pow(filtered_fe_x[i] - car_px[0],2) + pow(filtered_fe_y[i] - car_px[1],2))
+    #     dist.append(d)
 
-    dist = np.array(dist)
+    # dist = np.array(dist)
 
-    furthest_indeces = np.argsort(dist)
-    if len(furthest_indeces) > NUM_GOAL_POINTS:
-        furthest_indeces = np.argsort(dist)[-NUM_GOAL_POINTS:]
+    # furthest_indeces = np.argsort(dist)
+    # if len(furthest_indeces) > NUM_GOAL_POINTS:
+    #     furthest_indeces = np.argsort(dist)[-NUM_GOAL_POINTS:]
 
-    final_samples_x, final_samples_y = filtered_fe_x[furthest_indeces], filtered_fe_y[furthest_indeces]
+    # final_samples_x, final_samples_y = filtered_fe_x[furthest_indeces], filtered_fe_y[furthest_indeces]
 
-    try:
-        diff_points = NUM_GOAL_POINTS - len(final_samples_x)
-        final_samples_x = np.hstack((final_samples_x, final_samples_x[0]+0.2 * np.random.randn(diff_points)))
-        final_samples_y = np.hstack((final_samples_y, final_samples_y[0]+0.2 * np.random.randn(diff_points)))
-    except:
-        final_samples_x = cx + scale_x*np.random.randn(NUM_GOAL_POINTS)
-        final_samples_y = cy + scale_y*np.random.randn(NUM_GOAL_POINTS)
+    # try:
+    #     diff_points = NUM_GOAL_POINTS - len(final_samples_x)
+    #     final_samples_x = np.hstack((final_samples_x, final_samples_x[0]+0.2 * np.random.randn(diff_points)))
+    #     final_samples_y = np.hstack((final_samples_y, final_samples_y[0]+0.2 * np.random.randn(diff_points)))
+    # except:
+    #     final_samples_x = cx + scale_x*np.random.randn(NUM_GOAL_POINTS)
+    #     final_samples_y = cy + scale_y*np.random.randn(NUM_GOAL_POINTS)
 
-    # 5. Clustering
+    # # 5. Clustering
 
-    final_samples = np.hstack((final_samples_x.reshape(-1,1),final_samples_y.reshape(-1,1)))
-    final_samples.shape
+    # final_samples = np.hstack((final_samples_x.reshape(-1,1),final_samples_y.reshape(-1,1)))
+    # final_samples.shape
 
-    from sklearn.decomposition import PCA
-    from sklearn.cluster import KMeans
-    import numpy as np
+    # from sklearn.decomposition import PCA
+    # from sklearn.cluster import KMeans
+    # import numpy as np
 
-    # Initialize the class object
+    # # Initialize the class object
 
-    kmeans = KMeans(n_clusters = MAX_CLUSTERS)
+    # kmeans = KMeans(n_clusters = MAX_CLUSTERS)
     
-    # Predict the labels of clusters
+    # # Predict the labels of clusters
 
-    label = kmeans.fit_predict(final_samples)
+    # label = kmeans.fit_predict(final_samples)
 
-    # Getting unique labels
+    # # Getting unique labels
     
-    u_labels = np.unique(label)
+    # u_labels = np.unique(label)
 
-    # Final clusters
+    # # Final clusters
 
-    aux = torch.zeros((MAX_CLUSTERS,2))
-    cont_goals = torch.zeros((MAX_CLUSTERS))
+    # aux = torch.zeros((MAX_CLUSTERS,2))
+    # cont_goals = torch.zeros((MAX_CLUSTERS))
 
-    for i in range(final_samples.shape[0]):
-        aux[label[i],0] += final_samples[i,0]
-        aux[label[i],1] += final_samples[i,1]
-        cont_goals[label[i]] += 1 # Num goals per cluster
-    aux = torch.div(aux,cont_goals.reshape(MAX_CLUSTERS,1))
-    label = torch.arange(MAX_CLUSTERS)
+    # for i in range(final_samples.shape[0]):
+    #     aux[label[i],0] += final_samples[i,0]
+    #     aux[label[i],1] += final_samples[i,1]
+    #     cont_goals[label[i]] += 1 # Num goals per cluster
+    # aux = torch.div(aux,cont_goals.reshape(MAX_CLUSTERS,1))
+    # label = torch.arange(MAX_CLUSTERS)
 
-    # 6. Transform pixels to real-world coordinates
+    # # 6. Transform pixels to real-world coordinates
 
-    final_samples_px = np.hstack((aux[:,1].reshape(-1,1), aux[:,0].reshape(-1,1))) # rows (y), columns (x)
-    rw_points = goal_points_functions.transform_px2real_world(final_samples_px, origin_pos, real_world_offset, img_size)
+    # final_samples_px = np.hstack((aux[:,1].reshape(-1,1), aux[:,0].reshape(-1,1))) # rows (y), columns (x)
+    # rw_points = goal_points_functions.transform_px2real_world(final_samples_px, origin_pos, real_world_offset, img_size)
 
+    ## Get goals from centerlines
+    
+    if t >= centerlines.shape[0]:
+        break
+    
+    current_centerlines = centerlines[t,:,:,:]
+    
+    rw_points = []
+    for k in range(current_centerlines.shape[0]):
+        if np.any(current_centerlines[k,:,:]):
+            rw_points.append(current_centerlines[k,-1,:])
+        
     # 7. Check error with gt end point (AGENT)
 
     end_point_gt_map = agent_seq_global[-1,:]
 
     closest_gp_dist = 50000
-
     for rw_point in rw_points:
         try:
             dist = np.linalg.norm(rw_point - end_point_gt_map)
@@ -255,11 +279,12 @@ for t,file_id in enumerate(file_id_list):
     aux_list.append(_aux_list)
     closest_gp_dist_list.append(closest_gp_dist)
 
-    print("Error: ", closest_gp_dist)
-
+    # print("Error: ", closest_gp_dist)
+    
 # 8. Store in .csv
 
-path = os.path.join(BASE_DIR,"evaluate/argoverse",split+"_goal_points_error.csv")
+path = os.path.join(BASE_DIR,"evaluate/argoverse",
+                    split+f"_goal_points_error_{distance_method}_{filter_method}.csv")
 
 with open(path, 'w', newline='') as csvfile:
     csv_writer = csv.writer(csvfile, delimiter=' ', quotechar='|', quoting=csv.QUOTE_MINIMAL)
