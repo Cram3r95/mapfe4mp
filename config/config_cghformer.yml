@@ -7,7 +7,7 @@ dataset:
     path: "data/datasets/argoverse/motion-forecasting/"
     imgs_folder: "map_features"
     split: "train"
-    batch_size: 128
+    batch_size: 32
     num_workers: 0
     start_from_percentage: 0.0 # By default, 0. If you want to analize a particular bunch of files (e.g. from 25 % to 50 %)
                                # then write here 0.25 and in split_percentage 0.25
@@ -61,8 +61,7 @@ hyperparameters:
     num_epochs: 100 # 400
     print_every: 50
     checkpoint_name: "0"                      
-    checkpoint_val_percentage: 0.0001 # 0.1 # (0 - 1) Check accuracy in validation split every
-                                    # checkpoint_val_percentage * total_num_iterations
+    checkpoint_val_percentage: 0.1 # 0.1 # (0 - 1) Check accuracy in validation split every checkpoint_val_percentage * total_num_iterations
     checkpoint_train_percentage: 0.1 # 0.2 # (0 - 1)
 
     loss_type_g: "nll" # (mse|mse_w), nll, (mse|mse_w)+nll, (mse|mse_w)+fa, hinge+gt, hinge+centerlines+gt, ewta, wta
@@ -82,7 +81,7 @@ hyperparameters:
     clipping_threshold_g: 1.1
     
     save_root_dir: "save/argoverse"
-    exp_name: "test_save_model" # If no specific exp_name is used, fill with current day and hour
+    exp_name: "test_cghformer" # If no specific exp_name is used, fill with current day and hour
 
     # cp oracle_centerlines_map_api_last_obs_30_points.npy oracle_centerlines.npy && cp relevant_centerlines_map_api_last_obs_30_points.npy relevant_centerlines.npy
     # cp oracle_centerlines_map_api_first_obs_40_points.npy oracle_centerlines.npy && cp relevant_centerlines_map_api_first_obs_40_points.npy relevant_centerlines.npy
@@ -96,6 +95,6 @@ hyperparameters:
 
 model:
     path: "model/models/"
-    name: "mapfe4mp"
+    name: "cghformer"
 
 

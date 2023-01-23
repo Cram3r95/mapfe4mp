@@ -693,7 +693,10 @@ def model_trainer(config, logger):
     # Save the Python script (assuming the code is in a single file in model/models/)
                     
     if not model_script_saved:
-        pdb.set_trace()
+        model_filename = os.path.join(config.base_dir,config.model.path,config.model.name+".py")
+        output_dir = os.path.join(config.base_dir, hyperparameters.output_dir) 
+        os.system(f"cp {model_filename} {output_dir}")
+        model_script_saved = True
                         
     global g_lr
     while g_lr > hyperparameters.lr_min:

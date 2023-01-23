@@ -5,7 +5,7 @@
 
 """
 Created on Sun Mar 06 23:47:19 2022
-@author: Carlos Gómez-Huélamo and Miguel Eduardo Ortiz Huamaní
+@author: Carlos Gómez-Huélamo
 """
 
 # General purpose imports
@@ -37,7 +37,8 @@ TRAINER_LIST = [
                 "pv_lstm_mm",
                 "sophie",
                 "sophie_mm",
-                "mapfe4mp"
+                "mapfe4mp",
+                "cghformer"
                ]
 
 def create_logger(file_path):
@@ -137,7 +138,6 @@ if __name__ == "__main__":
     # to incorporate these temporal changes to the original config file
 
     if args.batch_size: config.dataset.batch_size = args.batch_size
-    if args.output_dir != "save": 
-        config.hyperparameters.output_dir = args.output_dir
+    if args.output_dir != "save": config.hyperparameters.output_dir = args.output_dir
 
     model_trainer(config, logger)
