@@ -219,7 +219,6 @@ def calculate_mse_centerlines_loss_interpolating(relevant_centerlines, pred, los
 
         # Check if from those indeces to the end of the centerline there are at least pred_len points
 
-
         # loss_ade += loss_f(pred[mode,:,:,:], gt, w_loss)
         # loss_fde += loss_f(pred[mode][-1].unsqueeze(0), gt[-1].unsqueeze(0), w_loss)
 
@@ -324,12 +323,13 @@ def calculate_hinge_wta_gt_centerlines_loss(gt, pred, relevant_centerlines, conf
     if DEBUG: print("Time consumed by max-margin loss: ", end-start)
     
     # # Compute SoftDTW loss
-    
+
     # start = time.time()
     # sdtw = SoftDTW(use_cuda=True, gamma=0.1)
     
     # for index_centerline in range(relevant_centerlines.shape[1]):
     #     for num_mode in range(pred.shape[1]):
+    #         pdb.set_trace()
     #         error = sdtw(relevant_centerlines[:,index_centerline,:,:],pred[:,num_mode,:,:])
             
     # end = time.time()
@@ -1081,6 +1081,7 @@ def generator_step(hyperparameters, batch, generator, optimizer_g,
         losses["G_smoothL1_fde_loss"] = loss_smoothL1_fde.item()
         
     elif hyperparameters.loss_type_g == "nll":
+        # loss = calculate_nll_loss(pred_traj_gt_rel, pred_traj_fake_rel, loss_f, conf)
         loss = calculate_nll_loss(pred_traj_gt, pred_traj_fake, loss_f, conf)
         losses["G_nll_loss"] = loss.item()
 

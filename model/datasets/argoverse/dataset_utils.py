@@ -135,7 +135,7 @@ def apply_percentage_startfrom(file_id_list, num_files,
     else:
         file_id_list = file_id_list[start_from:start_from+n_files]
         
-    print("Num files to be analized: ", len(file_id_list)) 
+    print("Num files to be analyzed: ", len(file_id_list)) 
 
     return file_id_list
 

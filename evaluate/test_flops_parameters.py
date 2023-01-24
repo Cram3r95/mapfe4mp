@@ -36,7 +36,8 @@ sys.path.append(BASE_DIR)
 
 import model.utils.utils as utils
 
-from model.models.mapfe4mp import TrajectoryGenerator
+# from model.models.mapfe4mp import TrajectoryGenerator
+from model.models.cghformer import TrajectoryGenerator
 
 #######################################
 

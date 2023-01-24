@@ -249,7 +249,6 @@ class MultiheadSelfAttention(nn.Module):
         mask = torch.arange(max_agents).to(att_in[0].device) < torch.tensor(agents_per_sample).to(att_in[0].device)[:, None]
 
         padded_att_in[mask] = att_in
-
         mask_inverted = ~mask
         mask_inverted = mask_inverted.to(att_in.device)
 
@@ -773,7 +772,7 @@ class TrajectoryGenerator(nn.Module):
 
         out_agent_gnn = self.agent_gnn(encoded_obs_traj_rel, centers, agents_per_sample)
         out_self_attention = self.sattn(out_agent_gnn, agents_per_sample)
-        encoded_social_info = torch.cat(out_self_attention,dim=0) # batch_size · num_agents x hidden_dim_social
+        encoded_social_info = torch.cat(out_self_attention,dim=0) # num_agents x hidden_dim_social
 
         if np.any(agent_idx): # single agent
             encoded_social_info = encoded_social_info[agent_idx,:]
