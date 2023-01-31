@@ -7,14 +7,14 @@ dataset:
     path: "data/datasets/argoverse/motion-forecasting/"
     imgs_folder: "map_features"
     split: "train"
-    batch_size: 1024
+    batch_size: 128
     num_workers: 0
     start_from_percentage: 0.0 # By default, 0. If you want to analize a particular bunch of files (e.g. from 25 % to 50 %)
                                # then write here 0.25 and in split_percentage 0.25
     split_percentage: 1.0 # % of the dataset (0-1)
     extra_data_train: -1.0 # % (0-1) of the val split is used for training too. Remaining files are used for validation
                            # -1.0 if not used
-    hard_mining: -1.0 # % (0-1). A fraction of the batch is filled with the hardest validation sequences. 
+    hard_mining: 0.05 # % (0-1). A fraction of the batch is filled with the hardest validation sequences. 
                      # E.g., if 0.7, 70 % of the batch is made up by the hardest validation sequences and the remaining 30 %,
                      # standard training sequences.
                      # -1.0 if not used 
@@ -33,6 +33,7 @@ dataset:
 optim_parameters:
     g_learning_rate: 1.0e-3 # 1.0e-3
     g_weight_decay: 1.0e-3
+    overwrite_optimizer: True
 hyperparameters:
     output_single_agent: True
 
@@ -61,7 +62,7 @@ hyperparameters:
     num_epochs: 32 # 400
     print_every: 50
     checkpoint_name: "0"                      
-    checkpoint_val_percentage: 0.01 # 0.1 # (0 - 1) Check accuracy in validation split every checkpoint_val_percentage * total_num_iterations
+    checkpoint_val_percentage: 0.05 # 0.1 # (0 - 1) Check accuracy in validation split every checkpoint_val_percentage * total_num_iterations
     checkpoint_train_percentage: 0.1 # 0.2 # (0 - 1)
 
     loss_type_g: "hinge+gt" # (mse|mse_w), nll, (mse|mse_w)+nll, (mse|mse_w)+fa, hinge+gt, hinge+centerlines+gt, ewta, wta
@@ -73,22 +74,22 @@ hyperparameters:
     loss_fa_weight: 1
 
     lr_scheduler: True
-    lr_decay_factor: 0.5 # 0.5 
+    lr_decay_factor: 0.25 # 0.5 
     lr_min: 5.0e-6
-    lr_epoch_percentage_patience: 0.05 # 0.15 # (0-N) E.g. If 0.05 -> the patience will be the 5 % of the total epochs
+    lr_epoch_percentage_patience: 0.3 # 0.15 # (0-N) E.g. If 0.05 -> the patience will be the 5 % of the total epochs
     
     g_steps: 1
     clipping_threshold_g: 1.1
     
     save_root_dir: "save/argoverse"
-    exp_name: "test_cghformer_cross_attn_soft_dtw" # If no specific exp_name is used, fill with current day and hour
+    exp_name: "exp6" # If no specific exp_name is used, fill with current day and hour
 
     # cp oracle_centerlines_map_api_last_obs_30_points.npy oracle_centerlines.npy && cp relevant_centerlines_map_api_last_obs_30_points.npy relevant_centerlines.npy
     # cp oracle_centerlines_map_api_first_obs_40_points.npy oracle_centerlines.npy && cp relevant_centerlines_map_api_first_obs_40_points.npy relevant_centerlines.npy
     
     output_dir: # To be filled in the code (save_root_dir/model_name/split_percentage/exp)
     checkpoint_start_from:
-    exp_description: 
+    exp_description: "LSTM decoder and loss with absolute coordinates and residual centerlines"
     tensorboard_active: True
 
 # Model

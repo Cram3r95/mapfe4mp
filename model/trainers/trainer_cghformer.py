@@ -16,6 +16,7 @@ import numpy as np
 import pdb
 import time
 import copy
+import importlib
 
 # DL & Math imports
 
@@ -23,6 +24,7 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import torch.optim.lr_scheduler as lrs
+import torch.nn.functional as F
 
 from torch.utils.data import DataLoader
 from torch.utils.tensorboard import SummaryWriter
@@ -399,6 +401,95 @@ def calculate_hinge_wta_gt_centerlines_loss(gt, pred, relevant_centerlines, conf
     
     return loss_hinge_conf, loss_wta_gt#, loss_wta_centerlines
 
+def calculate_loss_lanetransformer(gt, pred, relevant_centerlines, conf):
+
+    gt = gt.permute(1,0,2)
+    gt_repeated = gt.unsqueeze(1).repeat(1,pred.shape[1],1,1)
+
+    loss = torch.zeros(1, dtype=torch.float32).to(gt)
+
+    fde_k = torch.sqrt((pred[:, :, -1, 0] - gt_repeated[:, :, -1, 0]) ** 2 + # x
+                       (pred[:, :, -1, 1] - gt_repeated[:, :, -1, 1]) ** 2)  # y
+    k_hat = torch.argmin(fde_k, dim=1) 
+
+    index = torch.tensor(range(pred.shape[0]), dtype=torch.long)
+    pred_fut_traj = pred[index, k_hat] # Best trajectory in terms of FDE per sequence  
+
+    batch_size, pred_len, _ = pred_fut_traj.shape
+    num_modes = pred.shape[1]
+    
+    # Regression loss
+    
+    mse_loss = F.mse_loss(pred_fut_traj, gt, reduction='none')
+    mse_loss = mse_loss.sum(dim=2)
+    mse_loss = torch.sqrt(mse_loss)
+    mse_loss = mse_loss.mean(dim=1)
+
+    fde_loss = fde_k[index, k_hat]
+
+    loss = mse_loss * 0.5 + fde_loss * 0.5
+    loss = loss.mean()
+    
+    # Classification loss (max-margin)
+    
+    score_hat = conf[index, k_hat].unsqueeze(-1)
+    score_hat = score_hat.repeat(1, num_modes)
+    cls_loss = conf + 0.2 - score_hat
+    cls_loss[cls_loss < 0] = 0
+    cls_loss = cls_loss.sum(dim=-1).sum(dim=-1)
+    cls_loss = cls_loss /((num_modes-1) * batch_size)
+
+    # Centerlines loss
+    
+    # error_centerlines = []
+    
+    # for i in range(batch_size):
+    #     excluded_indeces = []
+    #     excluded_indeces.append(k_hat[i].item()) # Exclude mode index associated to GT
+    #     error_best_modes_centerlines = []
+        
+    #     for lane_index in range(relevant_centerlines.shape[1]):
+    #         curr_centerline = relevant_centerlines[i,lane_index,:,:] # centerline_length x 2
+            
+    #         if torch.any(curr_centerline): # Avoid computing error with padded zeros
+                    
+    #             curr_error_list = []
+    #             for mode in range(pred.shape[1]):
+    #                 if mode not in excluded_indeces:
+    #                     # error = dftorch(filtered_centerline,pred[i,mode,:,:])
+    #                     # error = dtwtorch(filtered_centerline,pred[i,mode,:,:])
+
+    #                     error = nn.functional.l1_loss(pred[i,mode,:,:], curr_centerline, reduction='none').sum(dim=[0, 1])
+                        
+    #                     curr_error_list.append(error)
+
+    #             curr_error_tensor = torch.stack(curr_error_list)
+    #             closest_pred = torch.argmin(curr_error_tensor)  
+    #             error_best_modes_centerlines.append(curr_error_tensor[closest_pred])
+                
+    #             excluded_indeces.append(closest_pred.item())
+    #     try:
+    #         error_best_modes_centerlines = torch.stack(error_best_modes_centerlines)
+    #     except:
+    #         continue
+    #     curr_error_centerlines = torch.mean(error_best_modes_centerlines)
+    #     error_centerlines.append(curr_error_centerlines)
+    
+    # error_centerlines = torch.stack(error_centerlines)
+    # loss_wta_centerlines = torch.mean(error_centerlines)
+    
+    # loss_centerlines = torch.zeros(1, dtype=torch.float32).to(gt)
+    # for lane_index in range(relevant_centerlines.shape[1]):
+    #     mse_loss = F.mse_loss(pred[:,lane_index,:,:], relevant_centerlines[:,lane_index,:,:], reduction='none')
+    #     mse_loss = mse_loss.sum(dim=2)
+    #     mse_loss = torch.sqrt(mse_loss)
+    #     mse_loss = mse_loss.mean(dim=1)
+    
+    #     loss_centerlines += mse_loss.mean()
+    # loss_centerlines = torch.mean(loss_centerlines)
+    
+    return cls_loss, loss#, loss_centerlines
+
 def calculate_nll_loss(gt, pred, loss_f, confidences):
     """
     NLL = Negative Log-Likelihood
@@ -551,8 +642,26 @@ def model_trainer(config, logger):
 
     # Initialize motion prediction generator and optimizer
 
-    generator = TrajectoryGenerator(PHYSICAL_CONTEXT=hyperparameters.physical_context,
-                                    CURRENT_DEVICE=current_cuda)
+    model_filename = os.path.join(config.base_dir,config.model.path,config.model.name+".py")
+    
+    ## Find model in the same folder where the weights were stored (so, use the motion prediction generator
+    ## from this file)
+    
+    if os.path.isfile(model_filename):
+        curr_model = config.model.name
+        aux = config.hyperparameters.output_dir.replace("/",".")
+        curr_model = f"{aux}.{curr_model}"
+        
+        curr_model_module = importlib.import_module(curr_model)
+        TrajectoryGenerator = getattr(curr_model_module,"TrajectoryGenerator")
+        generator = TrajectoryGenerator(PHYSICAL_CONTEXT=config.hyperparameters.physical_context,
+                                        CURRENT_DEVICE=device)
+        
+    ## Otherwise, use the current model generator
+
+    else:
+        generator = TrajectoryGenerator(PHYSICAL_CONTEXT=hyperparameters.physical_context,
+                                        CURRENT_DEVICE=current_cuda)
     generator.to(device)
     generator.apply(init_weights)
     generator.type(float_dtype).train() # train mode (if you compute metrics -> .eval() mode)
@@ -572,7 +681,9 @@ def model_trainer(config, logger):
         checkpoint = torch.load(restore_path, map_location=current_cuda)
 
         generator.load_state_dict(checkpoint.config_cp['g_best_state'], strict=False)
-        optimizer_g.load_state_dict(checkpoint.config_cp['g_optim_state'])
+        
+        if not optim_parameters.overwrite_optimizer:
+            optimizer_g.load_state_dict(checkpoint.config_cp['g_optim_state'])
 
         t = checkpoint.config_cp['counters']['t'] # Restore num_iters and epochs from checkpoint
         epoch = checkpoint.config_cp['counters']['epoch']
@@ -688,15 +799,12 @@ def model_trainer(config, logger):
     time_per_seq_collate = float(0)
     current_iteration = 0 # Current iteration, regardless the model had previous training
     flag_check_every = False
-    model_script_saved = False
     
     # Save the Python script (assuming the code is in a single file in model/models/)
-                    
-    if not model_script_saved:
-        model_filename = os.path.join(config.base_dir,config.model.path,config.model.name+".py")
+             
+    if not os.path.isfile(model_filename):
         output_dir = os.path.join(config.base_dir, hyperparameters.output_dir) 
         os.system(f"cp {model_filename} {output_dir}")
-        model_script_saved = True
                            
     global g_lr
     while g_lr > hyperparameters.lr_min:
@@ -840,9 +948,9 @@ def model_trainer(config, logger):
                 # Get previous best metrics in order to compare
 
                 global min_ade_
-                min_ade_ = min(checkpoint.config_cp["metrics_val"][f'{split}_ade'])
-                min_fde = min(checkpoint.config_cp["metrics_val"][f'{split}_fde'])
-                min_ade_nl = min(checkpoint.config_cp["metrics_val"][f'{split}_ade_nl'])
+                min_ade_ = round(min(checkpoint.config_cp["metrics_val"][f'{split}_ade']),2)
+                min_fde = round(min(checkpoint.config_cp["metrics_val"][f'{split}_fde']),2)
+                min_ade_nl = round(min(checkpoint.config_cp["metrics_val"][f'{split}_ade_nl']),2)
 
                 logger.info("Min ADE: {}".format(min_ade_))
                 logger.info("Min FDE: {}".format(min_fde))
@@ -1163,14 +1271,24 @@ def generator_step(hyperparameters, batch, generator, optimizer_g,
     # elif hyperparameters.loss_type_g == "hinge+centerlines+gt":
     elif hyperparameters.loss_type_g == "hinge+gt":
         # loss_hinge, loss_wta_gt, loss_wta_centerlines = calculate_hinge_wta_gt_centerlines_loss(pred_traj_gt, pred_traj_fake, relevant_centerlines, conf)
-        loss_hinge, loss_wta_gt = calculate_hinge_wta_gt_centerlines_loss(pred_traj_gt, pred_traj_fake, relevant_centerlines, conf)
+        # loss_hinge, loss_wta_gt = calculate_hinge_wta_gt_centerlines_loss(pred_traj_gt, pred_traj_fake, relevant_centerlines, conf)
+        # loss_hinge, loss_wta_gt = calculate_loss_lanetransformer(pred_traj_gt_rel, pred_traj_fake_rel, relevant_centerlines, conf)
+        loss_hinge, loss_wta_gt = calculate_loss_lanetransformer(pred_traj_gt, pred_traj_fake, relevant_centerlines, conf)
         
         loss = 1.0*loss_hinge + \
-               1.0*loss_wta_gt #+ \
-            #    0.1*loss_wta_centerlines
+               1.0*loss_wta_gt
 
         losses["G_hinge_loss"] = loss_hinge.item()
         losses["G_wta_ade_gt_loss"] = loss_wta_gt.item()
+        
+        # loss_hinge, loss_wta_gt, loss_wta_centerlines = calculate_loss_lanetransformer(pred_traj_gt, pred_traj_fake, relevant_centerlines, conf)
+        
+        # loss = 1.0*loss_hinge + \
+        #        1.0*loss_wta_gt + \
+        #        0.15*loss_wta_centerlines
+
+        # losses["G_hinge_loss"] = loss_hinge.item()
+        # losses["G_wta_ade_gt_loss"] = loss_wta_gt.item()
         # losses["G_wta_centerlines_loss"] = loss_wta_centerlines.item()
 
     losses[f"G_total_loss"] = loss.item()

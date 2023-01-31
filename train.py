@@ -96,12 +96,12 @@ if __name__ == "__main__":
         if not config["hyperparameters"]["exp_name"]: # Empty -> Fill with current hour and day
             config["hyperparameters"]["exp_name"] = exp_name
 
-        split_percentage_str = str(100*config["dataset"]["split_percentage"]) + "_percent" 
+        split_percentage_str = str(int(100*config["dataset"]["split_percentage"])) + "_percent" 
         config["hyperparameters"]["output_dir"] = os.path.join(config["hyperparameters"]["save_root_dir"],
                                                                config["model"]["name"],
                                                                split_percentage_str,
                                                                config["hyperparameters"]["exp_name"])
-
+        
         route_path = config["hyperparameters"]["output_dir"] + "/config_file.yml"
   
         if args.from_exp and os.path.isdir(args.from_exp): # Overwrite checkpoint_start_from

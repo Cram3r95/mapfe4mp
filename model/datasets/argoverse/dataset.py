@@ -721,7 +721,7 @@ class ArgoverseMotionForecastingDataset(Dataset):
 
             if self.hard_mining != -1.0 and split_percentage == 1.0: 
                 # In this file, we can see the most difficult sequences of the train split
-                file_csv = "results/mapfe4mp/100.0_percent/previous_validation/test_9/train/metrics_sorted_ade.csv"
+                file_csv = "results/mapfe4mp/100_percent/previous_validation/test_9/train/metrics_sorted_ade.csv"
                 
                 df = pd.read_csv(file_csv,sep=" ")
                 seq_index = df["Index"][:-2].astype(int) # from 0 to N-1, not num_seq.csv

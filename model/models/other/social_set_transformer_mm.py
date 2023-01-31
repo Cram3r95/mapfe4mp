@@ -39,55 +39,70 @@ from model.modules.set_transformer import ISAB, PMA, SAB
 # Read: Set transformer 
 # Read: https://medium.com/wovenplanetlevel5/how-to-build-a-motion-prediction-model-for-autonomous-vehicles-29f7f81f1580
 
-
 class TrajectoryGenerator(nn.Module):
-    def __init__(self, dim_input=20*2, num_outputs=3, dim_output=30 * 2,
-                 num_inds=8, dim_hidden=64, num_heads=4, ln=False, pred_len=30):
-        """
-        Num outputs = Multimodality
-        """
-
+    def __init__(self, dim_input=20*2, num_modes=6, dim_output=30 * 2,
+            num_inds=32, dim_hidden=128, num_heads=4, ln=False, pred_len=30,
+            PHYSICAL_CONTEXT="social", CURRENT_DEVICE="cpu"):
         super(TrajectoryGenerator, self).__init__()
-
-        self.num_outputs = num_outputs
-        self.pred_len = pred_len
         
-        # Layers
-
-        self.emb = nn.Linear(2, dim_hidden) # Embedding (from x|y to dim_hidden)
+        self.num_modes = num_modes
+        self.pred_len = pred_len
+        self.data_dim = 2
+        
         self.enc = nn.Sequential( # Encoder
-                                 ISAB(dim_input, dim_hidden, num_heads, num_inds, ln=ln),
-                                 ISAB(dim_hidden, dim_hidden, num_heads, num_inds, ln=ln),
-                                ) 
+                ISAB(dim_input, dim_hidden, num_heads, num_inds, ln=ln),
+                ISAB(dim_hidden, dim_hidden, num_heads, num_inds, ln=ln))
         self.dec = nn.Sequential( # Decoder
-                                 PMA(dim_hidden, num_heads, num_outputs, ln=ln),
-                                 SAB(dim_hidden, dim_hidden, num_heads, ln=ln)
-                                ) 
+                PMA(dim_hidden, num_heads, num_modes, ln=ln),
+                SAB(dim_hidden, dim_hidden, num_heads, ln=ln),
+                SAB(dim_hidden, dim_hidden, num_heads, ln=ln))
+
+        # Head
+        
         self.regressor = nn.Linear(dim_hidden, dim_output)
         self.mode_confidences = nn.Linear(dim_hidden, 1)
+        
+    def forward(self, obs_traj, obs_traj_rel, seq_start_end, agent_idx, phy_info=None, relevant_centerlines=None):
+        """_summary_
 
-    def forward(self, seq_list_rel, seq_start_end): #
+        Args:
+            obs_traj (_type_): _description_
+            obs_traj_rel (_type_): _description_
+            seq_start_end (_type_): _description_
+            agent_idx (_type_): _description_
+            phy_info (_type_, optional): _description_. Defaults to None.
+            relevant_centerlines (_type_, optional): _description_. Defaults to None.
         """
-        seq_list_rel: Observation data (20 = obs_len x batch_size·num_agents x data_dimensionality = 2 (x|y))
-                      Note that this data is in relative coordinates (displacements)
-        start_end_seq: batch_size x 2 (each element indicates the number of agents per sequence batch element
-                       in seq_list_rel
-        """
-        # pdb.set_trace()
-        XX = []
+        
+        batch_size = seq_start_end.shape[0]
+        social_features_list = []
+        
         for start, end in seq_start_end.data:
-            Y = seq_list_rel[:,start:end,:].contiguous().permute(1,0,2)
-            num_agents, obs_len, data_dim = Y.shape
-            Y = Y.contiguous().view(1, num_agents, data_dim*obs_len)
-            # X = self.emb(X)
-            Y = self.dec(self.enc(Y)) # 1, m, 64
-            # Y = Y.view(n,t,-1) # (n, obs, h_dim)
-            XX.append(Y)
-        XX = torch.cat(XX, 0)
-
-        coords = self.regressor(XX).reshape(-1, self.num_outputs, self.pred_len, 2) # (b, m, t, 2)
-        #pdb.set_trace()
-        confidences = torch.squeeze(self.mode_confidences(XX), -1) # (b, m)
-        confidences = torch.softmax(confidences, dim=1)
-
-        return coords, confidences
+            # Get current social information
+            
+            curr_obs_traj_rel = obs_traj_rel[:,start:end,:].contiguous().permute(1,0,2) # agents x obs_len x data_dim
+            num_agents, obs_len, data_dim = curr_obs_traj_rel.shape
+            curr_obs_traj_rel = curr_obs_traj_rel.contiguous().view(1, num_agents, data_dim*obs_len)
+            
+            # Auto-encode current social information
+            pdb.set_trace()
+            social_features = self.dec(self.enc(curr_obs_traj_rel)) # 1 x num_modes x hidden_dim
+            social_features_list.append(social_features)
+            
+        # Concat social latent space along batch dimension
+        
+        social_features = torch.cat(social_features_list,0)
+        
+        # Get Multi-modal prediction and confidences 
+        # Here we assume the social latent space is around the target agent
+        
+        pred_traj_fake_rel = self.regressor(social_features).reshape(-1, 
+                                                                     self.num_modes,
+                                                                     self.pred_len,
+                                                                     self.data_dim)
+        conf = torch.squeeze(self.mode_confidences(social_features), -1)
+        conf = torch.softmax(conf, dim=1)
+        if not torch.allclose(torch.sum(conf, dim=1), conf.new_ones((batch_size,))):
+                pdb.set_trace()
+    
+        return pred_traj_fake_rel, conf

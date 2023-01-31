@@ -5,14 +5,16 @@
 
 """
 Created on Fri Feb 25 12:19:38 2022
-@author: Carlos Gómez-Huélamo and Miguel Eduardo Ortiz Huamaní
+@author: Carlos Gómez-Huélamo
 """
 
 # General purpose imports
 
 import pdb
-from collections import defaultdict
+import os
 import importlib
+
+from collections import defaultdict
 
 # DL & Math imports
 
@@ -80,13 +82,24 @@ def get_generator(model_path, config):
     current_cuda = torch.device(f"cuda:{config.device_gpu}")
     device = torch.device(current_cuda if torch.cuda.is_available() else "cpu")
 
-    curr_model = model_path.split('/')[2]
-    adversarial_training = False
-    if "gan" in curr_model: 
-        curr_model = '_'.join(curr_model.split('_')[1:])
-        adversarial_training = True
+    curr_model = config.model.name
+    # adversarial_training = False
+    # if "gan" in curr_model: 
+    #     curr_model = '_'.join(curr_model.split('_')[1:])
+    #     adversarial_training = True
+    
+    # Find model in the same folder where the weights were stored
+    
+    filename = os.path.join(config.hyperparameters.output_dir,curr_model+".py")
+    if os.path.isfile(filename):
+        aux = config.hyperparameters.output_dir.replace("/",".")
+        curr_model = f"{aux}.{curr_model}"
 
-    curr_model = f"model.models.{curr_model}"
+    # Otherwise, use current model
+    
+    else: 
+        curr_model = f"model.models.{curr_model}"
+   
     curr_model_module = importlib.import_module(curr_model)
     TrajectoryGenerator = getattr(curr_model_module,"TrajectoryGenerator")
 

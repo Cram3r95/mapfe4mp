@@ -1072,7 +1072,7 @@ class MapFeaturesUtils:
             for centerline in candidate_centerlines:
                 distances.append(min(np.linalg.norm((centerline - reference_point),axis=1)))
             
-            AVOID_SAME_MIN_DISTANCES = False
+            AVOID_SAME_MIN_DISTANCES = True
             
             if AVOID_SAME_MIN_DISTANCES:
                 # Avoid repeating centerlines with the same min distance

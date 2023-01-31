@@ -64,8 +64,8 @@ config.dataset.start_from_percentage = 0.0
 
 # Preprocess data
                          # Split, Process, Split percentage
-splits_to_process = dict({"train":[False,1.0], # 0.01 (1 %), 0.1 (10 %), 1.0 (100 %)
-                          "val":  [True,0.1],
+splits_to_process = dict({"train":[True,1.0], # 0.01 (1 %), 0.1 (10 %), 1.0 (100 %)
+                          "val":  [True,1.0],
                           "test": [False,1.0]})
 modes_centerlines = ["test"] # "train","test" 
 # if train -> compute the best candidate (oracle), only using the "competition" algorithm
@@ -82,9 +82,14 @@ freq = 10 # Hz ("steps/s")
 obs_origin = 20 
 max_centerlines = 3
 min_dist_around = 25
-first_centerline_waypoint = "last_obs" # first_obs, last_obs
 data_dim = 2 # x,y
-max_points = 30 # 30 if start from last_obs, 40 if start from first obs
+
+first_centerline_waypoint = "first_obs" # first_obs, last_obs
+if first_centerline_waypoint == "last_obs":
+    max_points = 30
+elif first_centerline_waypoint == "first_obs":
+    max_points = 40
+    
 min_points = 4 # to perform a cubic interpolation you need at least 3 points
 algorithm = "map_api" # competition, map_api, get_around
                       # TODO: At this moment, only the "map_api" algorithm is prepared
