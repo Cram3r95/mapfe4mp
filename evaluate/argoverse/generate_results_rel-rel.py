@@ -79,7 +79,7 @@ GENERATE_QUALITATIVE_RESULTS = False
 PLOT_WORST_SCENES = False
 LIMIT_QUALITATIVE_RESULTS = 300
 
-COMPUTE_METRICS = True
+COMPUTE_METRICS = False
 PLOT_METRICS = True
 
 DEBUG = False
@@ -431,7 +431,8 @@ def evaluate(loader, generator, config, split, current_cuda, pred_len, results_p
                     if not PLOT_METRICS:
                         ade_min, fde_min = None, None
                     
-                    plots = ["general_view_without_centerlines", "unimodal", "multimodal"]
+                    plots = ["multimodal"]
+                    # plots = ["general_view_without_centerlines", "unimodal", "multimodal"]
                     # plots = ["general_view_only_target_without_centerlines",
                     #          "general_view_only_target_raw_centerlines",
                     #          "general_view_only_target_filtered_centerlines"]
@@ -684,6 +685,6 @@ python evaluate/argoverse/generate_results_rel-rel.py \
 
 """
 python evaluate/argoverse/generate_results_rel-rel.py \
---model_path "save/argoverse/cghformer/100_percent/exp11/argoverse_motion_forecasting_dataset_0_with_model.pt" \
---device_gpu 5 --split "val" --batch_size 1024
+--model_path "save/argoverse/cghformer/100_percent/exp4/argoverse_motion_forecasting_dataset_0_with_model.pt" \
+--device_gpu 0 --split "test" --batch_size 1024
 """

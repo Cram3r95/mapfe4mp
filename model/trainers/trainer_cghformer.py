@@ -480,6 +480,7 @@ def calculate_loss_lanetransformer(gt, pred, relevant_centerlines, conf):
     
     # loss_centerlines = torch.zeros(1, dtype=torch.float32).to(gt)
     # for lane_index in range(relevant_centerlines.shape[1]):
+    #     pdb.set_trace()
     #     mse_loss = F.mse_loss(pred[:,lane_index,:,:], relevant_centerlines[:,lane_index,:,:], reduction='none')
     #     mse_loss = mse_loss.sum(dim=2)
     #     mse_loss = torch.sqrt(mse_loss)
@@ -646,7 +647,7 @@ def model_trainer(config, logger):
     
     ## Find model in the same folder where the weights were stored (so, use the motion prediction generator
     ## from this file)
-    
+
     if os.path.isfile(model_filename):
         curr_model = config.model.name
         aux = config.hyperparameters.output_dir.replace("/",".")
@@ -662,6 +663,7 @@ def model_trainer(config, logger):
     else:
         generator = TrajectoryGenerator(PHYSICAL_CONTEXT=hyperparameters.physical_context,
                                         CURRENT_DEVICE=current_cuda)
+
     generator.to(device)
     generator.apply(init_weights)
     generator.type(float_dtype).train() # train mode (if you compute metrics -> .eval() mode)
@@ -901,6 +903,8 @@ def model_trainer(config, logger):
                     checkpoint.config_cp["G_losses"][k].append(v)
                 checkpoint.config_cp["losses_ts"].append(t)
 
+            num_decimals = 3
+            
             # Check training metrics
 
             if (CHECK_ACCURACY_TRAIN and current_iteration > 0 
@@ -917,7 +921,7 @@ def model_trainer(config, logger):
                         writer.add_scalar(k, v, num_analyzed_seqs)
                     if k not in checkpoint.config_cp["metrics_train"].keys():
                         checkpoint.config_cp["metrics_train"][k] = []
-                    checkpoint.config_cp["metrics_train"][k].append(v)
+                    checkpoint.config_cp["metrics_train"][k].append(round(v,num_decimals))
 
             # Check validation metrics
 
@@ -943,14 +947,14 @@ def model_trainer(config, logger):
                         writer.add_scalar(k, v, num_analyzed_seqs)
                     if k not in checkpoint.config_cp["metrics_val"].keys():
                         checkpoint.config_cp["metrics_val"][k] = []
-                    checkpoint.config_cp["metrics_val"][k].append(v)
+                    checkpoint.config_cp["metrics_val"][k].append(round(v,num_decimals))
 
                 # Get previous best metrics in order to compare
 
                 global min_ade_
-                min_ade_ = round(min(checkpoint.config_cp["metrics_val"][f'{split}_ade']),2)
-                min_fde = round(min(checkpoint.config_cp["metrics_val"][f'{split}_fde']),2)
-                min_ade_nl = round(min(checkpoint.config_cp["metrics_val"][f'{split}_ade_nl']),2)
+                min_ade_ = round(min(checkpoint.config_cp["metrics_val"][f'{split}_ade']),num_decimals)
+                min_fde = round(min(checkpoint.config_cp["metrics_val"][f'{split}_fde']),num_decimals)
+                min_ade_nl = round(min(checkpoint.config_cp["metrics_val"][f'{split}_ade_nl']),num_decimals)
 
                 logger.info("Min ADE: {}".format(min_ade_))
                 logger.info("Min FDE: {}".format(min_fde))
@@ -1285,7 +1289,7 @@ def generator_step(hyperparameters, batch, generator, optimizer_g,
         
         # loss = 1.0*loss_hinge + \
         #        1.0*loss_wta_gt + \
-        #        0.15*loss_wta_centerlines
+        #        0.05*loss_wta_centerlines
 
         # losses["G_hinge_loss"] = loss_hinge.item()
         # losses["G_wta_ade_gt_loss"] = loss_wta_gt.item()

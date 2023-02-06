@@ -62,16 +62,20 @@ print("Mapfe4mp social. All parameters: ", utils.count_parameters(whole_model))
 # whole_model.to(device)
 # print("Mapfe4mp plausible_centerlines+feasible_area. All parameters: ", utils.count_parameters(whole_model))
 
+past_observations = 20
+data_dim = 2
 agents = 10
+num_centerlines = 3
+num_points_centerline = 40
 
 # We assume bs = 1
 
-obs = torch.randn(20,agents,2).to(device)
-rel = torch.randn(20,agents,2).to(device)
+obs = torch.randn(past_observations,agents,data_dim).to(device)
+rel = torch.randn(past_observations,agents,data_dim).to(device)
 se = torch.tensor([[0,agents]]).to(device)
 agent_idx = np.array([1])
 phy_info = torch.tensor([]).to(device)
-relevant_centerlines = torch.randn(1,3,30,2).to(device)
+relevant_centerlines = torch.randn(1,num_centerlines,num_points_centerline,data_dim).to(device)
 
 # macs, params = profile(whole_model, inputs=(obs,rel,se,agent_idx,phy_info,relevant_centerlines), custom_ops={})
 # macs, params = clever_format([macs, params], "%.3f")
